@@ -1,5 +1,7 @@
 # Rig
 
+[![Build Status](https://travis-ci.org/mundya/rig.svg?branch=master)](https://travis-ci.org/mundya/rig)
+
 Rig is a set of Python and C libraries for mapping computational problems to
 SpiNNaker and interacting with them.  Above all it aims to be light weight and
 to present common and well-documented interfaces to all of its parts.
