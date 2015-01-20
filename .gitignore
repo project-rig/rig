@@ -48,7 +48,10 @@ coverage.xml
 *.log
 
 # Sphinx documentation
-docs/_build/
+docs/build/
 
 # PyBuilder
 target/
+
+# Vi[m] swap files
+*.swp

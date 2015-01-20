@@ -93,7 +93,7 @@ class Keyspace(object):
     and positions unspecified. These fields will be assigned a free space
     (working from the least-significant bit upwards) in the keyspace large
     enough for the largest value ever assigned to the field when we call
-    `assign_fields()`.
+    `assign_fields()`.::
 
         ks3 = Keyspace(32)
 
@@ -143,7 +143,7 @@ class Keyspace(object):
     easily generate keys/masks based only on these fields. When a tag is
     applied, it is added to all currently set fields too. This means we can
     easily identify the fields used for routing by just assigning a tag to the
-    fields that, semantically, are actually used for routing.
+    fields that, semantically, are actually used for routing.::
 
         ks4 = Keyspace(32)
 
