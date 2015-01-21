@@ -22,6 +22,7 @@ SpiNNaker.  Tools exist for:
         :maxdepth: 2
 
         keyspaces
+        regions
 
 Problem mapping
 ---------------
