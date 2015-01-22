@@ -67,7 +67,7 @@ class TestUnpartitionedMatrixRegion(object):
         # Assert the region data can't be written to directly
         with pytest.raises(ValueError):
             mr.matrix[0][0] = 3.
-        assert mr.matrix.flags.writeable == False
+        assert mr.matrix.flags.writeable is False
 
     @pytest.mark.parametrize("matrix, vertex_slice", [
         (np.ones(shape=(3, 4), dtype=np.uint32), slice(0, 1)),
