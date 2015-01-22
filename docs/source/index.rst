@@ -30,6 +30,11 @@ Problem mapping
 Execution control
 -----------------
 
+.. toctree::
+        :maxdepth: 2
+
+        scp
+
 Indices and tables
 ==================
 
