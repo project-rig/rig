@@ -27,6 +27,11 @@ SpiNNaker.  Tools exist for:
 Problem mapping
 ---------------
 
+.. toctree::
+        :maxdepth: 2
+
+        partitioning
+
 Execution control
 -----------------
 
