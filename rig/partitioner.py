@@ -181,3 +181,78 @@ def split_slice(obj_slice, splits):
         n += per_slice
 
     return slices
+
+
+def _create_derived_net(net, new_source, new_sinks):
+    """Create a new net with the same properties as this one but with a
+    replaced source and sinks.
+
+    Override this to use the standard netlist partitioning methods with
+    custom net types.
+    """
+    # Return a new net with the given source, sinks.  Copy over the weight
+    # and get an of the keyspace if one is provided.
+    return type(net)(
+        new_source, new_sinks, net.weight,
+        keyspace=None if net.keyspace is None else net.keyspace
+    )
+
+
+def partition_net(net, replacements,
+                  create_derived_net=_create_derived_net):
+    """Create new net(s) by replacing sinks and source(s) of an existing
+    net.
+
+    Parameters
+    ----------
+    net : :py:class:`~rig.netlist.Net`
+        The net to partition.
+    replacements : dict
+        A mapping from objects to other objects or lists of objects.
+    create_derived_net : callable
+        A callable which accepts a :py:class:`~rig.netlist.Net`, a source
+        object and a list of sink objects and which returns a copy of the
+        original Net but with the source and sinks replaced.
+
+    Returns
+    -------
+    list
+        A list containing new net(s).
+
+    If the source object requires replacing then a new net (or nets) will
+    be produced with the replacement source(s).  If a sink object requires
+    replacing then a single new net will be generated with the new sink(s)
+    added as required.
+
+        net = Net(obj_a, 1, [obj_b, obj_c])
+        replacements = {obj_a: [obj_a1, obj_a2], obj_b: [obj_b1, obj_b2]}
+        partition_net(net, replacements)
+    """
+    # Swap out sink objects
+    new_sinks = list()
+
+    for obj in net.sinks:
+        if obj in replacements:
+            # If the object is in the replacement map, then replace it.
+            if isinstance(replacements[obj], list):
+                # If the replacement is a list of new objects then add them
+                new_sinks.extend(replacements[obj])
+            else:
+                # Otherwise just add the single new entry
+                new_sinks.append(replacements[obj])
+        else:
+            # Otherwise retain it
+            new_sinks.append(obj)
+
+    # Swap out the source object if required
+    if net.source in replacements:
+        if isinstance(replacements[net.source], list):
+            new_sources = replacements[net.source][:]
+        else:
+            new_sources = [replacements[net.source]]
+    else:
+        new_sources = [net.source]
+
+    # Return the new net(s) by deriving from this net
+    return [create_derived_net(net, source, new_sinks)
+            for source in new_sources]
