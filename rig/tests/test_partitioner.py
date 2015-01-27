@@ -1,6 +1,7 @@
 import mock
 import pytest
 from .. import partitioner
+from ..netlist import Net
 
 
 # Create a silly constraint
@@ -17,6 +18,11 @@ class ObjectWithWidgets(object):
         self.n_atoms = n_atoms
         self.multiplier = widget_multiplier
         self.offset = widget_offset
+
+
+class Vertex(object):
+    """Represents an object that could be the source or sink of a net."""
+    pass
 
 
 class TestPartition(object):
@@ -102,3 +108,94 @@ class TestSplitSlice(object):
         distributed numbers of atoms.
         """
         assert partitioner.split_slice(sl, splits) == sls
+
+
+class TestPartitionNet(object):
+    def test_replace_sinks_1_to_1(self):
+        # Define objects and a replacement
+        obj_a = Vertex()
+        obj_b = Vertex()
+        obj_c = Vertex()
+        obj_d = Vertex()
+        replacements = {obj_b: obj_d}
+
+        # Create a net and ensure that it is swapped
+        n = Net(obj_a, [obj_b, obj_c])
+        new_n = partitioner.partition_net(n, replacements)[0]
+
+        assert new_n.source is obj_a
+        assert new_n.weight == n.weight
+        assert set(new_n.sinks) == {obj_c, obj_d}
+
+    def test_replace_sources_1_to_1(self):
+        # Define objects and a replacement
+        obj_a = Vertex()
+        obj_b = Vertex()
+        obj_d = Vertex()
+        replacements = {obj_a: obj_d}
+
+        # Create a net and ensure that it is swapped
+        n = Net(obj_a, [obj_b])
+        new_n = partitioner.partition_net(n, replacements)[0]
+
+        assert new_n.source is obj_d
+        assert new_n.weight == n.weight
+        assert new_n.sinks == n.sinks
+
+    def test_replace_sinks_1_to_many(self):
+        # Define objects and a replacement
+        obj_a = Vertex()
+        obj_b = Vertex()
+        obj_c = Vertex()
+        obj_d = Vertex()
+        obj_e = Vertex()
+        replacements = {obj_b: [obj_d, obj_e]}
+
+        # Create a net and ensure that it is swapped
+        n = Net(obj_a, [obj_b, obj_c])
+        new_n = partitioner.partition_net(n, replacements)[0]
+
+        assert new_n.source is obj_a
+        assert new_n.weight == n.weight
+        assert set(new_n.sinks) == {obj_c, obj_d, obj_e}
+
+    def test_replace_sources_1_to_many(self):
+        # Define objects and a replacement
+        obj_a = Vertex()
+        obj_b = Vertex()
+        obj_d = Vertex()
+        obj_e = Vertex()
+        replacements = {obj_a: [obj_d, obj_e]}
+
+        # Create a net and ensure that it is swapped
+        n = Net(obj_a, [obj_b])
+        new_nets = partitioner.partition_net(n, replacements)
+
+        assert len(new_nets) == 2
+        for new_n in new_nets:
+            assert new_n.source is obj_d or new_n.source is obj_e
+            assert new_n.weight == n.weight
+            assert new_n.sinks == n.sinks
+
+    def test_replace(self):
+        # Define objects and a replacement
+        obj_a = Vertex()
+        obj_b = Vertex()
+        obj_d = Vertex()
+        obj_e = Vertex()
+        obj_f = Vertex()
+        obj_g = Vertex()
+        replacements = {obj_a: [obj_d, obj_e], obj_b: [obj_f, obj_g]}
+
+        ks = mock.Mock()
+
+        # Create a net and ensure that it is swapped
+        n = Net(obj_a, [obj_b], keyspace=ks)
+        new_nets = partitioner.partition_net(n, replacements)
+
+        assert len(new_nets) ==  2
+        for new_n in new_nets:
+            assert new_n.source is obj_d or new_n.source is obj_e
+            assert new_n.weight == n.weight
+            assert set(new_n.sinks) == {obj_f, obj_g}
+            assert new_n.keyspace is ks
