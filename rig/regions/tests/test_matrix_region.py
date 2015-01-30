@@ -4,9 +4,9 @@ import pytest
 import tempfile
 
 from ..region import PrependNumAtoms
-from ..matrix_region import (MatrixRegion, PrependNumColumns, PrependNumRows,
-                             NpIntFormatter, RowSlicedMatrixRegion,
-                             ColumnSlicedMatrixRegion)
+from ..matrix import (MatrixRegion, PrependNumColumns, PrependNumRows,
+                      NpIntFormatter, RowSlicedMatrixRegion,
+                      ColumnSlicedMatrixRegion)
 
 
 class TestUnpartitionedMatrixRegion(object):

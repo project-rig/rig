@@ -10,3 +10,8 @@ Matrices in memory
 ------------------
 .. autoclass:: rig.regions.MatrixRegion
         :members: __init__
+
+Keys in memory
+--------------
+.. autoclass:: rig.regions.KeyspaceRegion
+        :members: __init__

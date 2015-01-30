@@ -9,5 +9,5 @@ their data out to files as necessary.
 """
 
 from .region import PrependNumAtoms
-from .matrix_region import (MatrixRegion, PrependNumColumns, PrependNumRows,
-                           ColumnSlicedMatrixRegion, RowSlicedMatrixRegion)
+from . import matrix
+from . import keyspaces

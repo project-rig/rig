@@ -142,8 +142,8 @@ class PrependedValue(object):
         c = {1: 'b', 2: 'h', 4: 'i'}[self.n_bytes]
 
         # Pack and return
-        return struct.pack('<{}'.format(c if self.signed else c.upper()),
-                           value)
+        return bytes(struct.pack('<{}'.format(c if self.signed else c.upper()),
+                                 value))
 
     def _get_prepended_value(self, vertex_slice, region):
         """Get the value to prepend to the region data.
