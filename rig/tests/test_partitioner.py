@@ -193,7 +193,7 @@ class TestPartitionNet(object):
         n = Net(obj_a, [obj_b], keyspace=ks)
         new_nets = partitioner.partition_net(n, replacements)
 
-        assert len(new_nets) ==  2
+        assert len(new_nets) == 2
         for new_n in new_nets:
             assert new_n.source is obj_d or new_n.source is obj_e
             assert new_n.weight == n.weight

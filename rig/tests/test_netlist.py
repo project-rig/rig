@@ -22,6 +22,12 @@ class TestNet(object):
         assert net.sinks == sinks
         assert net.weight == 0.5
 
+        # Assert that membership test succeeds
+        assert source in net
+        for sink in sinks:
+            assert sink in net
+        assert Vertex() not in net
+
     def test_init_with_object(self):
         source = Vertex()
         sink = Vertex()

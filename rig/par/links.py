@@ -9,8 +9,8 @@ class Links(IntEnum):
 
     Note that the numbers chosen have two useful properties:
     * The integer values assigned are chosen to match the numbers used to
-      identify the links in the low-level software API.
-    * The links are ordered consecutively in clockwise order meaning the
+      identify the links in the low-level software API and hardware registers.
+    * The links are ordered consecutively in anticlockwise order meaning the
       opposite link is `(link+3)%6`.
     """
 
