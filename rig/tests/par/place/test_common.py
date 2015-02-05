@@ -2,7 +2,12 @@
 
 import pytest
 
-from rig.par.place.common import subtract_resources, overallocated
+from rig.par import Cores, SDRAM, SRAM
+
+from rig.par.constraints import ReserveResourceConstraint
+
+from rig.par.place.common import \
+    subtract_resources, overallocated, resources_after_reservation
 
 
 def test_subtract_resources():
@@ -44,3 +49,21 @@ def test_overallocated():
     assert overallocated({"a": -1, "b": 1})
     assert overallocated({"a": -1, "b": 0})
     assert overallocated({"a": -1, "b": -1})
+
+
+def test_unreserved_resources():
+    # Null constraint
+    constraint = ReserveResourceConstraint(Cores, slice(0, 0))
+    assert resources_after_reservation({Cores: 0}, constraint) == {Cores: 0}
+
+    # Constrain some away
+    constraint = ReserveResourceConstraint(Cores, slice(0, 1))
+    assert resources_after_reservation({Cores: 10}, constraint) == {Cores: 9}
+
+    # Non-zero starting point of reservation
+    constraint = ReserveResourceConstraint(Cores, slice(9, 10))
+    assert resources_after_reservation({Cores: 10}, constraint) == {Cores: 9}
+
+    # Constrain everything away
+    constraint = ReserveResourceConstraint(Cores, slice(0, 10))
+    assert resources_after_reservation({Cores: 10}, constraint) == {Cores: 0}

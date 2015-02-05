@@ -11,7 +11,7 @@ from rig.par import Machine, Cores
 from rig.par.exceptions import InsufficientResourceError
 from rig.par.exceptions import InvalidConstraintError
 
-from rig.par.constraints import LocationConstraint
+from rig.par.constraints import LocationConstraint, ReserveResourceConstraint
 
 from rig.par import place as default_place
 from rig.par.place.hilbert import place as hilbert_place
@@ -205,3 +205,47 @@ def test_location_constraint(algorithm, kwargs):
     constraints = [LocationConstraint(vertex, (0, 0))]
     with pytest.raises(InsufficientResourceError):
         algorithm({vertex: {Cores: 2}}, [], machine, constraints, **kwargs)
+
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_reserve_resource_constraint(algorithm, kwargs):
+    """Test that the ReserveResourceConstraint is respected."""
+    # Should be able to limit resources on every chip to make the situation
+    # impossible
+    machine = Machine(1, 1, chip_resources={Cores: 1})
+    vertex = object()
+    constraints = [ReserveResourceConstraint(Cores, slice(0, 1))]
+    with pytest.raises(InsufficientResourceError):
+        algorithm({vertex: {Cores: 1}}, [], machine, constraints, **kwargs)
+
+    # Should be able to limit resources on specific chip to make the situation
+    # impossible
+    machine = Machine(1, 1, chip_resources={Cores: 1})
+    vertex = object()
+    constraints = [ReserveResourceConstraint(Cores, slice(0, 1), (0, 0))]
+    with pytest.raises(InsufficientResourceError):
+        algorithm({vertex: {Cores: 1}}, [], machine, constraints, **kwargs)
+
+    # Should be able to limit resources on chips with resource exceptions to
+    # make the situation impossible
+    machine = Machine(1, 1,
+                      chip_resources={Cores: 1},
+                      chip_resource_exceptions={(0, 0): {Cores: 1}})
+    vertex = object()
+    constraints = [ReserveResourceConstraint(Cores, slice(0, 1))]
+    with pytest.raises(InsufficientResourceError):
+        algorithm({vertex: {Cores: 1}}, [], machine, constraints, **kwargs)
+
+    # Should be able to limit resources such that things are spread out
+    machine = Machine(2, 2, chip_resources={Cores: 2})
+    vertices_resources = {object(): {Cores: 1} for _ in range(4)}
+    constraints = [ReserveResourceConstraint(Cores, slice(1, 2))]
+    placements = algorithm(vertices_resources, [], machine, constraints,
+                           **kwargs)
+    used_chips = set()
+    for vertex in vertices_resources:
+        assert vertex in placements
+        assert placements[vertex] not in used_chips
+        used_chips.add(placements[vertex])
+    assert len(placements) == 4
+    assert len(used_chips) == 4

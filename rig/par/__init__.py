@@ -28,7 +28,7 @@ Where:
 
 * `vertices_resources` is a dictionary `{vertex: resources, ...}` which
   enumerates the resources required by every vertex to be placed. `vertex`
-  should be a unique object which does not compare equal to any other vertex.
+  should be a unique object which sensibly implement `__hash__` and `__eq__`.
   `resources` should be a dictionary `{resource: value, ...}` where `resource`
   is some resource identifier (:py:class:`~.rig.par.resources` defines some
   example resource types though users are free to define their own) and `value`
@@ -129,7 +129,8 @@ Sensible default algorithms have been chosen and are exposed by the names
 place and route problem is NP-hard and so this module contains a library of
 alternative algorithms for each step in submodules named `place`, `allocate`
 and `route` which advanced users are encouraged to peruse to find the most
-appropriate algorithm for their task.  """
+appropriate algorithm for their task.
+"""
 
 from .resources import Cores, SDRAM, SRAM
 from .links import Links
@@ -138,3 +139,4 @@ from .machine import Machine
 
 # Default algorithms
 from .place.hilbert import place
+from .allocate.simple import allocate

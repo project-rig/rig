@@ -7,7 +7,7 @@ their own application-specific resources as required.
 import sentinel
 
 """Usable application processor cores."""
-Cores = sentinel.create("Core")
+Cores = sentinel.create("Cores")
 
 """Shared off-chip SDRAM: bytes."""
 SDRAM = sentinel.create("SDRAM")
