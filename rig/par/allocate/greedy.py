@@ -21,7 +21,7 @@ from ..constraints import ReserveResourceConstraint, AlignResourceConstraint
 
 from ..exceptions import InsufficientResourceError
 
-from .common import slices_overlap, align
+from .util import slices_overlap, align
 
 
 def allocate(vertices_resources, nets, machine, constraints, placements):

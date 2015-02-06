@@ -2,11 +2,11 @@
 
 import pytest
 
-from rig.par import Cores, SDRAM, SRAM
+from rig.machine import Cores, SDRAM, SRAM
 
 from rig.par.constraints import ReserveResourceConstraint
 
-from rig.par.place.common import \
+from rig.par.place.util import \
     subtract_resources, overallocated, resources_after_reservation
 
 

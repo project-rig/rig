@@ -6,7 +6,7 @@ from six import iteritems
 
 from rig.netlist import Net
 
-from rig.par import Machine, Cores
+from rig.machine import Machine, Cores
 
 from rig.par.exceptions import InsufficientResourceError
 from rig.par.exceptions import InvalidConstraintError

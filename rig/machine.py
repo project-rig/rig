@@ -1,14 +1,71 @@
-"""Defines the computational resources available in a SpiNNaker machine.
+"""Definitions of the resources available in a SpiNNaker machine.
 
-The Machine datastructure makes the assumption that in most systems almost
-everything is uniform and working.
+Overview
+--------
+
+* :py:class:`~.rig.machine.Links` gives identifiers for links in a machine
+
+* :py:class:`~.rig.machine.Cores`, :py:class:`~.rig.machine.SDRAM` and
+  :py:class:`~.rig.machine.SDRAM` are (suggested) identifiers for common
+  resources in a SpiNNaker machine.
+
+* :py:class:`~.rig.machine.Machine` defines resources what resources are
+  available in a machine.
+
 """
 
-from .resources import Cores, SDRAM, SRAM
+from enum import Enum, IntEnum
+
+import sentinel
+
+
+class Links(IntEnum):
+    """Enumeration of links from a SpiNNaker chip.
+
+    Note that the numbers chosen have two useful properties:
+    * The integer values assigned are chosen to match the numbers used to
+      identify the links in the low-level software API and hardware registers.
+    * The links are ordered consecutively in anticlockwise order meaning the
+      opposite link is `(link+3)%6`.
+    """
+
+    east = 0
+    north_east = 1
+    north = 2
+    west = 3
+    south_west = 4
+    south = 5
+
+
+"""Resource identifier for (usable) application processor cores.
+
+Note that this identifer does not trigger any kind of special-case behaviour in
+library functions. Users are free to define their own alternatives.
+"""
+Cores = sentinel.create("Cores")
+
+
+"""Resource identifier for shared off-die SDRAM (in bytes).
+
+Note that this identifer does not trigger any kind of special-case behaviour in
+library functions. Users are free to define their own alternatives.
+"""
+SDRAM = sentinel.create("SDRAM")
+
+
+"""Resource identifier for shared on-die SRAM (in bytes).
+
+Note that this identifer does not trigger any kind of special-case behaviour in
+library functions. Users are free to define their own alternatives.
+"""
+SRAM = sentinel.create("SRAM")
 
 
 class Machine(object):
     """Defines the resources available in a SpiNNaker machine.
+
+    This datastructure makes the assumption that in most systems almost
+    everything is uniform and working.
 
     This data-structure intends to be completely transparent. Its contents is
     described below. A number of utility methods are available but should be
@@ -39,9 +96,9 @@ class Machine(object):
         unavailable. Links leaving a dead chip are implicitly marked as dead.
     dead_links : set
         A set `(x,y,link)` where `x` and `y` are a chip's coordinates and
-        `link` is a value from the Enum :py:class:`~rig.par.Links`. Note that
-        links have two directions and both should be defined if a link is dead
-        in both directions (the typical case).
+        `link` is a value from the Enum :py:class:`~rig.machine.Links`. Note
+        that links have two directions and both should be defined if a link is
+        dead in both directions (the typical case).
     """
     __slots__ = ["width", "height", "chip_resources",
                  "chip_resource_exceptions", "dead_chips", "dead_links"]

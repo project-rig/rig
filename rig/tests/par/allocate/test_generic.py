@@ -4,7 +4,7 @@ import pytest
 
 from six import iteritems
 
-from rig.par import Machine, Cores, SDRAM, SRAM
+from rig.machine import Machine, Cores, SDRAM, SRAM
 
 from rig.par.constraints import \
     ReserveResourceConstraint, AlignResourceConstraint
@@ -12,12 +12,12 @@ from rig.par.constraints import \
 from rig.par.exceptions import InsufficientResourceError
 
 from rig.par import allocate as default_allocate
-from rig.par.allocate.simple import allocate as simple_allocate
+from rig.par.allocate.greedy import allocate as greedy_allocate
 
 # This dictionary should be updated to contain all implemented algorithms along
 # with applicable keyword arguments.
 ALGORITHMS_UNDER_TEST = [(default_allocate, {}),
-                         (simple_allocate, {})]
+                         (greedy_allocate, {})]
 
 
 @pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)

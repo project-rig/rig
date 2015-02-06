@@ -11,7 +11,7 @@ from ..exceptions import InsufficientResourceError, InvalidConstraintError
 
 from ..constraints import LocationConstraint, ReserveResourceConstraint
 
-from .common import \
+from .util import \
     subtract_resources, overallocated, resources_after_reservation
 
 

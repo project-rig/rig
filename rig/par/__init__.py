@@ -30,13 +30,13 @@ Where:
   enumerates the resources required by every vertex to be placed. `vertex`
   should be a unique object which sensibly implement `__hash__` and `__eq__`.
   `resources` should be a dictionary `{resource: value, ...}` where `resource`
-  is some resource identifier (:py:class:`~.rig.par.resources` defines some
-  example resource types though users are free to define their own) and `value`
-  is some non-negative integer value.
+  is some resource identifier (:py:class:`~.rig.machine` defines names for some
+  common resource types though users are free to (re)define their own) and
+  `value` is some non-negative integer value.
 * `nets` should be a list of :py:class:`~.rig.netlist.Net` objects which refer
   to vertices given in `vertices_resources`.
-* `machine` should be a :py:class:`~rig.par.Machine` describing the machine for
-  which placement should be carried out.
+* `machine` should be a :py:class:`~rig.machine.Machine` describing the machine
+  for which placement should be carried out.
 * `constraints` should be a list of constraints from
   :py:class:`~rig.par.constraints` referring only to vertices in
   `vertices_resources`. Individual placers may define their own additional
@@ -71,7 +71,9 @@ The resulting `allocation` is a dictionary `{vertex: {resource: slice, ...},
 ...}` which for each vertex in `vertices_resources` gives a dictionary of
 resource allocations. For each resource consumed by the vertex, the allocation
 maps the `resource` identifier to a `:py:class:slice` object which defines the
-range over the placed chip's resources allocated to this vertex.
+range over the placed chip's resources allocated to this vertex. This slice will
+have its `start` and `stop` fields defined while `step` will be `None` (since
+range allocations are always continuous).
 
 Route
 `````
@@ -79,7 +81,7 @@ Route
 Routers have the function prototype::
 
     route(vertices_resources, nets, machine, constraints, placements,
-          allocation, **kwargs)
+          **kwargs)
         -> routes
 
 Where:
@@ -89,11 +91,11 @@ Where:
 * `machine` as defined above.
 * `constraints` as defined above.
 * `placement` is a dictionary of the format returned by a placer.
-* `allocation` is a dictionary of the format returned by an allocator.
 * `**kwargs` may be any additional (and optional) implementation-specific
   arguments.
 
-The resulting `routes` is a TODO.
+The resulting `routes` is a list of :py:class:`~.rig.routing_table.RoutingTree`
+objects defining the routes which connect the supplied nets.
 
 
 A Note About Resources and Cores
@@ -132,11 +134,6 @@ and `route` which advanced users are encouraged to peruse to find the most
 appropriate algorithm for their task.
 """
 
-from .resources import Cores, SDRAM, SRAM
-from .links import Links
-
-from .machine import Machine
-
 # Default algorithms
 from .place.hilbert import place
-from .allocate.simple import allocate
+from .allocate.greedy import allocate

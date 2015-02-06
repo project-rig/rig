@@ -1,6 +1,6 @@
 import pytest
 
-from rig.par import Machine, Cores, SDRAM, SRAM, Links
+from rig.machine import Machine, Links, Cores, SDRAM, SRAM
 
 
 def test_constructor_copies():
