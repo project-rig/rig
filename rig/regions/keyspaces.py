@@ -1,6 +1,6 @@
 from six import iteritems
 import struct
-from .region import Region, PrependedValue
+from .region import Region
 
 
 class KeyspacesRegion(Region):
@@ -14,7 +14,7 @@ class KeyspacesRegion(Region):
     long.
     """
     def __init__(self, keyspaces, fields=list(), partitioned_by_atom=False,
-                 prepends=list()):
+                 prepend_num_keyspaces=False):
         """Create a new region representing Keyspace information.
 
         Parameters
@@ -32,16 +32,15 @@ class KeyspacesRegion(Region):
             If True then one set of fields will be written out per atom, if
             False then fields for all keyspaces are written out regardless of
             the vertex slice.
-        prepends : list of :py:class:`RegionPrepend`
-            Values which will be prepended to the keyspace fields when they are
-            written out into memory.
+        prepend_num_keyspaces : bool
+            Prepend a word containing the number of keyspaces to the region
+            data when it is written out.
         """
-        super(KeyspacesRegion, self).__init__(prepends=prepends)
-
         # Save the keyspaces, fields and partitioned status
         self.keyspaces = keyspaces[:]
         self.fields = fields[:]
         self.partitioned = partitioned_by_atom
+        self.prepend_num_keyspaces = prepend_num_keyspaces
 
         # Determine the number of bytes per field
         max_bits = max(ks.length for ks in self.keyspaces)
@@ -53,9 +52,6 @@ class KeyspacesRegion(Region):
 
         See :py:method:`Region.sizeof`
         """
-        # Get the memory requirements of the prepends
-        pp_size = super(KeyspacesRegion, self).sizeof(vertex_slice)
-
         # Get the size from representing the fields
         if not self.partitioned:
             n_keys = len(self.keyspaces)
@@ -63,46 +59,35 @@ class KeyspacesRegion(Region):
             assert vertex_slice.stop < len(self.keyspaces) + 1
             n_keys = vertex_slice.stop - vertex_slice.start
 
+        pp_size = 0 if not self.prepend_num_keyspaces else 4
+
         return self.bytes_per_field * n_keys * len(self.fields) + pp_size
 
     def write_subregion_to_file(self, vertex_slice, fp, **field_args):
         """Write the data contained in a portion of this region out to file.
         """
+        data = b''
+
         # Get a slice onto the keys
         if self.partitioned:
             assert vertex_slice.stop < len(self.keyspaces) + 1
         key_slice = vertex_slice if self.partitioned else slice(None)
 
-        # Write out the prepends
-        super(KeyspacesRegion, self).write_subregion_to_file(vertex_slice, fp,
-                                                            **field_args)
+        # Write the prepends
+        if self.prepend_num_keyspaces:
+            nks = len(self.keyspaces[key_slice])
+            data += struct.pack("<I", nks)
 
         # Get the size of the data to write
         c = {1: 'B', 2: 'H', 4: 'I'}[self.bytes_per_field]
 
         # For each key fill in each field
-        data = b''
         for ks in self.keyspaces[key_slice]:
             for field in self.fields:
                 data += struct.pack("<{}".format(c), field(ks, **field_args))
 
         # Write out
         fp.write(data)
-
-
-class PrependNumKeyspaces(PrependedValue):
-    """Prepend the number of keyspaces that are in the region."""
-    def __init__(self, n_bytes=4):
-        super(PrependNumKeyspaces, self).__init__(n_bytes, signed=False)
-
-    def _get_prepended_value(self, vertex_slice, region):
-        """Get the prepended value, in this case the number of keyspaces that
-        are contained in the given slice.
-        """
-        if region.partitioned:
-            return vertex_slice.stop - vertex_slice.start
-        else:
-            return len(region.keyspaces)
 
 
 # NOTE: This closure intentionally tries to look like a class.

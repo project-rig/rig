@@ -1,56 +1,152 @@
-import mock
 import numpy as np
 import pytest
+import struct
 import tempfile
 
-from ..region import PrependNumAtoms
-from ..matrix import (MatrixRegion, PrependNumColumns, PrependNumRows,
-                      NpIntFormatter, RowSlicedMatrixRegion,
-                      ColumnSlicedMatrixRegion)
+from ..matrix import MatrixRegion, NpIntFormatter, MatrixPartitioning
 
 
-class TestUnpartitionedMatrixRegion(object):
-    @pytest.mark.parametrize("matrix, shape", [
-        (np.zeros(shape=(3, 4)), (4, 3)),  # Shape mismatch
-        (None, None),  # Neither matrix nor shape
-    ])
-    def test_init_mismatch_shape(self, matrix, shape):
-        """Check that a ValueError is raised if the matrix and shape don't
-        match or no matrix or shape are provided."""
-        with pytest.raises(ValueError):
-            MatrixRegion(matrix, shape)
+class TestNpIntFormatter(object):
+    @pytest.mark.parametrize(
+        "dtype, bytes_per_element",
+        [(np.int8, 1),
+         (np.uint8, 1),
+         (np.int16, 2),
+         (np.uint16, 2),
+         (np.int32, 4),
+         (np.uint32, 4),
+         ])
+    def test_correct(self, dtype, bytes_per_element):
+        f = NpIntFormatter(dtype)
+        assert f.bytes_per_element == bytes_per_element
+        assert f.dtype == dtype
+        assert f(np.zeros(100, dtype=float)).dtype == dtype
 
-    def test_too_many_dimensions(self):
-        with pytest.raises(ValueError):
-            MatrixRegion(np.zeros(shape=(1, 2, 3)))
 
-    @pytest.mark.parametrize("matrix, shape, formatter, prepends, size", [
-        (np.zeros(shape=(3, 4)), None, NpIntFormatter(4, np.uint32),
-         list(), 3*4*4),
-        (np.zeros(shape=(3)), None, NpIntFormatter(4, np.uint32),
-         list(), 3*4),
-        (np.zeros(shape=(3, 4)), None, NpIntFormatter(2, np.uint16),
-         list(), 3*4*2),
-        (None, (5, 2), NpIntFormatter(1, np.uint8), list(), 5*2*1),
-        (None, (5,), NpIntFormatter(1, np.uint8), list(), 5*1),
-        (None, (5, 2), NpIntFormatter(1, np.uint8),
-         [PrependNumColumns(1)], 5*2*1 + 1),
-    ])
-    def test_sizeof(self, matrix, shape, formatter, prepends, size):
-        # Create the matrix region, then assert the size is correct.
-        mr = MatrixRegion(matrix=matrix, shape=shape, prepends=prepends,
-                          formatter=formatter)
-        assert mr.sizeof(slice(0, 0)) == size
+class TestMatrixRegion(object):
+    @pytest.mark.parametrize("formatter", [NpIntFormatter(np.uint8),
+                                           NpIntFormatter(np.uint16),
+                                           NpIntFormatter(np.uint32)])
+    @pytest.mark.parametrize(
+        "prepend_n_rows, prepend_n_cols, n_prepend_bytes",
+        [(False, False, 0),
+         (True, False, 4),
+         (False, True, 4),
+         (True, True, 8)
+         ])
+    @pytest.mark.parametrize(
+        "matrix, partition, sliced_dimension",
+        [(np.zeros((4, 3)), slice(0, 4), None),
+         (np.zeros((4, 3)), slice(0, 2), MatrixPartitioning.rows),
+         (np.ones((4, 5)), slice(0, 2), MatrixPartitioning.columns),
+         (np.zeros(100), slice(1), 0),
+         (np.zeros((4, 3, 5)), slice(1), 2),
+         ])
+    def test_sizeof(self, matrix, prepend_n_rows, prepend_n_cols,
+                    n_prepend_bytes, formatter, partition, sliced_dimension):
+        # Create the matrix region
+        mr = MatrixRegion(
+            matrix, prepend_n_rows=prepend_n_rows,
+            prepend_n_columns=prepend_n_cols, formatter=formatter,
+            sliced_dimension=sliced_dimension
+        )
 
-    @pytest.mark.parametrize("matrix, shape, prepends, empty", [
-        (np.zeros(shape=(3, 1)), None, list(), False),
-        (None, (3, 2), [1], False),
-        (None, (3, 2), [], True),
-    ])
-    def test_empty(self, matrix, shape, prepends, empty):
-        """Test whether the `empty` flag is set correctly."""
-        mr = MatrixRegion(matrix, shape, prepends)
-        assert mr.empty is empty
+        # Get the partitioned matrix
+        if sliced_dimension is None:
+            slices = slice(None)
+        else:
+            slices = (
+                tuple(slice(None) for _ in range(sliced_dimension)) +
+                (partition, ) +
+                tuple(slice(None) for _ in range(sliced_dimension + 1,
+                                                 matrix.ndim))
+            )
+
+        # Check the size is correct
+        assert (
+            mr.sizeof(partition) ==
+            n_prepend_bytes + formatter.bytes_per_element * matrix[slices].size
+        )
+
+    @pytest.mark.parametrize(
+        "prepend_n_rows, prepend_n_cols",
+        [(False, False),
+         (True, False),
+         (False, True),
+         (True, True)])
+    @pytest.mark.parametrize(
+        "matrix, partition, sliced_dimension",
+        [(np.eye(4), slice(0, 2), MatrixPartitioning.rows),
+         (np.eye(5), slice(1, 3), MatrixPartitioning.rows),
+         ])
+    @pytest.mark.parametrize(
+        "formatter",
+        [NpIntFormatter(np.uint8),
+         NpIntFormatter(np.int8),
+         NpIntFormatter(np.uint16),
+         NpIntFormatter(np.int16),
+         NpIntFormatter(np.uint32),
+         NpIntFormatter(np.int32),
+         ])
+    def test_write_subregion_to_file(self, matrix,
+                                     prepend_n_rows, prepend_n_cols,
+                                     formatter, partition, sliced_dimension):
+        # Create the matrix region
+        mr = MatrixRegion(matrix, prepend_n_rows=prepend_n_rows,
+                          prepend_n_columns=prepend_n_cols,
+                          formatter=formatter,
+                          sliced_dimension=sliced_dimension)
+
+        partitioned_matrix = matrix[mr.expanded_slice(partition)]
+
+        # Get the temporary file
+        fp = tempfile.TemporaryFile()
+
+        # Write the subregion
+        mr.write_subregion_to_file(partition, fp)
+
+        # Read and check
+        # Check the prepended data
+        fp.seek(0)
+        if prepend_n_rows:
+            n_rows = fp.read(4)
+            assert (partitioned_matrix.shape[0] ==
+                    struct.unpack('I', n_rows)[0])
+
+        if prepend_n_cols:
+            n_cols = fp.read(4)
+            assert (partitioned_matrix.shape[1] ==
+                    struct.unpack('I', n_cols)[0])
+
+        # Check the actual data
+        data = np.frombuffer(fp.read(), dtype=formatter.dtype).reshape(
+            partitioned_matrix.shape)
+        assert np.all(data == formatter(partitioned_matrix))
+
+    def test_write_subregion_to_file_with_1d_array(self):
+        matrix = np.ones(100)
+        mr = MatrixRegion(matrix, True, True)
+
+        # Get the temporary file
+        fp = tempfile.TemporaryFile()
+
+        # Write the subregion
+        mr.write_subregion_to_file(slice(1, 1), fp)
+
+        # Read and check
+        # Check the prepended data
+        fp.seek(0)
+        n_rows = fp.read(4)
+        assert 100 == struct.unpack('I', n_rows)[0]
+
+        n_cols = fp.read(4)
+        assert 1 == struct.unpack('I', n_cols)[0]
+
+        # Check the actual data
+        formatter = mr.formatter
+        data = np.frombuffer(fp.read(), dtype=formatter.dtype).reshape(
+            matrix.shape)
+        assert np.all(data == formatter(matrix))
 
     def test_locks_matrix(self):
         """Check that the data stored in the region is copied and not editable.
@@ -68,141 +164,3 @@ class TestUnpartitionedMatrixRegion(object):
         with pytest.raises(ValueError):
             mr.matrix[0][0] = 3.
         assert mr.matrix.flags.writeable is False
-
-    @pytest.mark.parametrize("matrix, vertex_slice", [
-        (np.ones(shape=(3, 4), dtype=np.uint32), slice(0, 1)),
-        (np.zeros(shape=(2, 5), dtype=np.uint32), slice(1, 4)),
-    ])
-    def test_write_subregion_to_file_no_prepends(self, matrix, vertex_slice):
-        # Create a temporary file to write to
-        f = tempfile.TemporaryFile()
-
-        # Create the region and write out
-        mr = MatrixRegion(matrix)
-        mr.write_subregion_to_file(vertex_slice, f)
-
-        # Read in the file, check that the matrices match
-        f.seek(0)
-        recovered = np.fromstring(
-            f.read(), dtype=matrix.dtype).reshape(matrix.shape)
-        assert np.all(recovered == matrix)
-
-    @pytest.mark.parametrize("matrix, prepends, vertex_slice, prepend_data", [
-        (np.ones(shape=(3, 4), dtype=np.uint32),
-         [PrependNumAtoms(4)], slice(0, 1), b'\x01\x00\x00\x00'),
-        (np.zeros(shape=(2, 5), dtype=np.uint32),
-         [PrependNumColumns(1), PrependNumRows(1)], slice(1, 4),
-         b'\x05\x02'),
-    ])
-    def test_write_subregion_to_file(self, matrix, prepends, vertex_slice,
-                                     prepend_data):
-        # Create a temporary file to write to
-        f = tempfile.TemporaryFile()
-
-        # Create a formatter
-        formatter = mock.Mock(spec=NpIntFormatter)
-        formatter.side_effect = NpIntFormatter(4, np.uint32)
-
-        # Create the region and write out
-        mr = MatrixRegion(matrix, prepends=prepends, formatter=formatter)
-        mr.write_subregion_to_file(vertex_slice, f, subvertex_index=1)
-
-        # Assert that the formatter was called with the data and the kwargs
-        formatter.assert_called_once_with(mr.matrix, subvertex_index=1)
-
-        # Read in the file, check that the matrices match
-        f.seek(0)
-        assert f.read(len(prepend_data)) == prepend_data
-        recovered = np.fromstring(
-            f.read(), dtype=matrix.dtype).reshape(matrix.shape)
-        assert np.all(recovered == matrix)
-
-
-class TestRowSlicedMatrixRegion(object):
-    """Test for matrix regions which are sliced by row."""
-
-    @pytest.mark.parametrize("matrix,shape,formatter,prepends,slice,size", [
-        (np.zeros(shape=(3, 4)),
-         None,
-         NpIntFormatter(4, np.uint32),
-         list(),
-         slice(0, 1),
-         1*4*4),
-        (np.zeros(shape=(3, 4)),
-         None,
-         NpIntFormatter(4, np.uint32),
-         list(),
-         slice(0, 2),
-         2*4*4),
-        (np.zeros(shape=(3, 4)),
-         None,
-         NpIntFormatter(2, np.uint16),
-         list(),
-         slice(0, 3),
-         3*4*2),
-        (np.zeros(shape=(3, 1)),
-         None,
-         NpIntFormatter(2, np.uint16),
-         list(),
-         slice(0, 3),
-         3*1*2),
-        (np.zeros(shape=(5, 1)),
-         None,
-         NpIntFormatter(2, np.uint16),
-         [PrependNumAtoms(4)],
-         slice(2, 4),
-         2*1*2 + 4),
-    ])
-    def test_sizeof(self, matrix, shape, formatter, prepends, slice, size):
-        # Create the matrix region, then assert the size is correct.
-        mr = RowSlicedMatrixRegion(
-            matrix=matrix, shape=shape, prepends=prepends, formatter=formatter)
-        assert mr.sizeof(slice) == size
-
-    def test_write_subregion_to_file(self):
-        """Test writing a subregion to file."""
-        # Create some data which should be distinctive
-        data = np.array([[1., 2., 3., 4.]]*2).T
-
-        # Create a matrix region with prepends
-        pps = [PrependNumAtoms(1), PrependNumRows(1), PrependNumColumns(1)]
-        mr = RowSlicedMatrixRegion(data, prepends=pps)
-
-        # Create temporary file to write to
-        f = tempfile.TemporaryFile()
-
-        # Write out a subregion
-        mr.write_subregion_to_file(slice(0, 3), f)
-
-        # Check that the first 3 bytes are correct
-        f.seek(0)
-        assert f.read(3) == b'\x03\x03\x02'
-
-        # Check that the data is correct
-        d2 = np.fromstring(f.read(), dtype=np.uint32).reshape((3, 2))
-        assert np.all(d2 == data[0:3])
-
-
-class TestColumnSlicedMatrixRegion(object):
-    def test_write_subregion_to_file(self):
-        """Test writing a subregion to file."""
-        # Create some data which should be distinctive
-        data = np.array([[1., 2., 3., 4.]]*2)
-
-        # Create a matrix region with prepends
-        pps = [PrependNumAtoms(1), PrependNumRows(1), PrependNumColumns(1)]
-        mr = ColumnSlicedMatrixRegion(data, prepends=pps)
-
-        # Create temporary file to write to
-        f = tempfile.TemporaryFile()
-
-        # Write out a subregion
-        mr.write_subregion_to_file(slice(2, 3), f)
-
-        # Check that the first 3 bytes are correct
-        f.seek(0)
-        assert f.read(3) == b'\x01\x02\x01'
-
-        # Check that the data is correct
-        d2 = np.fromstring(f.read(), dtype=np.uint32).reshape((2, 1))
-        assert np.all(d2 == data.T[2:3].T)
