@@ -3,13 +3,12 @@
 import numpy as np
 
 
-def float_to_fix(value, signed, n_bits, n_frac):
-    """Convert a floating point value to a fixed point value.
+def float_to_fix(signed, n_bits, n_frac):
+    """Return a function to convert a floating point value to a fixed point
+    value.
 
     Parameters
     ----------
-    value : float
-        The value to convert.
     signed : bool
     n_bits : int
     n_frac : int
@@ -18,36 +17,55 @@ def float_to_fix(value, signed, n_bits, n_frac):
     min_v, max_v = validate_fp_params(signed, n_bits, n_frac)
 
     # Saturate values
-    value = np.clip(value, min_v, max_v)
+    def bitsk(value):
+        """Convert a floating point value to a fixed point value.
 
-    if value < 0:
-        fp_val = (1 << n_bits) + int(value * 2**n_frac)
-    else:
-        fp_val = int(value * 2**n_frac)
+        Parameters
+        ----------
+        value : float
+            The value to convert.
+        """
+        value = np.clip(value, min_v, max_v)
 
-    assert 0 <= fp_val < 1 << (n_bits + 1)
-    return fp_val & mask
+        if value < 0:
+            fp_val = (1 << n_bits) + int(value * 2**n_frac)
+        else:
+            fp_val = int(value * 2**n_frac)
+
+        assert 0 <= fp_val < 1 << (n_bits + 1)
+        return fp_val & mask
+
+    return bitsk
 
 
-def fix_to_float(value, signed, n_bits, n_frac):
-    """Convert a fixed point value to a floating point value.
+def fix_to_float(signed, n_bits, n_frac):
+    """Return a function to convert a fixed point value to a floating point
+    value.
 
     Parameters
     ----------
-    value : int
-        The fix point value as an integer.
     signed : bool
     n_bits : int
     n_frac : int
     """
     validate_fp_params(signed, n_bits, n_frac)
 
-    if signed and value & (1 << (n_bits - 1)):
-        # If signed and negative
-        return -(value & (2**(n_bits - 1) - 1)) / (2.0**n_frac)
-    else:
-        # Unsigned or signed and positive
-        return float(value) / (2.0**n_frac)
+    def kbits(value):
+        """Convert a fixed point value to a float.
+
+        Parameters
+        ----------
+        value : int
+            The fix point value as an integer.
+        """
+        if signed and value & (1 << (n_bits - 1)):
+            # If signed and negative
+            return -(value & (2**(n_bits - 1) - 1)) / (2.0**n_frac)
+        else:
+            # Unsigned or signed and positive
+            return float(value) / (2.0**n_frac)
+
+    return kbits
 
 
 class FixPointFormatter(object):

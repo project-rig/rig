@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from rig.fixed_point import float_to_fix, fix_to_float, FixPointFormatter
+from rig.type_casts import float_to_fix, fix_to_float, FixPointFormatter
 import struct
 
 
@@ -16,7 +16,7 @@ class TestFloatToFix(object):
          ])
     def test_invalid_parameters(self, signed, n_bits, n_frac):
         with pytest.raises(ValueError):
-            float_to_fix(0.0, signed, n_bits, n_frac)
+            float_to_fix(signed, n_bits, n_frac)
 
     @pytest.mark.parametrize(
         "value, n_bits, n_frac, output",
@@ -31,7 +31,7 @@ class TestFloatToFix(object):
          (-1.75, 8, 4, 0x00),  # Clipped
          ])
     def test_no_saturate_unsigned(self, value, n_bits, n_frac, output):
-        assert float_to_fix(value, False, n_bits, n_frac) == output
+        assert float_to_fix(False, n_bits, n_frac)(value) == output
 
     @pytest.mark.parametrize(
         "value, n_bits, n_frac, output",
@@ -62,7 +62,7 @@ class TestFloatToFix(object):
          (-1.0, 16, 2, 0xfffc),
          ])
     def test_no_saturate_signed(self, value, n_bits, n_frac, output):
-        assert float_to_fix(value, True, n_bits, n_frac) == output
+        assert float_to_fix(True, n_bits, n_frac)(value) == output
 
     @pytest.mark.parametrize(
         "value, n_bits, n_frac, output",
@@ -70,7 +70,7 @@ class TestFloatToFix(object):
          (2**4 - 1 + sum(2**-n for n in range(1, 6)), 8, 4, 0xff),  # Saturate
          ])
     def test_saturate_unsigned(self, value, n_bits, n_frac, output):
-        assert float_to_fix(value, False, n_bits, n_frac) == output
+        assert float_to_fix(False, n_bits, n_frac)(value) == output
 
 
 class TestFixToFloat(object):
@@ -83,7 +83,7 @@ class TestFixToFloat(object):
          ])
     def test_invalid_parameters(self, signed, n_bits, n_frac):
         with pytest.raises(ValueError):
-            fix_to_float(0.0, signed, n_bits, n_frac)
+            fix_to_float(signed, n_bits, n_frac)
 
     @pytest.mark.parametrize(
         "bits, signed, n_bits, n_frac, value",
@@ -93,7 +93,7 @@ class TestFixToFloat(object):
          (0xff, True, 8, 1, -63.5),
          ])
     def test_fix_to_float(self, bits, signed, n_bits, n_frac, value):
-        assert value == fix_to_float(bits, signed, n_bits, n_frac)
+        assert value == fix_to_float(signed, n_bits, n_frac)(bits)
 
 
 class TestFixPointFormatter(object):
@@ -143,10 +143,8 @@ class TestFixPointFormatter(object):
         vals = fpf(np.array(values))
 
         # Check the values are correct
-        assert np.all(
-            vals ==
-            np.array([float_to_fix(v, False, n_bits, n_frac) for v in values])
-        )
+        ftf = float_to_fix(False, n_bits, n_frac)
+        assert np.all(vals == np.array([ftf(v) for v in values]))
         assert vals.dtype == dtype
 
     @pytest.mark.parametrize(
@@ -167,13 +165,12 @@ class TestFixPointFormatter(object):
         c = {8: 'B', 16: 'H', 32: 'I'}[n_bits]
 
         # Check the values are correct
+        ftf = float_to_fix(True, n_bits, n_frac)
         assert vals.dtype == dtype
         assert (
             bytes(vals.data) ==
             struct.pack("{}{}".format(len(values), c),
-                        *[float_to_fix(v, True, n_bits, n_frac) for v in
-                          values]
-                        )
+                        *[ftf(v) for v in values])
         )
 
     @pytest.mark.parametrize("signed", [True, False])
@@ -192,10 +189,9 @@ class TestFixPointFormatter(object):
         c = {8: 'B', 16: 'H', 32: 'I'}[n_bits]
 
         # Check the values are correct
+        ftf = float_to_fix(signed, n_bits, n_frac)
         assert (
             bytes(vals.data) ==
             struct.pack("{}{}".format(len(values), c),
-                        *[float_to_fix(v, signed, n_bits, n_frac) for v in
-                          values]
-                        )
+                        *[ftf(v) for v in values])
         )
