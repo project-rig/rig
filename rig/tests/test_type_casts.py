@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from rig.type_casts import float_to_fix, fix_to_float, FixPointFormatter
+from rig.type_casts import float_to_fix, fix_to_float, NumpyFloatToFixConverter
 import struct
 
 
@@ -96,7 +96,7 @@ class TestFixToFloat(object):
         assert value == fix_to_float(signed, n_bits, n_frac)(bits)
 
 
-class TestFixPointFormatter(object):
+class TestNumpyFloatToFixConverter(object):
     @pytest.mark.parametrize(
         "signed, n_bits, n_frac",
         [(True, 32, 32),  # Too many frac bits
@@ -107,7 +107,7 @@ class TestFixPointFormatter(object):
          ])
     def test_init_fails(self, signed, n_bits, n_frac):
         with pytest.raises(ValueError):
-            FixPointFormatter(signed, n_bits, n_frac)
+            NumpyFloatToFixConverter(signed, n_bits, n_frac)
 
     @pytest.mark.parametrize(
         "signed, n_bits, dtype, n_bytes",
@@ -122,7 +122,7 @@ class TestFixPointFormatter(object):
          ])
     def test_dtypes(self, signed, n_bits, dtype, n_bytes):
         """Check that the correcy dtype is returned."""
-        fpf = FixPointFormatter(signed, n_bits, 0)
+        fpf = NumpyFloatToFixConverter(signed, n_bits, 0)
         assert fpf.dtype == dtype
         assert fpf.bytes_per_element == n_bytes
 
@@ -139,7 +139,7 @@ class TestFixPointFormatter(object):
          ])
     def test_unsigned_no_saturate(self, n_bits, n_frac, values, dtype):
         # Create the formatter then call it on the array
-        fpf = FixPointFormatter(False, n_bits, n_frac)
+        fpf = NumpyFloatToFixConverter(False, n_bits, n_frac)
         vals = fpf(np.array(values))
 
         # Check the values are correct
@@ -159,7 +159,7 @@ class TestFixPointFormatter(object):
          ])
     def test_signed_no_saturate(self, n_bits, n_frac, values, dtype):
         # Create the formatter then call it on the array
-        fpf = FixPointFormatter(True, n_bits, n_frac)
+        fpf = NumpyFloatToFixConverter(True, n_bits, n_frac)
         vals = fpf(np.array(values))
 
         c = {8: 'B', 16: 'H', 32: 'I'}[n_bits]
@@ -183,7 +183,7 @@ class TestFixPointFormatter(object):
                   2.0**(n_bits - n_frac - (1 if signed else 0)) - 1]
 
         # Format
-        fpf = FixPointFormatter(signed, n_bits, n_frac)
+        fpf = NumpyFloatToFixConverter(signed, n_bits, n_frac)
         vals = fpf(np.array(values))
 
         c = {8: 'B', 16: 'H', 32: 'I'}[n_bits]

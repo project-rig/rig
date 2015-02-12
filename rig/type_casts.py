@@ -68,9 +68,8 @@ def fix_to_float(signed, n_bits, n_frac):
     return kbits
 
 
-class FixPointFormatter(object):
-    """A formatter that can be used to convert values in matrix regions into
-    fixed point representations.
+class NumpyFloatToFixConverter(object):
+    """A callable which converts Numpy arrays of floats to fixed point arrays.
     """
     dtypes = {
         (False, 8): np.uint8,
@@ -84,8 +83,7 @@ class FixPointFormatter(object):
     }
 
     def __init__(self, signed, n_bits, n_frac):
-        """Create a new formatter that will convert values from floats into
-        ints.
+        """Create a new converter from floats into ints.
 
         Parameters
         ----------
