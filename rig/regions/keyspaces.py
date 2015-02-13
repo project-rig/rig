@@ -8,10 +8,8 @@ class KeyspacesRegion(Region):
     :py:class:`~rig.keyspaces.Keyspace` instances.
 
     Each "row" represents a keyspace, and each "column" is formed by getting
-    the result of a function applied to the keyspace.  Each field will be the
-    same size, the smallest number of bytes required to represent the keyspace.
-    For example, if 12 bit keyspaces were used each field would be 2 bytes
-    long.
+    the result of a function applied to the keyspace.  Each field will be one
+    word long, and all keyspaces are expected to be 32-bit long.
     """
     def __init__(self, keyspaces, fields=list(), partitioned_by_atom=False,
                  prepend_num_keyspaces=False):
@@ -36,16 +34,16 @@ class KeyspacesRegion(Region):
             Prepend a word containing the number of keyspaces to the region
             data when it is written out.
         """
+        # Can only support 32-bit keyspaces
+        for ks in keyspaces:
+            assert ks.length == 32
+
         # Save the keyspaces, fields and partitioned status
         self.keyspaces = keyspaces[:]
         self.fields = fields[:]
         self.partitioned = partitioned_by_atom
         self.prepend_num_keyspaces = prepend_num_keyspaces
-
-        # Determine the number of bytes per field
-        max_bits = max(ks.length for ks in self.keyspaces)
-        self.bytes_per_field = (max_bits >> 3) + (1 if max_bits & 0x7 != 0
-                                                  else 0)
+        self.bytes_per_field = 4
 
     def sizeof(self, vertex_slice):
         """Get the size of a slice of this region in bytes.
@@ -78,13 +76,10 @@ class KeyspacesRegion(Region):
             nks = len(self.keyspaces[key_slice])
             data += struct.pack("<I", nks)
 
-        # Get the size of the data to write
-        c = {1: 'B', 2: 'H', 4: 'I'}[self.bytes_per_field]
-
         # For each key fill in each field
         for ks in self.keyspaces[key_slice]:
             for field in self.fields:
-                data += struct.pack("<{}".format(c), field(ks, **field_args))
+                data += struct.pack("<I", field(ks, **field_args))
 
         # Write out
         fp.write(data)

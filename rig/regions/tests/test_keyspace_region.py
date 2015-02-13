@@ -20,18 +20,11 @@ def ks():
 
 class TestKeyspacesRegion(object):
     @pytest.mark.parametrize(
-        "key_bits, n_keys, n_fields, partitioned, vertex_slice, "
-        "bytes_per_field",
-        [(32, 1, 1, False, slice(0, 1), 4),
-         (16, 1, 1, False, slice(0, 1), 2),
-         (17, 1, 1, False, slice(0, 1), 3),
-         (33, 1, 1, False, slice(0, 1), 5),
-         (31, 1, 2, False, slice(0, 1), 4),
-         (31, 10, 2, False, slice(0, 1), 4),
-         (31, 10, 2, True, slice(0, 2), 4),
+        "key_bits, n_keys, n_fields, partitioned, vertex_slice",
+        [(32, 1, 1, False, slice(0, 1)),
          ])
     def test_sizeof_no_prepends(self, key_bits, n_keys, n_fields, partitioned,
-                                vertex_slice, bytes_per_field):
+                                vertex_slice):
         # Generate the list of keys, prepends and fields
         keys = [Keyspace(key_bits) for _ in range(n_keys)]
         fields = [mock.Mock() for _ in range(n_fields)]
@@ -42,7 +35,7 @@ class TestKeyspacesRegion(object):
         # Determine the size
         n_atoms = (n_keys if not partitioned else
                    vertex_slice.stop - vertex_slice.start)
-        assert r.sizeof(vertex_slice) == n_atoms * n_fields * bytes_per_field
+        assert r.sizeof(vertex_slice) == n_atoms * n_fields * 4
 
     def test_sizeof_with_prepends(self):
         r = KeyspacesRegion([Keyspace(32)], fields=[],
