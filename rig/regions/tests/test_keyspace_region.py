@@ -4,9 +4,7 @@ import struct
 import tempfile
 
 from rig.keyspaces import Keyspace
-from ..region import PrependNumAtoms
-from ..keyspaces import (KeyspacesRegion, PrependNumKeyspaces, KeyField,
-                         MaskField)
+from ..keyspaces import (KeyspacesRegion, KeyField, MaskField)
 
 
 @pytest.fixture
@@ -22,18 +20,11 @@ def ks():
 
 class TestKeyspacesRegion(object):
     @pytest.mark.parametrize(
-        "key_bits, n_keys, n_fields, partitioned, vertex_slice, "
-        "bytes_per_field",
-        [(32, 1, 1, False, slice(0, 1), 4),
-         (16, 1, 1, False, slice(0, 1), 2),
-         (17, 1, 1, False, slice(0, 1), 3),
-         (33, 1, 1, False, slice(0, 1), 5),
-         (31, 1, 2, False, slice(0, 1), 4),
-         (31, 10, 2, False, slice(0, 1), 4),
-         (31, 10, 2, True, slice(0, 2), 4),
+        "key_bits, n_keys, n_fields, partitioned, vertex_slice",
+        [(32, 1, 1, False, slice(0, 1)),
          ])
     def test_sizeof_no_prepends(self, key_bits, n_keys, n_fields, partitioned,
-                                vertex_slice, bytes_per_field):
+                                vertex_slice):
         # Generate the list of keys, prepends and fields
         keys = [Keyspace(key_bits) for _ in range(n_keys)]
         fields = [mock.Mock() for _ in range(n_fields)]
@@ -44,16 +35,12 @@ class TestKeyspacesRegion(object):
         # Determine the size
         n_atoms = (n_keys if not partitioned else
                    vertex_slice.stop - vertex_slice.start)
-        assert r.sizeof(vertex_slice) == n_atoms * n_fields * bytes_per_field
+        assert r.sizeof(vertex_slice) == n_atoms * n_fields * 4
 
     def test_sizeof_with_prepends(self):
         r = KeyspacesRegion([Keyspace(32)], fields=[],
-                            prepends=[PrependNumAtoms(4)])
+                            prepend_num_keyspaces=True)
         assert r.sizeof(slice(None)) == 4
-
-        r = KeyspacesRegion([Keyspace(32)], fields=[],
-                            prepends=[PrependNumAtoms(4), PrependNumAtoms(2)])
-        assert r.sizeof(slice(None)) == 6
 
     def test_write_subregion_calls_fields(self):
         """Check that writing a subregion to file calls the field functions
@@ -106,7 +93,7 @@ class TestKeyspacesRegion(object):
 
         # Create the region
         r = KeyspacesRegion(keyspaces, fields=[kf, mf],
-                            prepends=(PrependNumKeyspaces(1), ))
+                            prepend_num_keyspaces=True)
 
         # Write out the region, then check that the data corresponds to what
         # we'd expect.
@@ -114,32 +101,12 @@ class TestKeyspacesRegion(object):
         r.write_subregion_to_file(slice(0, 10), fp, c=5)
 
         fp.seek(0)
-        assert fp.read(1) == b'\x02'  # Number of keyspaces
+        assert fp.read(4) == b'\x02\x00\x00\x00'  # Number of keyspaces
         assert fp.read() == struct.pack('4I',
                                         keyspaces[0](c=5).get_key(),
                                         keyspaces[0].get_mask(tag='routing'),
                                         keyspaces[1](c=5).get_key(),
                                         keyspaces[1].get_mask(tag='routing'))
-
-
-class TestPrependNumKeyspaces(object):
-    @pytest.mark.parametrize(
-        "region, vertex_slice, value",
-        [(KeyspacesRegion([Keyspace(32)], fields=[]), slice(0, 100),
-          b'\x01\x00\x00\x00'),
-         (KeyspacesRegion([Keyspace(32)]*32, fields=[]), slice(0, 100),
-          b'\x20\x00\x00\x00'),
-         (KeyspacesRegion([Keyspace(32)]*32, fields=[],
-                          partitioned_by_atom=True), slice(0, 1),
-          b'\x01\x00\x00\x00'),
-         ]
-    )
-    def test_value(self, region, vertex_slice, value):
-        # Create and call the prepender, check that the value is sensible.
-        pp = PrependNumKeyspaces(4)
-
-        # Call and check the value
-        assert pp(vertex_slice, region) == value
 
 
 class TestMaskField(object):
