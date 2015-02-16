@@ -1,1 +1,1 @@
-from rig.communicator.tests.conftest import pytest_addoption  # noqa
+from rig.machine_control.tests.conftest import pytest_addoption  # noqa
