@@ -12,8 +12,8 @@ class RoutingTree(object):
     ----------
     chip : (x, y)
         The chip the route is currently passing through.
-    children : list
-        A list of the next step in the route. This may be one of:
+    children : set
+        A set of the next steps in the route. This may be one of:
         * :py:class:`~.rig.routing_table.RoutingTree` representing a step onto
           the next chip
         * :py:class:`~.rig.machine.Links` representing a link to terminate on.
@@ -28,6 +28,25 @@ class RoutingTree(object):
 
     __slots__ = ["chip", "children"]
 
-    def __init__(self, chip, children):
+    def __init__(self, chip, children=None):
         self.chip = chip
-        self.children = children
+        self.children = children if children is not None else set()
+
+    def __iter__(self):
+        """Iterate over this node and all its children, recursively and in no
+        specific order.
+        """
+        yield self
+
+        for child in self.children:
+            if isinstance(child, RoutingTree):
+                for subchild in child:
+                    yield subchild
+            else:
+                yield child
+
+    def __repr__(self):
+        return "<RoutingTree at {} with {} {}>".format(
+            self.chip,
+            len(self.children),
+            "child" if len(self.children) == 1 else "children")

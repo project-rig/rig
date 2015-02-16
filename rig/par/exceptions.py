@@ -14,3 +14,10 @@ class InvalidConstraintError(Exception):
     given.
     """
     pass
+
+
+class MachineHasDisconnectedSubregion(Exception):
+    """Some part of the machine has no paths connecting it to the rest of the
+    machine.
+    """
+    pass

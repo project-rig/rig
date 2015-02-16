@@ -93,6 +93,11 @@ class RouteToLinkConstraint(object):
     be routed to/from the chip the vertex is placed on and then to/from the
     link specified in the constraint.
 
+    Note: This constraint will allow you to cause a route to/from an apparently
+    dead link. This is useful since links attached to many devices will not
+    respond to nearest-neighbour PEEK/POKE requests used by the SpiNNaker
+    software to detect link liveness.
+
     Example Usage
     -------------
     If a silicon retina is attached to the north link of chip (1,1) in a 2x2

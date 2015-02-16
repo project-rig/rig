@@ -63,7 +63,9 @@ Where:
 * `nets` as defined above.
 * `machine` as defined above.
 * `constraints` as defined above.
-* `placement` is a dictionary of the format returned by a placer.
+* `placement` is a dictionary of the format returned by a placer. Note that
+  this placement must be valid (i.e. no vertices on dead/non-existant chips):
+  failiure to comply with this requirement will result in undefined behaviour.
 * `**kwargs` may be any additional (and optional) implementation-specific
   arguments.
 
@@ -71,9 +73,9 @@ The resulting `allocation` is a dictionary `{vertex: {resource: slice, ...},
 ...}` which for each vertex in `vertices_resources` gives a dictionary of
 resource allocations. For each resource consumed by the vertex, the allocation
 maps the `resource` identifier to a `:py:class:slice` object which defines the
-range over the placed chip's resources allocated to this vertex. This slice will
-have its `start` and `stop` fields defined while `step` will be `None` (since
-range allocations are always continuous).
+range over the placed chip's resources allocated to this vertex. This slice
+will have its `start` and `stop` fields defined while `step` will be `None`
+(since range allocations are always continuous).
 
 Route
 `````
@@ -90,7 +92,9 @@ Where:
 * `nets` as defined above.
 * `machine` as defined above.
 * `constraints` as defined above.
-* `placement` is a dictionary of the format returned by a placer.
+* `placement` is a dictionary of the format returned by a placer. Note that
+  this placement must be valid (i.e. no vertices on dead/non-existant chips):
+  failiure to comply with this requirement will result in undefined behaviour.
 * `**kwargs` may be any additional (and optional) implementation-specific
   arguments.
 
@@ -137,3 +141,4 @@ appropriate algorithm for their task.
 # Default algorithms
 from .place.hilbert import place
 from .allocate.greedy import allocate
+from .route.ner import route
