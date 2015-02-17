@@ -86,17 +86,19 @@ class AlignResourceConstraint(object):
         self.alignment = alignment
 
 
-class RouteToLinkConstraint(object):
-    """Route connected nets to/from a specified link.
+class RouteEndpointConstraint(object):
+    """Force the endpoint of a path through the network to be a particular
+    route.
 
-    This constraint forces routes to/from the constrained vertex to
-    be routed to/from the chip the vertex is placed on and then to/from the
-    link specified in the constraint.
+    This constraint forces routes to/from the constrained vertex to terminate
+    on the route specified in the constraint. For example, this could be used
+    with a vertex representing an external device to force packets sent to the
+    vertex to be absorbed.
 
-    Note: This constraint will allow you to cause a route to/from an apparently
-    dead link. This is useful since links attached to many devices will not
-    respond to nearest-neighbour PEEK/POKE requests used by the SpiNNaker
-    software to detect link liveness.
+    Note: This constraint does not check for dead links. This is useful since
+    links attached to external devices will not typically respond to
+    nearest-neighbour PEEK/POKE requests used by the SpiNNaker software to
+    detect link liveness.
 
     Example Usage
     -------------
@@ -106,18 +108,18 @@ class RouteToLinkConstraint(object):
 
         my_device_vertex = ...
         constraints = [LocationConstraint(my_device_vertex, (1, 1)),
-                       RouteToLinkConstraint(my_device_vertex, Link.north)]
+                       RouteEndpointConstraint(my_device_vertex, Routes.north)]
 
     Attributes
     ----------
     vertex : object
         The user-supplied object representing the vertex.
-    link : :py:class:`~rig.par.Link`
+    route : :py:class:`~rig.routing_table.Routes`
         The link to which routes will be directed.
     """
 
-    __slots__ = ["vertex", "link"]
+    __slots__ = ["vertex", "route"]
 
-    def __init__(self, vertex, link):
+    def __init__(self, vertex, route):
         self.vertex = vertex
-        self.link = link
+        self.route = route

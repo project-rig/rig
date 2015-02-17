@@ -37,7 +37,7 @@ class Links(IntEnum):
     south = 5
 
 
-"""Resource identifier for (usable) application processor cores.
+"""Resource identifier for (monitor and application) processor cores.
 
 Note that this identifer does not trigger any kind of special-case behaviour in
 library functions. Users are free to define their own alternatives.
@@ -104,7 +104,7 @@ class Machine(object):
                  "chip_resource_exceptions", "dead_chips", "dead_links"]
 
     def __init__(self, width, height,
-                 chip_resources={Cores: 17, SDRAM: 128*1024*1024,
+                 chip_resources={Cores: 18, SDRAM: 128*1024*1024,
                                  SRAM: 32*1024},
                  chip_resource_exceptions={}, dead_chips=set(),
                  dead_links=set()):

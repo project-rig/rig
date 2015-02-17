@@ -17,10 +17,10 @@ from .util import longest_dimension_first, to_xyz, \
 
 from ..exceptions import MachineHasDisconnectedSubregion
 
-from ..constraints import RouteToLinkConstraint
+from ..constraints import RouteEndpointConstraint
 
-from ...machine import Links
-from ...routing_table import RoutingTree
+from ...machine import Links, Cores
+from ...routing_table import RoutingTree, Routes
 
 
 def concentric_hexagons(radius, start=(0, 0)):
@@ -377,7 +377,7 @@ def avoid_dead_links(root, machine, wrap_around=False):
 
 
 def route(vertices_resources, nets, machine, constraints, placements,
-          radius=20):
+          allocation, core_resource=Cores, radius=20):
     """Routing algorithm based on Neighbour Exploring Routing (NER).
 
     This algorithm attempts to use NER to generate routing trees for all nets
@@ -400,13 +400,13 @@ def route(vertices_resources, nets, machine, constraints, placements,
     """
     wrap_around = has_wrap_around_links(machine)
 
-    # Vertices constrained to route to a specific link. {vertex: link}
-    route_to_link = {}
+    # Vertices constrained to route to a specific link. {vertex: route}
+    route_to_endpoint = {}
     for constraint in constraints:
-        if isinstance(constraint, RouteToLinkConstraint):
-            route_to_link[constraint.vertex] = constraint.link
+        if isinstance(constraint, RouteEndpointConstraint):
+            route_to_endpoint[constraint.vertex] = constraint.route
 
-    routes = []
+    routes = {}
     for net in nets:
         # Generate routing tree (assuming a perfect machine)
         root, lookup = ner_net(placements[net.source],
@@ -419,11 +419,15 @@ def route(vertices_resources, nets, machine, constraints, placements,
 
         # Annotate RoutingTree with vertices/links
         for sink in net.sinks:
-            if sink in route_to_link:
-                lookup[placements[sink]].children.add(route_to_link[sink])
+            if sink in route_to_endpoint:
+                # Route to link
+                lookup[placements[sink]].children.add(route_to_endpoint[sink])
             else:
-                lookup[placements[sink]].children.add(sink)
+                # Route to the sink's cores
+                cores = allocation[sink].get(core_resource, slice(0, 0))
+                for core in range(cores.start, cores.stop):
+                    lookup[placements[sink]].children.add(Routes.core(core))
 
-        routes.append(root)
+        routes[net] = root
 
     return routes

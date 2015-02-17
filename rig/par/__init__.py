@@ -83,7 +83,7 @@ Route
 Routers have the function prototype::
 
     route(vertices_resources, nets, machine, constraints, placements,
-          **kwargs)
+          allocations, core_resource=Cores, **kwargs)
         -> routes
 
 Where:
@@ -92,28 +92,50 @@ Where:
 * `nets` as defined above.
 * `machine` as defined above.
 * `constraints` as defined above.
-* `placement` is a dictionary of the format returned by a placer. Note that
+* `placements` is a dictionary of the format returned by a placer. Note that
   this placement must be valid (i.e. no vertices on dead/non-existant chips):
   failiure to comply with this requirement will result in undefined behaviour.
+* `allocations` is a dictionary as produced by an allocator.
+* `core_resource` is the identifier of the resource in `allocations` which
+  indicates the cores to route to when routing to a vertex. This defaults to
+  :py:class:`~rig.machine.Cores` but may be re-defined at will. Note: If no
+  cores are allocated to a vertex, the router will still route the net to the
+  chip the vertex is placed on but not to any cores.
 * `**kwargs` may be any additional (and optional) implementation-specific
   arguments.
 
-The resulting `routes` is a list of :py:class:`~.rig.routing_table.RoutingTree`
-objects defining the routes which connect the supplied nets.
+The resulting `routes` is a dictionary mapping from nets to
+:py:class:`~.rig.routing_table.RoutingTree` objects defining the routes which
+connect the associated net.
 
 
 A Note About Resources and Cores
 --------------------------------
 
 Resources are completely user-defined quantities however most applications will
-use (possibly a subset of) those defined in the `resources` submodule. As you
-will see, `Cores` are thus just a standard per-chip resource and have
-absolutely no special meaning. As a result, just as a vertex may consume more
-than one byte of memory, it may also consume zero, one or more cores. However,
-since a vertex is assigned to exactly one chip, it cannot consume more cores
-than are available on a single chip: vertices are never be split across chips.
-If an application requires this type of behaviour, users must perform this step
-in an application-defined preprocessing step before placement.
+use (possibly a subset of) those defined in the :py:class:`~rig.machine`
+module. As you will see, `Cores` are thus just a standard per-chip resource and
+have absolutely no other special meaning. This simplifies implementation of
+placement/allocation/routing but has a few subtle side-effects:
+
+* Most users will wish to use a ReserveResourceConstraint to indicate that core
+  0 is in use as a monitor processor and cannot be allocated.
+
+* One can allocate zero, one or multiple cores at once, an ability which should
+  be treated with some care (see below).
+
+* Routers *do* in fact care about cores and thus, in order to produce a routing
+  with routes which terminates in cores, there must exist exactly one resource
+  which mapps 1:1 to cores on a chip. Note that if this is not done, routers
+  still produce routes which connect all involved chips but these routes simply
+  wont terminate with a core.
+
+As a result, just as a vertex may consume more than one byte of memory, it may
+also consume zero, one or more cores.  However, since a vertex is assigned to
+exactly one chip, it cannot consume more cores than are available on a single
+chip: vertices are never be split across chips.  If an application requires
+this type of behaviour, users must perform this step in an application-defined
+preprocessing step before placement.
 
 Users should be careful when using a number of cores greater than one that they
 *really* intend to specify that a vertex must be placed on multiple cores of a
@@ -125,7 +147,6 @@ possible use-case would be vertices representing external devices where routes
 must be set up to and from a device connected to a link in the system. Such
 vertices would then typically be subject to constraints to ensure a routes
 terminate at a specific link in the system.
-
 
 Algorithms
 ----------
