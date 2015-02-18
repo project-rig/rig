@@ -1,13 +1,9 @@
-"""Utilities for generating routing tables for SpiNNaker.
+"""A representation for SpiNNaker routing tables.
 """
 
 from enum import IntEnum
 
-from collections import namedtuple, defaultdict, deque
-
-from six import iteritems
-
-from .machine import Cores, Links
+from collections import namedtuple
 
 
 class Routes(IntEnum):
@@ -70,105 +66,3 @@ mask : int
     32-bit unsigned integer mask to apply to keys of packets arriving at the
     router.
 """
-
-
-class RoutingTree(object):
-    """Explicitly defines a multicast route through a SpiNNaker machine.
-
-    Each instance represents a single hop in a route and recursively refers to
-    following steps.
-
-    Attributes
-    ----------
-    chip : (x, y)
-        The chip the route is currently passing through.
-    children : set
-        A set of the next steps in the route. This may be one of:
-        * :py:class:`~.rig.routing_table.RoutingTree` representing a step onto
-          the next chip
-        * :py:class:`~.rig.routing_table.Routes` representing a core or link to
-          terminate on.
-    """
-
-    __slots__ = ["chip", "children"]
-
-    def __init__(self, chip, children=None):
-        self.chip = chip
-        self.children = children if children is not None else set()
-
-    def __iter__(self):
-        """Iterate over this node and all its children, recursively and in no
-        specific order.
-        """
-        yield self
-
-        for child in self.children:
-            if isinstance(child, RoutingTree):
-                for subchild in child:
-                    yield subchild
-            else:
-                yield child
-
-    def __repr__(self):
-        return "<RoutingTree at {} with {} {}>".format(
-            self.chip,
-            len(self.children),
-            "child" if len(self.children) == 1 else "children")
-
-
-def build_routing_tables(routes, net_keys):
-    """Convert a set of RoutingTrees into a per-chip set of routing tables.
-
-    This command produces routing tables with entries ommitted when the route
-    does not change direction.
-
-    Note: The routing trees provided are assumed to be correct and continuous
-    (not missing any hops). If this is not the case, the output is undefined.
-
-    Argument
-    --------
-    routes : {net: :py:class:`~rig.routing_table.RoutingTree`, ...}
-        The complete set of RoutingTrees representing all routes in the system.
-        (Note: this is the same datastructure produced by routers in the `par`
-        module.)
-    net_keys : {net: (key, mask), ...}
-        The key and mask associated with each net.
-
-    Returns
-    -------
-    {(x, y): [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
-    """
-    # {(x, y): [RoutingTableEntry, ...]
-    routing_tables = defaultdict(list)
-
-    for net, routing_tree in iteritems(routes):
-        key, mask = net_keys[net]
-
-        # A queue of (node, direction) to visit. The direction is the Links
-        # entry which describes the direction in which we last moved to reach
-        # the current node (or None for the root).
-        to_visit = deque([(routing_tree, None)])
-        while to_visit:
-            node, direction = to_visit.popleft()
-
-            x, y = node.chip
-
-            # Determine the set of directions we must travel to reach the
-            # children
-            out_directions = set()
-            for child in node.children:
-                if isinstance(child, RoutingTree):
-                    cx, cy = child.chip
-                    dx, dy = cx - x, cy - y
-                    child_direction = Routes(Links.from_vector((dx, dy)))
-                    to_visit.append((child, child_direction))
-                    out_directions.add(child_direction)
-                else:
-                    out_directions.add(child)
-
-            # Add a routing entry when the direction changes
-            if set([direction]) != out_directions:
-                routing_tables[(x, y)].append(
-                    RoutingTableEntry(out_directions, key, mask))
-
-    return routing_tables

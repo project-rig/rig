@@ -4,7 +4,7 @@ from collections import deque
 
 from rig.machine import Machine, Links
 
-from rig.routing_table import RoutingTree
+from rig.par.routing_tree import RoutingTree
 
 from rig.par.route.util import links_between
 

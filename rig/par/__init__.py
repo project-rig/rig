@@ -105,8 +105,8 @@ Where:
   arguments.
 
 The resulting `routes` is a dictionary mapping from nets to
-:py:class:`~.rig.routing_table.RoutingTree` objects defining the routes which
-connect the associated net.
+:py:class:`~.rig.par.routing_tree.RoutingTree` objects defining the routes
+which connect the associated net.
 
 
 A Note About Resources and Cores

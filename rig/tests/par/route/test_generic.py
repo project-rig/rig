@@ -6,9 +6,9 @@ from collections import deque
 
 from rig.machine import Machine, Links, Cores
 
-from rig.routing_table import RoutingTree
-
 from rig.netlist import Net
+
+from rig.par.routing_tree import RoutingTree
 
 from rig.par.constraints import RouteEndpointConstraint
 

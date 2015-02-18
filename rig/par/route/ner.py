@@ -20,7 +20,10 @@ from ..exceptions import MachineHasDisconnectedSubregion
 from ..constraints import RouteEndpointConstraint
 
 from ...machine import Links, Cores
-from ...routing_table import RoutingTree, Routes
+
+from ...routing_table import Routes
+
+from ..routing_tree import RoutingTree
 
 
 def concentric_hexagons(radius, start=(0, 0)):
@@ -72,8 +75,8 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
 
     Returns
     -------
-    (:py:class:`~.rig.routing_table.RoutingTree`,
-     {(x,y): :py:class:`~.rig.routing_table.RoutingTree`, ...})
+    (:py:class:`~.rig.par.routing_tree.RoutingTree`,
+     {(x,y): :py:class:`~.rig.par.routing_tree.RoutingTree`, ...})
         A RoutingTree is produced rooted at the source and visiting all
         destinations but which does not contain any vertices etc. For
         convenience, a dictionarry mapping from destination (x, y) coordinates
@@ -146,7 +149,7 @@ def copy_and_disconnect_tree(root, machine):
 
     Parameters
     ----------
-    root : :py:class:`~rig.routing_table.RoutingTree`
+    root : :py:class:`~rig.par.routing_tree.RoutingTree`
         The root of the RoutingTree that contains nothing but RoutingTrees
         (i.e. no vertices and links).
     machine : :py:class:`~rig.machine.Machine`
@@ -157,9 +160,9 @@ def copy_and_disconnect_tree(root, machine):
     (root, lookup, broken_links)
         Where:
         * `root` is the new root of the tree
-          :py:class:`~rig.routing_table.RoutingTree`
+          :py:class:`~rig.par.routing_tree.RoutingTree`
         * `lookup` is a dict {(x, y):
-          :py:class:`~rig.routing_table.RoutingTree`, ...}
+          :py:class:`~rig.par.routing_tree.RoutingTree`, ...}
         * `broken_links` is a set ([(parent, child), ...]) containing all
           disconnected parent and child (x, y) pairs due to broken links.
     """
@@ -317,7 +320,7 @@ def avoid_dead_links(root, machine, wrap_around=False):
 
     Parameters
     ----------
-    root : :py:class:`~rig.routing_table.RoutingTree`
+    root : :py:class:`~rig.par.routing_tree.RoutingTree`
         The root of the RoutingTree which contains nothing but RoutingTrees
         (i.e. no vertices and links).
     machine : :py:class:`~rig.machine.Machine`
@@ -327,8 +330,8 @@ def avoid_dead_links(root, machine, wrap_around=False):
 
     Returns
     -------
-    (:py:class:`~.rig.routing_table.RoutingTree`,
-     {(x,y): :py:class:`~.rig.routing_table.RoutingTree`, ...})
+    (:py:class:`~.rig.par.routing_tree.RoutingTree`,
+     {(x,y): :py:class:`~.rig.par.routing_tree.RoutingTree`, ...})
         A new RoutingTree is produced rooted as before. A dictionarry mapping
         from (x, y) to the associated RoutingTree is provided for convenience.
 
