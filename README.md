@@ -44,7 +44,10 @@ SpiNNaker.  Tools exist for:
 
 Create a new [virtualenv](https://pypi.python.org/pypi/virtualenv) by running:
 
-    virtualenv new_directory_name
+    virtualenv --system-site-packages new_directory_name
+
+Note `--system-site-packages` optionally allows the virtualenv to use your
+system-wide installations of large packages (e.g. NUMPY)
 
 Then activate the virtualenv before installing.
 
@@ -71,9 +74,11 @@ standard checker.
 
 Install py.test et al. in the virtualenv.
 
-    pip install pytest pytest-cov flake8
+    pip install pytest pytest-cov flake8 mock
 
 *To run the tests*:
+
+(You must be in the rig module directory, e.g. `new_directory_name/rig/rig/`)
 
     py.test
 
