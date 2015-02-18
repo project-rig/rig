@@ -22,9 +22,6 @@ SpiNNaker.  Tools exist for:
 
 ## Problem mapping
 
- - Partitioning computational nodes if necessary.  We believe this is a problem
-   specific tool but provide a very simple starting point which may be easily
-   expanded.
  - Placing: Taking a set of computational nodes and determining which SpiNNaker
    processing cores they should be placed on.
  - Routing: Taking a set of computational nodes and determining the routing

@@ -30,7 +30,6 @@ Problem mapping
 .. toctree::
         :maxdepth: 2
 
-        partitioning
 
 Execution control
 -----------------
