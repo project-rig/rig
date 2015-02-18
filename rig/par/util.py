@@ -12,7 +12,7 @@ from ..routing_table import Routes, RoutingTableEntry
 from .routing_tree import RoutingTree
 
 
-def build_application_map(vertices_applications, placements, allocation,
+def build_application_map(vertices_applications, placements, allocations,
                           core_resource=Cores):
     """Build a mapping from application to a list of cores where the
     application is used.
@@ -25,7 +25,7 @@ def build_application_map(vertices_applications, placements, allocation,
     vertices_applications : {vertex: application, ...}
         Applications are represented by the path of their APLX file.
     placements : {vertex: (x, y), ...}
-    allocation : {vertex: {resource: slice, ...}, ...}
+    allocations : {vertex: {resource: slice, ...}, ...}
         One of these resources should match the `core_resource` argument.
     core_resource : object
         The resource identifier which represents cores.
@@ -40,7 +40,7 @@ def build_application_map(vertices_applications, placements, allocation,
 
     for vertex, application in iteritems(vertices_applications):
         chip_cores = application_map[application][placements[vertex]]
-        core_slice = allocation[vertex].get(core_resource, slice(0, 0))
+        core_slice = allocations[vertex].get(core_resource, slice(0, 0))
         chip_cores.update(range(core_slice.start, core_slice.stop))
 
     return application_map

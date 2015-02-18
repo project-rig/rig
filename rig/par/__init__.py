@@ -16,6 +16,14 @@ SDRAM.
 General Usage
 -------------
 
+In the common-case, users are referred to :py:class:`~rig.par.par` which is a
+wrapper function around the common-case uses of the utilities in this module.
+This wrapper is very simple and essentially calls `place`, `allocate` and
+`route` in sequence, avoiding a certain amount of boilerplate.
+
+The underlying functions, which users are free to use directly if desired, are
+defined as follows.
+
 Place
 `````
 
@@ -55,7 +63,7 @@ Allocators have the function prototype::
 
     allocate(vertices_resources, nets, machine, constraints, placements,
              **kwargs)
-        -> allocation
+        -> allocations
 
 Where:
 
@@ -163,3 +171,6 @@ appropriate algorithm for their task.
 from .place.hilbert import place
 from .allocate.greedy import allocate
 from .route.ner import route
+
+# High-Level Wrapper
+from .wrapper import par
