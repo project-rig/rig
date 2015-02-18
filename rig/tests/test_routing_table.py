@@ -2,7 +2,10 @@ import pytest
 
 from rig.machine import Links
 
-from rig.routing_table import Routes, RoutingTree
+from rig.routing_table import Routes, RoutingTree, RoutingTableEntry, \
+    build_routing_tables
+
+from rig.netlist import Net
 
 
 def test_routes():
@@ -77,3 +80,107 @@ class TestRoutingTree(object):
         assert "RoutingTree" in repr(t)
         assert "123" in repr(t)
         assert "321" in repr(t)
+
+
+def test_build_routing_tables():
+    # Null task
+    assert build_routing_tables({}, {}) == {}
+
+    # Single net with a singleton route ending in nothing.
+    net = Net(object(), object())
+    routes = {net: RoutingTree((0, 0))}
+    net_keys = {net: (0xDEAD, 0xBEEF)}
+    assert build_routing_tables(routes, net_keys) == \
+        {(0, 0): [RoutingTableEntry(set(), 0xDEAD, 0xBEEF)]}
+
+    # Single net with a singleton route ending in a number of links.
+    net = Net(object(), object())
+    routes = {net: RoutingTree((1, 1), set([Routes.north, Routes.core_1]))}
+    net_keys = {net: (0xDEAD, 0xBEEF)}
+    assert build_routing_tables(routes, net_keys) == \
+        {(1, 1): [RoutingTableEntry(set([Routes.north, Routes.core_1]),
+                  0xDEAD, 0xBEEF)]}
+
+    # Single net with a multi-element route
+    net = Net(object(), object())
+    routes = {net: RoutingTree((1, 1),
+                               set([Routes.core_1,
+                                    RoutingTree((2, 1),
+                                                set([Routes.core_2]))]))}
+    net_keys = {net: (0xDEAD, 0xBEEF)}
+    assert build_routing_tables(routes, net_keys) == \
+        {(1, 1): [RoutingTableEntry(set([Routes.east, Routes.core_1]),
+                  0xDEAD, 0xBEEF)],
+         (2, 1): [RoutingTableEntry(set([Routes.core_2]),
+                  0xDEAD, 0xBEEF)]}
+
+    # Single net with a wrapping route
+    net = Net(object(), object())
+    routes = {net: RoutingTree((7, 1),
+                               set([Routes.core_1,
+                                    RoutingTree((0, 1),
+                                                set([Routes.core_2]))]))}
+    net_keys = {net: (0xDEAD, 0xBEEF)}
+    assert build_routing_tables(routes, net_keys) == \
+        {(7, 1): [RoutingTableEntry(set([Routes.east, Routes.core_1]),
+                  0xDEAD, 0xBEEF)],
+         (0, 1): [RoutingTableEntry(set([Routes.core_2]),
+                  0xDEAD, 0xBEEF)]}
+
+    # Single net with a multi-hop route with no direction changes, terminating
+    # in nothing
+    net = Net(object(), object())
+    r3 = RoutingTree((3, 0))
+    r2 = RoutingTree((2, 0), set([r3]))
+    r1 = RoutingTree((1, 0), set([r2]))
+    r0 = RoutingTree((0, 0), set([r1]))
+    routes = {net: r0}
+    net_keys = {net: (0xDEAD, 0xBEEF)}
+    assert build_routing_tables(routes, net_keys) == \
+        {(0, 0): [RoutingTableEntry(set([Routes.east]), 0xDEAD, 0xBEEF)],
+         (3, 0): [RoutingTableEntry(set([]), 0xDEAD, 0xBEEF)]}
+
+    # Single net with a multi-hop route with no direction changes, terminating
+    # in a number of cores
+    net = Net(object(), object())
+    r3 = RoutingTree((3, 0), set([Routes.core_2, Routes.core_3]))
+    r2 = RoutingTree((2, 0), set([r3]))
+    r1 = RoutingTree((1, 0), set([r2]))
+    r0 = RoutingTree((0, 0), set([r1]))
+    routes = {net: r0}
+    net_keys = {net: (0xDEAD, 0xBEEF)}
+    assert build_routing_tables(routes, net_keys) == \
+        {(0, 0): [RoutingTableEntry(set([Routes.east]), 0xDEAD, 0xBEEF)],
+         (3, 0): [RoutingTableEntry(set([Routes.core_2, Routes.core_3]),
+                                    0xDEAD, 0xBEEF)]}
+
+    # Single net with a multi-hop route with a fork in the middle
+    net = Net(object(), object())
+    r6 = RoutingTree((3, 1), set([Routes.core_6]))
+    r5 = RoutingTree((5, 0), set([Routes.core_5]))
+    r4 = RoutingTree((4, 0), set([r5]))
+    r3 = RoutingTree((3, 0), set([r4, r6]))
+    r2 = RoutingTree((2, 0), set([r3]))
+    r1 = RoutingTree((1, 0), set([r2]))
+    r0 = RoutingTree((0, 0), set([r1]))
+    routes = {net: r0}
+    net_keys = {net: (0xDEAD, 0xBEEF)}
+    assert build_routing_tables(routes, net_keys) == \
+        {(0, 0): [RoutingTableEntry(set([Routes.east]), 0xDEAD, 0xBEEF)],
+         (3, 0): [RoutingTableEntry(set([Routes.north, Routes.east]),
+                                    0xDEAD, 0xBEEF)],
+         (5, 0): [RoutingTableEntry(set([Routes.core_5]), 0xDEAD, 0xBEEF)],
+         (3, 1): [RoutingTableEntry(set([Routes.core_6]), 0xDEAD, 0xBEEF)]}
+
+    # Multiple nets
+    net0 = Net(object(), object())
+    net1 = Net(object(), object())
+    routes = {net0: RoutingTree((2, 2), set([Routes.core_1])),
+              net1: RoutingTree((2, 2), set([Routes.core_2]))}
+    net_keys = {net0: (0xDEAD, 0xBEEF), net1: (0x1234, 0xABCD)}
+    tables = build_routing_tables(routes, net_keys)
+    assert set(tables) == set([(2, 2)])
+    entries = tables[(2, 2)]
+    e0 = RoutingTableEntry(set([Routes.core_1]), 0xDEAD, 0xBEEF)
+    e1 = RoutingTableEntry(set([Routes.core_2]), 0x1234, 0xABCD)
+    assert entries == [e0, e1] or entries == [e1, e0]

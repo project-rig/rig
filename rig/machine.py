@@ -36,6 +36,45 @@ class Links(IntEnum):
     south_west = 4
     south = 5
 
+    @classmethod
+    def from_vector(cls, vector):
+        """Given a vector from one node to a neighbour, get the link direction.
+
+        Note that any vector whose magnitude in any given dimension is greater
+        than 1 will be assumed to use a machine's wrap-around links.
+
+        Note that this method assumes a system larger than 2x2 (if a smaller
+        system is provided, the function may produce unexpected or imballenced
+        results).
+
+        Argument
+        --------
+        vector : (x, y)
+            The vector from one node to its logical neighbour.
+
+        Return
+        ------
+        :py:class:`~rig.machine.Links`
+            The link direction to travel in the direction indicated by the
+            vector.
+        """
+        x, y = vector
+        if abs(x) > 1:
+            x = -1 if x > 0 else 1
+        if abs(y) > 1:
+            y = -1 if y > 0 else 1
+
+        return _link_direction_lookup[(x, y)]
+
+_link_direction_lookup = {
+    (+1, +0): Links.east,
+    (-1, +0): Links.west,
+    (+0, +1): Links.north,
+    (+0, -1): Links.south,
+    (+1, +1): Links.north_east,
+    (-1, -1): Links.south_west,
+}
+
 
 """Resource identifier for (monitor and application) processor cores.
 
