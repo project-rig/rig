@@ -32,11 +32,3 @@ class TestNet(object):
         assert net.source is source
         assert net.sinks == [sink]
         assert net.weight == 5
-
-    def test_init_with_keyspace(self):
-        source = Vertex()
-        sinks = [Vertex() for _ in range(5)]
-        ks = mock.Mock()
-
-        net = Net(source, sinks, 1, keyspace=ks)
-        assert net.keyspace == ks
