@@ -13,12 +13,10 @@ class Net(object):
         The "strength" of the net, in application specific units.
     sinks : list
         A list of vertices that the net connects to.
-    keyspace : :py:class:`~rig.keyspaces.Keyspace`
-        Keyspace for packets transmitted across this net.
     """
-    __slots__ = ["source", "weight", "sinks", "keyspace"]
+    __slots__ = ["source", "weight", "sinks"]
 
-    def __init__(self, source, sinks, weight=1.0, keyspace=None):
+    def __init__(self, source, sinks, weight=1.0):
         """Create a new Net.
 
         Parameters
@@ -29,12 +27,9 @@ class Net(object):
             if a single vertex is provided then this used to create the list of
             sinks.
         weight : float or int
-        keyspace : :py:class:`~rig.keyspaces.Keyspace`
-            Keyspace for packets transmitted across this net.
         """
         self.source = source
         self.weight = weight
-        self.keyspace = keyspace
 
         # If the sinks is a list then copy it, otherwise construct a new list
         # containing the sink we were given.
