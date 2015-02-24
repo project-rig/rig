@@ -8,13 +8,14 @@ from rig.netlist import Net
 
 from rig.machine import Machine, Cores
 
-from rig.par.exceptions import InsufficientResourceError
-from rig.par.exceptions import InvalidConstraintError
+from rig.place_and_route.exceptions import InsufficientResourceError
+from rig.place_and_route.exceptions import InvalidConstraintError
 
-from rig.par.constraints import LocationConstraint, ReserveResourceConstraint
+from rig.place_and_route.constraints import LocationConstraint, \
+    ReserveResourceConstraint
 
-from rig.par import place as default_place
-from rig.par.place.hilbert import place as hilbert_place
+from rig.place_and_route import place as default_place
+from rig.place_and_route.place.hilbert import place as hilbert_place
 
 # This dictionary should be updated to contain all implemented algorithms along
 # with applicable keyword arguments.

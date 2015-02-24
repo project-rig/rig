@@ -8,17 +8,17 @@ from rig.machine import Machine, Links, Cores
 
 from rig.netlist import Net
 
-from rig.par.routing_tree import RoutingTree
+from rig.place_and_route.routing_tree import RoutingTree
 
-from rig.par.constraints import RouteEndpointConstraint
+from rig.place_and_route.constraints import RouteEndpointConstraint
 
-from rig.par.exceptions import MachineHasDisconnectedSubregion, \
+from rig.place_and_route.exceptions import MachineHasDisconnectedSubregion, \
     InvalidConstraintError
 
-from rig.par.route.util import links_between
+from rig.place_and_route.route.util import links_between
 
-from rig.par import route as default_route
-from rig.par.route.ner import route as ner_route
+from rig.place_and_route import route as default_route
+from rig.place_and_route.route.ner import route as ner_route
 
 from rig.routing_table import Routes
 

@@ -4,14 +4,14 @@ from collections import deque
 
 from rig.machine import Machine, Links
 
-from rig.par.routing_tree import RoutingTree
+from rig.place_and_route.routing_tree import RoutingTree
 
-from rig.par.route.util import links_between
+from rig.place_and_route.route.util import links_between
 
-from rig.par.route.ner import concentric_hexagons, ner_net, \
+from rig.place_and_route.route.ner import concentric_hexagons, ner_net, \
     copy_and_disconnect_tree, a_star, avoid_dead_links
 
-from rig.par.exceptions import MachineHasDisconnectedSubregion
+from rig.place_and_route.exceptions import MachineHasDisconnectedSubregion
 
 
 def test_concentric_hexagons():

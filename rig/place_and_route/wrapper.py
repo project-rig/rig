@@ -1,4 +1,4 @@
-"""High-level wrapper around PAR functions.
+"""High-level wrapper around place and route functions.
 """
 
 from ..machine import Cores, SDRAM
@@ -12,14 +12,14 @@ from . import allocate as default_allocate
 from . import route as default_route
 
 
-def par(vertices_resources, vertices_applications,
-        nets, net_keys,
-        machine, constraints=[],
-        reserve_monitor=True, align_sdram=True,
-        place=default_place, place_kwargs={},
-        allocate=default_allocate, allocate_kwargs={},
-        route=default_route, route_kwargs={},
-        core_resource=Cores, sdram_resource=SDRAM):
+def wrapper(vertices_resources, vertices_applications,
+            nets, net_keys,
+            machine, constraints=[],
+            reserve_monitor=True, align_sdram=True,
+            place=default_place, place_kwargs={},
+            allocate=default_allocate, allocate_kwargs={},
+            route=default_route, route_kwargs={},
+            core_resource=Cores, sdram_resource=SDRAM):
     """Wrapper for core place-and-route tasks for the common case.
 
     This wrapper aims to be a simple wrapper around the place-and-route process

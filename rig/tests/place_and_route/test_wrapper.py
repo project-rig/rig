@@ -5,7 +5,7 @@ from six import iteritems
 from rig.machine import Machine, Cores, SDRAM
 from rig.netlist import Net
 
-from rig.par import par
+from rig.place_and_route import wrapper
 
 
 class TestWrapper(object):
@@ -16,7 +16,7 @@ class TestWrapper(object):
         # Simplest possible case of an empty system
         m = Machine(1, 1)
         placements, allocations, application_map, routing_tables = \
-            par({}, {}, [], {}, m)
+            wrapper({}, {}, [], {}, m)
         assert placements == {}
         assert allocations == {}
         assert application_map == {}
@@ -40,8 +40,8 @@ class TestWrapper(object):
         net_keys = {n: (i, 0xFFFF) for i, n in enumerate(nets)}
 
         placements, allocations, application_map, routing_tables = \
-            par(vertices_resources, vertices_applications,
-                nets, net_keys, m)
+            wrapper(vertices_resources, vertices_applications,
+                    nets, net_keys, m)
 
         # Check all vertices are placed & allocated
         assert set(vertices) == set(placements) == set(allocations)

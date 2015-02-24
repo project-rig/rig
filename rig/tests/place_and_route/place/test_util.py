@@ -4,9 +4,9 @@ import pytest
 
 from rig.machine import Cores, SDRAM, SRAM
 
-from rig.par.constraints import ReserveResourceConstraint
+from rig.place_and_route.constraints import ReserveResourceConstraint
 
-from rig.par.place.util import \
+from rig.place_and_route.place.util import \
     subtract_resources, overallocated, resources_after_reservation
 
 

@@ -16,10 +16,11 @@ SDRAM.
 General Usage
 -------------
 
-In the common-case, users are referred to :py:class:`~rig.par.par` which is a
-wrapper function around the common-case uses of the utilities in this module.
-This wrapper is very simple and essentially calls `place`, `allocate` and
-`route` in sequence, avoiding a certain amount of boilerplate.
+In the common-case, users are referred to
+:py:class:`~rig.place_and_route.wrapper` which is a wrapper function around the
+common-case uses of the utilities in this module.  This wrapper is very simple
+and essentially calls `place`, `allocate` and `route` in sequence, avoiding a
+certain amount of boilerplate.
 
 The underlying functions, which users are free to use directly if desired, are
 defined as follows.
@@ -46,7 +47,7 @@ Where:
 * `machine` should be a :py:class:`~rig.machine.Machine` describing the machine
   for which placement should be carried out.
 * `constraints` should be a list of constraints from
-  :py:class:`~rig.par.constraints` referring only to vertices in
+  :py:class:`~rig.place_and_route.constraints` referring only to vertices in
   `vertices_resources`. Individual placers may define their own additional
   constraints.
 * `**kwargs` may be any additional (and optional) implementation-specific
@@ -113,8 +114,8 @@ Where:
   arguments.
 
 The resulting `routes` is a dictionary mapping from nets to
-:py:class:`~.rig.par.routing_tree.RoutingTree` objects defining the routes
-which connect the associated net.
+:py:class:`~.rig.place_and_route.routing_tree.RoutingTree` objects defining the
+routes which connect the associated net.
 
 
 A Note About Resources and Cores
@@ -173,4 +174,4 @@ from .allocate.greedy import allocate
 from .route.ner import route
 
 # High-Level Wrapper
-from .wrapper import par
+from .wrapper import wrapper

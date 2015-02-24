@@ -1,6 +1,7 @@
 import pytest
 
-from rig.par.util import build_application_map, build_routing_tables
+from rig.place_and_route.util import build_application_map, \
+    build_routing_tables
 
 from rig.machine import Cores
 
@@ -8,7 +9,7 @@ from rig.netlist import Net
 
 from rig.routing_table import Routes, RoutingTableEntry
 
-from rig.par.routing_tree import RoutingTree
+from rig.place_and_route.routing_tree import RoutingTree
 
 
 def test_build_application_map():

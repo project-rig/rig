@@ -6,13 +6,13 @@ from six import iteritems
 
 from rig.machine import Machine, Cores, SDRAM, SRAM
 
-from rig.par.constraints import \
+from rig.place_and_route.constraints import \
     ReserveResourceConstraint, AlignResourceConstraint
 
-from rig.par.exceptions import InsufficientResourceError
+from rig.place_and_route.exceptions import InsufficientResourceError
 
-from rig.par import allocate as default_allocate
-from rig.par.allocate.greedy import allocate as greedy_allocate
+from rig.place_and_route import allocate as default_allocate
+from rig.place_and_route.allocate.greedy import allocate as greedy_allocate
 
 # This dictionary should be updated to contain all implemented algorithms along
 # with applicable keyword arguments.

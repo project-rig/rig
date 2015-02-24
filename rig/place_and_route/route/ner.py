@@ -75,8 +75,8 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
 
     Returns
     -------
-    (:py:class:`~.rig.par.routing_tree.RoutingTree`,
-     {(x,y): :py:class:`~.rig.par.routing_tree.RoutingTree`, ...})
+    (:py:class:`~.rig.place_and_route.routing_tree.RoutingTree`,
+     {(x,y): :py:class:`~.rig.place_and_route.routing_tree.RoutingTree`, ...})
         A RoutingTree is produced rooted at the source and visiting all
         destinations but which does not contain any vertices etc. For
         convenience, a dictionarry mapping from destination (x, y) coordinates
@@ -149,7 +149,7 @@ def copy_and_disconnect_tree(root, machine):
 
     Parameters
     ----------
-    root : :py:class:`~rig.par.routing_tree.RoutingTree`
+    root : :py:class:`~rig.place_and_route.routing_tree.RoutingTree`
         The root of the RoutingTree that contains nothing but RoutingTrees
         (i.e. no vertices and links).
     machine : :py:class:`~rig.machine.Machine`
@@ -160,9 +160,9 @@ def copy_and_disconnect_tree(root, machine):
     (root, lookup, broken_links)
         Where:
         * `root` is the new root of the tree
-          :py:class:`~rig.par.routing_tree.RoutingTree`
+          :py:class:`~rig.place_and_route.routing_tree.RoutingTree`
         * `lookup` is a dict {(x, y):
-          :py:class:`~rig.par.routing_tree.RoutingTree`, ...}
+          :py:class:`~rig.place_and_route.routing_tree.RoutingTree`, ...}
         * `broken_links` is a set ([(parent, child), ...]) containing all
           disconnected parent and child (x, y) pairs due to broken links.
     """
@@ -242,7 +242,7 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
 
     Raises
     ------
-    :py:class:~rig.par.exceptions.MachineHasDisconnectedSubregion`
+    :py:class:~rig.place_and_route.exceptions.MachineHasDisconnectedSubregion`
         If a path cannot be found.
     """
     # Select the heuristic function to use for distances
@@ -320,7 +320,7 @@ def avoid_dead_links(root, machine, wrap_around=False):
 
     Parameters
     ----------
-    root : :py:class:`~rig.par.routing_tree.RoutingTree`
+    root : :py:class:`~rig.place_and_route.routing_tree.RoutingTree`
         The root of the RoutingTree which contains nothing but RoutingTrees
         (i.e. no vertices and links).
     machine : :py:class:`~rig.machine.Machine`
@@ -330,14 +330,14 @@ def avoid_dead_links(root, machine, wrap_around=False):
 
     Returns
     -------
-    (:py:class:`~.rig.par.routing_tree.RoutingTree`,
-     {(x,y): :py:class:`~.rig.par.routing_tree.RoutingTree`, ...})
+    (:py:class:`~.rig.place_and_route.routing_tree.RoutingTree`,
+     {(x,y): :py:class:`~.rig.place_and_route.routing_tree.RoutingTree`, ...})
         A new RoutingTree is produced rooted as before. A dictionarry mapping
         from (x, y) to the associated RoutingTree is provided for convenience.
 
     Raises
     ------
-    :py:class:~rig.par.exceptions.MachineHasDisconnectedSubregion`
+    :py:class:~rig.place_and_route.exceptions.MachineHasDisconnectedSubregion`
         If a path to reconnect the tree cannot be found.
     """
     # Make a copy of the RoutingTree with all broken parts disconnected
@@ -397,7 +397,7 @@ def route(vertices_resources, nets, machine, constraints, placements,
 
     Raises
     ------
-    :py:class:~rig.par.exceptions.MachineHasDisconnectedSubregion`
+    :py:class:~rig.place_and_route.exceptions.MachineHasDisconnectedSubregion`
         If any pair of vertices in a net have no path between them (i.e.
         the system is impossible to route).
     """

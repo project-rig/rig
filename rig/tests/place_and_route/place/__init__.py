@@ -11,5 +11,6 @@ Note to placer developers
   placers to be tested at the top of this file to reap the benefits of these
   basic "sanity check" tests.
 * A number of utility functions which may be useful within a placer
-  implementation can be found in :py:class:`~.rig.par.place.common`.
+  implementation can be found in
+  :py:class:`~.rig.place_and_route.place.common`.
 """

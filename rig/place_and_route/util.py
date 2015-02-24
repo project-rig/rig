@@ -57,7 +57,8 @@ def build_routing_tables(routes, net_keys):
 
     Argument
     --------
-    routes : {net: :py:class:`~rig.par.routing_tree.RoutingTree`, ...}
+    routes : {net: :py:class:`~rig.place_and_route.routing_tree.RoutingTree`,
+              ...}
         The complete set of RoutingTrees representing all routes in the system.
         (Note: this is the same datastructure produced by routers in the `par`
         module.)

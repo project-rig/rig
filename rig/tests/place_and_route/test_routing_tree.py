@@ -1,6 +1,6 @@
 import pytest
 
-from rig.par.routing_tree import RoutingTree
+from rig.place_and_route.routing_tree import RoutingTree
 
 
 class TestRoutingTree(object):

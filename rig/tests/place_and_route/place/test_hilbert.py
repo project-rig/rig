@@ -1,6 +1,6 @@
 import pytest
 
-from rig.par.place.hilbert import hilbert
+from rig.place_and_route.place.hilbert import hilbert
 
 
 class TestHilbert(object):

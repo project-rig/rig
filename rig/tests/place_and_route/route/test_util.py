@@ -2,7 +2,7 @@ import pytest
 
 from six import next
 
-from rig.par.route.util import \
+from rig.place_and_route.route.util import \
     longest_dimension_first, to_xyz, minimise_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \
     shortest_torus_path_length, shortest_torus_path, \
