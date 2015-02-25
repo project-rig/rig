@@ -124,6 +124,20 @@ def test_build_routing_tables():
         {(0, 0): [RoutingTableEntry(set([Routes.east]), 0xDEAD, 0xBEEF)],
          (3, 0): [RoutingTableEntry(set([]), 0xDEAD, 0xBEEF)]}
 
+    # The same but this time forcing intermediate hops to be included
+    net = Net(object(), object())
+    r3 = RoutingTree((3, 0))
+    r2 = RoutingTree((2, 0), set([r3]))
+    r1 = RoutingTree((1, 0), set([r2]))
+    r0 = RoutingTree((0, 0), set([r1]))
+    routes = {net: r0}
+    net_keys = {net: (0xDEAD, 0xBEEF)}
+    assert build_routing_tables(routes, net_keys, False) == \
+        {(0, 0): [RoutingTableEntry(set([Routes.east]), 0xDEAD, 0xBEEF)],
+         (1, 0): [RoutingTableEntry(set([Routes.east]), 0xDEAD, 0xBEEF)],
+         (2, 0): [RoutingTableEntry(set([Routes.east]), 0xDEAD, 0xBEEF)],
+         (3, 0): [RoutingTableEntry(set([]), 0xDEAD, 0xBEEF)]}
+
     # Single net with a multi-hop route with no direction changes, terminating
     # in a number of cores
     net = Net(object(), object())

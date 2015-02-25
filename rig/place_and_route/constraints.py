@@ -67,9 +67,9 @@ class AlignResourceConstraint(object):
     aligned.
 
     Note: placers are not obliged to be aware of or compensate for wastage of a
-    resource due to this constraint and so may produce impossible placements
-    when in the even of large numbers of individual items using a non-aligned
-    width block of resource.
+    resource due to this constraint and so may produce impossible placements in
+    the event of large numbers of individual items using a non-aligned width
+    block of resource.
 
     Attributes
     ----------
@@ -115,7 +115,7 @@ class RouteEndpointConstraint(object):
     vertex : object
         The user-supplied object representing the vertex.
     route : :py:class:`~rig.routing_table.Routes`
-        The link to which routes will be directed.
+        The route to which paths will be directed.
     """
 
     __slots__ = ["vertex", "route"]

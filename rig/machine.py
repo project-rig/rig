@@ -43,9 +43,10 @@ class Links(IntEnum):
         Note that any vector whose magnitude in any given dimension is greater
         than 1 will be assumed to use a machine's wrap-around links.
 
-        Note that this method assumes a system larger than 2x2 (if a smaller
-        system is provided, the function may produce unexpected or imballenced
-        results).
+        Note that this method assumes a system larger than 2x2. If a 2x2, 2xN
+        or Nx2 (for N > 2) system is provided the link selected will
+        arbitrarily favour either wrap-around or non-wrap-around links. This
+        function is not meaningful for 1x1 systems.
 
         Argument
         --------
@@ -59,6 +60,19 @@ class Links(IntEnum):
             vector.
         """
         x, y = vector
+
+        # Vectors must be mapped to a form (x, y) where x and y are -1, 0 or 1.
+        # When a vector is between two neighbouring nodes which are not
+        # connected by a wrap-around link this is already the case. When
+        # wrapping around on a given dimension, however, the element of the
+        # vector corresponding with that dimension will be outside this range.
+        #
+        # For example, in a 4x4 system, the vector between nodes (3, 1) and (0,
+        # 1) comes out as (-3, 0). In this case we wrap around on the X axis
+        # going from the right-hand-side to the left-hand-side. The logical
+        # direction vector should just be (1, 0) since we're logically
+        # travelling East. Notice that the sign of the wrapped-around element
+        # is flipped and the magnitude forced to 1.
         if abs(x) > 1:
             x = -1 if x > 0 else 1
         if abs(y) > 1:
@@ -78,24 +92,24 @@ _link_direction_lookup = {
 
 """Resource identifier for (monitor and application) processor cores.
 
-Note that this identifer does not trigger any kind of special-case behaviour in
-library functions. Users are free to define their own alternatives.
+Note that this identifier does not trigger any kind of special-case behaviour
+in library functions. Users are free to define their own alternatives.
 """
 Cores = sentinel.create("Cores")
 
 
 """Resource identifier for shared off-die SDRAM (in bytes).
 
-Note that this identifer does not trigger any kind of special-case behaviour in
-library functions. Users are free to define their own alternatives.
+Note that this identifier does not trigger any kind of special-case behaviour
+in library functions. Users are free to define their own alternatives.
 """
 SDRAM = sentinel.create("SDRAM")
 
 
 """Resource identifier for shared on-die SRAM (in bytes).
 
-Note that this identifer does not trigger any kind of special-case behaviour in
-library functions. Users are free to define their own alternatives.
+Note that this identifier does not trigger any kind of special-case behaviour
+in library functions. Users are free to define their own alternatives.
 """
 SRAM = sentinel.create("SRAM")
 
@@ -106,7 +120,7 @@ class Machine(object):
     This datastructure makes the assumption that in most systems almost
     everything is uniform and working.
 
-    This data-structure intends to be completely transparent. Its contents is
+    This data-structure intends to be completely transparent. Its contents are
     described below. A number of utility methods are available but should be
     considered just that: utilities.
 
@@ -122,7 +136,8 @@ class Machine(object):
         The resources available on chips (unless otherwise stated in
         `chip_resource_exceptions). `resource_key` must be some unique
         identifying object for a given resource. `requirement` must be a
-        positive numerical value.
+        positive numerical value. For example: `{Cores: 17, SDRAM:
+        128*1024*1024}` would indicate 17 cores and 128 MBytes of SDRAM.
     chip_resource_exceptions : {(x,y): resources, ...}
         If any chip's resources differ from those specified in
         `chip_resources`, an entry in this dictionary with the key being the

@@ -37,7 +37,7 @@ Where:
 
 * `vertices_resources` is a dictionary `{vertex: resources, ...}` which
   enumerates the resources required by every vertex to be placed. `vertex`
-  should be a unique object which sensibly implement `__hash__` and `__eq__`.
+  should be a unique object which implements `__hash__` and `__eq__`.
   `resources` should be a dictionary `{resource: value, ...}` where `resource`
   is some resource identifier (:py:class:`~.rig.machine` defines names for some
   common resource types though users are free to (re)define their own) and
@@ -73,8 +73,8 @@ Where:
 * `machine` as defined above.
 * `constraints` as defined above.
 * `placement` is a dictionary of the format returned by a placer. Note that
-  this placement must be valid (i.e. no vertices on dead/non-existant chips):
-  failiure to comply with this requirement will result in undefined behaviour.
+  this placement must be valid (i.e. no vertices on dead/non-existent chips):
+  failure to comply with this requirement will result in undefined behaviour.
 * `**kwargs` may be any additional (and optional) implementation-specific
   arguments.
 
@@ -103,7 +103,7 @@ Where:
 * `constraints` as defined above.
 * `placements` is a dictionary of the format returned by a placer. Note that
   this placement must be valid (i.e. no vertices on dead/non-existant chips):
-  failiure to comply with this requirement will result in undefined behaviour.
+  failure to comply with this requirement will result in undefined behaviour.
 * `allocations` is a dictionary as produced by an allocator.
 * `core_resource` is the identifier of the resource in `allocations` which
   indicates the cores to route to when routing to a vertex. This defaults to
@@ -135,16 +135,16 @@ placement/allocation/routing but has a few subtle side-effects:
 
 * Routers *do* in fact care about cores and thus, in order to produce a routing
   with routes which terminates in cores, there must exist exactly one resource
-  which mapps 1:1 to cores on a chip. Note that if this is not done, routers
+  which maps 1:1 to cores on a chip. Note that if this is not done, routers
   still produce routes which connect all involved chips but these routes simply
-  wont terminate with a core.
+  won't terminate with a core.
 
 As a result, just as a vertex may consume more than one byte of memory, it may
 also consume zero, one or more cores.  However, since a vertex is assigned to
 exactly one chip, it cannot consume more cores than are available on a single
-chip: vertices are never be split across chips.  If an application requires
-this type of behaviour, users must perform this step in an application-defined
-preprocessing step before placement.
+chip: vertices are never split across chips.  If an application requires this
+type of behaviour, users must perform this step in an application-defined step
+prior to placement.
 
 Users should be careful when using a number of cores greater than one that they
 *really* intend to specify that a vertex must be placed on multiple cores of a

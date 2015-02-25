@@ -46,11 +46,11 @@ def build_application_map(vertices_applications, placements, allocations,
     return application_map
 
 
-def build_routing_tables(routes, net_keys):
+def build_routing_tables(routes, net_keys, omit_default_routes=True):
     """Convert a set of RoutingTrees into a per-chip set of routing tables.
 
-    This command produces routing tables with entries ommitted when the route
-    does not change direction.
+    This command produces routing tables with entries optionally omitted when
+    the route does not change direction.
 
     Note: The routing trees provided are assumed to be correct and continuous
     (not missing any hops). If this is not the case, the output is undefined.
@@ -64,6 +64,9 @@ def build_routing_tables(routes, net_keys):
         module.)
     net_keys : {net: (key, mask), ...}
         The key and mask associated with each net.
+    omit_default_routes : bool
+        Do not create routing entries for routes which do not change direction
+        (i.e. use default routing).
 
     Returns
     -------
@@ -98,7 +101,7 @@ def build_routing_tables(routes, net_keys):
                     out_directions.add(child)
 
             # Add a routing entry when the direction changes
-            if set([direction]) != out_directions:
+            if not omit_default_routes or set([direction]) != out_directions:
                 routing_tables[(x, y)].append(
                     RoutingTableEntry(out_directions, key, mask))
 
