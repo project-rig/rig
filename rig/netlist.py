@@ -37,3 +37,7 @@ class Net(object):
             self.sinks = sinks[:]
         else:
             self.sinks = [sinks]
+
+    def __contains__(self, vertex):
+        """Test if a supplied vertex is a source or sink of this net."""
+        return vertex == self.source or vertex in self.sinks
