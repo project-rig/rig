@@ -30,6 +30,7 @@ import os   # noqa
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.doctest',
     'numpydoc',
 ]
 

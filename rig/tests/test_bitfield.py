@@ -1,12 +1,19 @@
+"""Tests for BitFields.
+
+Please note that for historical reasons, in this file instances of
+:py:class:`rig.bitfield.BitField` are commonly named `ks`, standing for `Key
+Space` (or variants thereof).
+"""
+
 import pytest
 
-from ..keyspaces import Keyspace
+from rig.bitfield import BitField
 
 
-def test_keyspace_add_field():
-    # Assert that we can't create a new keyspace with fixed fields beyond its
+def test_bitfield_add_field():
+    # Assert that we can't create a new bit field with fixed fields beyond its
     # length
-    ks = Keyspace(64)
+    ks = BitField(64)
     with pytest.raises(ValueError):
         ks.add_field("out_of_range", start_at=64)
     with pytest.raises(ValueError):
@@ -41,10 +48,10 @@ def test_keyspace_add_field():
         ks.add_field("obstruction", length=1, start_at=0)
 
 
-def test_keyspace_masks():
-    # Create a new keyspace and check that appropriate masks can be retrieved
+def test_bitfield_masks():
+    # Create a new bit field and check that appropriate masks can be retrieved
     # from it, filtering by tag.
-    ks = Keyspace(64)
+    ks = BitField(64)
     ks.add_field("bottom", length=32, start_at=0, tags="Bottom All")
     ks.add_field("top", length=8, start_at=56, tags="Top All")
 
@@ -65,9 +72,9 @@ def test_keyspace_masks():
         assert ks.get_mask(tag="All", field="top") == 0xFF000000FFFFFFFF
 
 
-def test_keyspace_keys():
-    # Create a new keyspace and check that keys can be filled in and extracted
-    ks = Keyspace(32)
+def test_bitfield_keys():
+    # Create a new bit field and check that keys can be filled in and extracted
+    ks = BitField(32)
     ks.add_field("a", length=8, start_at=0, tags="A All")
     ks.add_field("b", length=8, start_at=8, tags="B All")
     ks.add_field("c", length=8, start_at=16, tags="C All")
@@ -82,21 +89,21 @@ def test_keyspace_keys():
 
     # Shouldn't be able to get values before they're assigned
     with pytest.raises(ValueError):
-        ks.get_key()
+        ks.get_value()
     with pytest.raises(ValueError):
-        ks.get_key(tag="All")
+        ks.get_value(tag="All")
     with pytest.raises(ValueError):
-        ks.get_key(field="a")
+        ks.get_value(field="a")
     with pytest.raises(ValueError):
-        ks.get_key(tag="A")
+        ks.get_value(tag="A")
     with pytest.raises(ValueError):
-        ks.get_key(field="b")
+        ks.get_value(field="b")
     with pytest.raises(ValueError):
-        ks.get_key(tag="B")
+        ks.get_value(tag="B")
     with pytest.raises(ValueError):
-        ks.get_key(field="c")
+        ks.get_value(field="c")
     with pytest.raises(ValueError):
-        ks.get_key(tag="C")
+        ks.get_value(tag="C")
 
     # Should just get None for unspecified fields
     assert ks.a is None
@@ -114,20 +121,20 @@ def test_keyspace_keys():
     assert ks_a.a == 0xAA
     assert ks_a.b is None
     assert ks_a.c is None
-    assert ks_a.get_key(field="a") == 0x000000AA
-    assert ks_a.get_key(tag="A") == 0x000000AA
+    assert ks_a.get_value(field="a") == 0x000000AA
+    assert ks_a.get_value(tag="A") == 0x000000AA
     with pytest.raises(ValueError):
-        ks_a.get_key()
+        ks_a.get_value()
     with pytest.raises(ValueError):
-        ks_a.get_key(tag="All")
+        ks_a.get_value(tag="All")
     with pytest.raises(ValueError):
-        ks_a.get_key(field="b")
+        ks_a.get_value(field="b")
     with pytest.raises(ValueError):
-        ks_a.get_key(tag="B")
+        ks_a.get_value(tag="B")
     with pytest.raises(ValueError):
-        ks_a.get_key(field="c")
+        ks_a.get_value(field="c")
     with pytest.raises(ValueError):
-        ks_a.get_key(tag="C")
+        ks_a.get_value(tag="C")
 
     # Should not be able to change a field
     with pytest.raises(ValueError):
@@ -140,27 +147,27 @@ def test_keyspace_keys():
     assert ks_abc.a == 0xAA
     assert ks_abc.b == 0xBB
     assert ks_abc.c == 0xCC
-    assert ks_abc.get_key() == 0x00CCBBAA
-    assert ks_abc.get_key(field="a") == 0x000000AA
-    assert ks_abc.get_key(field="b") == 0x0000BB00
-    assert ks_abc.get_key(field="c") == 0x00CC0000
-    assert ks_abc.get_key(tag="All") == 0x00CCBBAA
-    assert ks_abc.get_key(tag="A") == 0x000000AA
-    assert ks_abc.get_key(tag="B") == 0x0000BB00
-    assert ks_abc.get_key(tag="C") == 0x00CC0000
+    assert ks_abc.get_value() == 0x00CCBBAA
+    assert ks_abc.get_value(field="a") == 0x000000AA
+    assert ks_abc.get_value(field="b") == 0x0000BB00
+    assert ks_abc.get_value(field="c") == 0x00CC0000
+    assert ks_abc.get_value(tag="All") == 0x00CCBBAA
+    assert ks_abc.get_value(tag="A") == 0x000000AA
+    assert ks_abc.get_value(tag="B") == 0x0000BB00
+    assert ks_abc.get_value(tag="C") == 0x00CC0000
 
     # Test some special-case values
     ks_a0 = ks(a=0)
-    assert ks_a0.get_key(field="a") == 0x00000000
+    assert ks_a0.get_value(field="a") == 0x00000000
     ks_a1 = ks(a=1)
-    assert ks_a1.get_key(field="a") == 0x00000001
+    assert ks_a1.get_value(field="a") == 0x00000001
     ks_aFF = ks(a=0xFF)
-    assert ks_aFF.get_key(field="a") == 0x000000FF
+    assert ks_aFF.get_value(field="a") == 0x000000FF
 
 
-def test_keyspace_tags():
+def test_bitfield_tags():
     # Test the ability to define tags in different ways
-    ks = Keyspace(6)
+    ks = BitField(6)
     ks.add_field("a", length=1, start_at=0)
     ks.add_field("b", length=1, start_at=1, tags="B")
     ks.add_field("c", length=1, start_at=2, tags="C C_")
@@ -176,19 +183,19 @@ def test_keyspace_tags():
     assert ks_def.get_mask("E") == 0x10
     assert ks_def.get_mask("E_") == 0x10
 
-    assert ks_def.get_key() == 0x1F
-    assert ks_def.get_key("B") == 0x02
-    assert ks_def.get_key("C") == 0x04
-    assert ks_def.get_key("C_") == 0x04
-    assert ks_def.get_key("D") == 0x08
-    assert ks_def.get_key("E") == 0x10
-    assert ks_def.get_key("E_") == 0x10
+    assert ks_def.get_value() == 0x1F
+    assert ks_def.get_value("B") == 0x02
+    assert ks_def.get_value("C") == 0x04
+    assert ks_def.get_value("C_") == 0x04
+    assert ks_def.get_value("D") == 0x08
+    assert ks_def.get_value("E") == 0x10
+    assert ks_def.get_value("E_") == 0x10
 
     # Test that non-existant tags cause an error
     with pytest.raises(ValueError):
         ks.get_mask("Non-existant")
     with pytest.raises(ValueError):
-        ks.get_key("Non-existant")
+        ks.get_value("Non-existant")
 
     ks_a0 = ks(a=0)
     ks_a0.add_field("a0", length=1, start_at=5, tags="A0")
@@ -201,16 +208,16 @@ def test_keyspace_tags():
 
     # Test that fields become available when selected
     assert ks_a0.get_mask("A0") == 0b100001
-    assert ks_a0(a0=1).get_key("A0") == 0b100000
+    assert ks_a0(a0=1).get_value("A0") == 0b100000
     assert ks.get_mask("A1") == 0x01
 
     assert ks_a1.get_mask("A1") == 0b100001
-    assert ks_a1(a1=1).get_key("A1") == 0b100001
+    assert ks_a1(a1=1).get_value("A1") == 0b100001
     assert ks.get_mask("A0") == 0x01
 
 
-def test_keyspace_hierachy():
-    ks = Keyspace(8)
+def test_bitfield_hierachy():
+    ks = BitField(8)
     ks.add_field("always", length=1, start_at=7)
     ks.add_field("split", length=1, start_at=6)
 
@@ -241,7 +248,7 @@ def test_keyspace_hierachy():
     assert ks_s0_defined.split == 0
     assert ks_s0_defined.s0_btm == 3
     assert ks_s0_defined.s0_top == 5
-    assert ks_s0_defined.get_key() == 0b10101011
+    assert ks_s0_defined.get_value() == 0b10101011
     assert ks_s0_defined.get_mask() == 0b11111111
 
     # Should be able to order child keys before the parent key too in the
@@ -274,7 +281,7 @@ def test_keyspace_hierachy():
 
     # Test that if a subfield blocks a space, another field cannot be added
     # there at a higher level in the hierarchy
-    ks_obst = Keyspace(32)
+    ks_obst = BitField(32)
     ks_obst.add_field("split")
     ks_obst_s1 = ks_obst(split=1)
     ks_obst_s1.add_field("obstruction", start_at=0)
@@ -290,7 +297,7 @@ def test_keyspace_hierachy():
 def test_auto_length():
     # Tests for automatic length calculation.
     # Test that fields never given any values just become single-bit fields
-    ks_never = Keyspace(8)
+    ks_never = BitField(8)
     ks_never.add_field("never", start_at=0)
     ks_never.assign_fields()
     assert ks_never.get_mask() == 0x01
@@ -300,15 +307,15 @@ def test_auto_length():
         ks_never.add_field("obstructed", start_at=0)
 
     # Make sure that assign_fields() also forces a fixing of the size
-    ks_once = Keyspace(8)
+    ks_once = BitField(8)
     ks_once.add_field("once", start_at=0)
     once_fifteen = ks_once(once=0x0F)
     with pytest.raises(ValueError):
         ks_once.get_mask()
     with pytest.raises(ValueError):
-        once_fifteen.get_key()
+        once_fifteen.get_value()
     ks_once.assign_fields()
-    assert once_fifteen.get_key() == 0x0F
+    assert once_fifteen.get_value() == 0x0F
     assert once_fifteen.get_mask() == 0x0F
 
     # The signle-bit value should happily fit only 0 and 1
@@ -318,7 +325,7 @@ def test_auto_length():
         ks_never(never=2)
 
     # Test that fields can be sized automatically but positioned manually
-    ks = Keyspace(64)
+    ks = BitField(64)
     ks.add_field("auto_length", start_at=32)
 
     # Create a load of keys (of which one is at least 32-bits long)
@@ -336,7 +343,7 @@ def test_auto_length():
 
     # Test that fields can be created which, when auto-lengthed after a large
     # field value, don't fit.
-    ks_long = Keyspace(16)
+    ks_long = BitField(16)
     ks_long.add_field("too_long", start_at=0)
     ks_long(too_long=0x10000)
     with pytest.raises(ValueError):
@@ -347,7 +354,7 @@ def test_auto_length():
         ks_long.get_mask()
 
     # Test that fields can be generated hierarchically
-    ks_h = Keyspace(16)
+    ks_h = BitField(16)
     ks_h.add_field("split", start_at=8)
     ks_h_s0 = ks_h(split=0)
     ks_h_s0.add_field("s0", start_at=0)
@@ -359,7 +366,7 @@ def test_auto_length():
     ks_h_s0_val = ks_h(split=0, s0=0x10)
     ks_h_s0_val.assign_fields()
     assert ks_h_s0_val.get_mask() == 0x031F
-    assert ks_h_s0_val.get_key() == 0x0010
+    assert ks_h_s0_val.get_value() == 0x0010
 
     # Make sure this side and the split field are now fixed
     with pytest.raises(ValueError):
@@ -376,7 +383,7 @@ def test_auto_length():
 
 def test_auto_start_at():
     # Test automatic positioning of fixed-length fields
-    ks = Keyspace(32)
+    ks = BitField(32)
 
     ks.add_field("a", length=4)
     ks.add_field("b", length=4)
@@ -386,7 +393,7 @@ def test_auto_start_at():
     with pytest.raises(ValueError):
         ks.get_mask()
     with pytest.raises(ValueError):
-        ks(a=0).get_key(field="a")
+        ks(a=0).get_value(field="a")
 
     ks.assign_fields()
 
@@ -418,7 +425,7 @@ def test_auto_start_at():
         ks.assign_fields()
 
     # Test that auto-placed fields can be created heirachically
-    ks_h = Keyspace(32)
+    ks_h = BitField(32)
     ks_h.add_field("split", length=4)
 
     # Ensure that additional top-level fields are placed before all split
@@ -450,7 +457,7 @@ def test_auto_start_at():
 def test_full_auto():
     # Brief test that automatic placement and length assignment can happen
     # simultaneously
-    ks = Keyspace(32)
+    ks = BitField(32)
     ks.add_field("a")
     ks.add_field("b")
 
@@ -464,7 +471,7 @@ def test_full_auto():
     assert ks.get_mask() == 0x000FFFFF
 
     # Also test that assignment of fields works at multiple levels of heirarchy
-    ks_h = Keyspace(32)
+    ks_h = BitField(32)
     ks_h.add_field("s")
     ks_h(s=0).add_field("s0")
     ks_h(s=0, s0=0).add_field("s00")
@@ -483,10 +490,10 @@ def test_full_auto():
 
 
 def test_eq():
-    # Check that two Keyspaces with the same fields and values (but defined
+    # Check that two bit fields with the same fields and values (but defined
     # seperately) are not equivilent.
-    ks1 = Keyspace(32)
-    ks2 = Keyspace(32)
+    ks1 = BitField(32)
+    ks2 = BitField(32)
     assert ks1 != ks2
 
     ks1.add_field("test", length=2, start_at=1)
@@ -508,7 +515,7 @@ def test_eq():
     assert ks1_val2 != ks2_val2
 
     # Check self-equivilence, even with fields and values set
-    ks = Keyspace(32)
+    ks = BitField(32)
     assert ks == ks
 
     ks.add_field("test")
@@ -536,9 +543,9 @@ def test_eq():
 
 
 def test_repr():
-    # Very rough tests to ensure the string representation of a keyspace is
+    # Very rough tests to ensure the string representation of a bit field is
     # reasonably sane.
-    ks = Keyspace(128)
+    ks = BitField(128)
     ks.add_field("always")
     ks.add_field("split")
     ks_s0 = ks(split=0)
@@ -548,7 +555,7 @@ def test_repr():
 
     # Basic info should appear
     assert "128" in repr(ks)
-    assert "Keyspace" in repr(ks)
+    assert "BitField" in repr(ks)
 
     # Global fields should appear, even if undefined
     assert "'always'" in repr(ks)
