@@ -21,7 +21,7 @@ SpiNNaker.  Tools exist for:
 .. toctree::
         :maxdepth: 2
 
-        keyspaces
+        bitfield
         regions
 
 Problem mapping
