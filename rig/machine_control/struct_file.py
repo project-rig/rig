@@ -2,15 +2,18 @@
 """
 import collections
 import re
+import six
+import struct
 
 
-def read_struct_file(fp):
-    """Read a struct file defining the location of variables in memory.
+def read_struct_file(struct_data):
+    """Interpret a struct file defining the location of variables in memory.
 
     Parameters
     ----------
-    fp : file
-        A file-object containing the struct file to read.
+    struct_data : :py:class:`bytes`
+        String of :py:class:`bytes` containing data to interpret as the struct
+        definition.
 
     Returns
     -------
@@ -26,7 +29,7 @@ def read_struct_file(fp):
     name = None
 
     # Iterate over every line in the file
-    for i, l in enumerate(fp):
+    for i, l in enumerate(struct_data.splitlines()):
         # Empty the line of comments, if the line is empty then skip to the
         # next line.  Split on whitespace to get the tokens.
         tokens = re_comment.sub(b"", l).strip().split()
@@ -88,6 +91,39 @@ def read_struct_file(fp):
     return structs
 
 
+def read_conf_file(conf_data):
+    """Interpret a configuration file that provides default values for elements
+    in structs.
+
+    Parameters
+    ----------
+    conf_data : :py:class:`bytes`
+        A bytestring of the conf-file to read.  This conf file is NOT expected
+        to include comments, the structure should be pairs of field and value.
+
+    Returns
+    -------
+    {field_name: default_value}
+        Dictionary mapping field name to default value.
+    """
+    fields = {}
+
+    # The conf file should be dead simple to parse!
+    for i, l in enumerate(conf_data.splitlines()):
+        # Skip empty lines
+        l = l.strip()
+        if len(l) == 0:
+            continue
+
+        try:
+            # Tokenize and parse
+            (field, value) = l.split()
+            fields[field] = num(value)
+        except:
+            raise ValueError("line {}: syntax error in config file".format(i))
+
+    return fields
+
 # Regex definitions
 re_comment = re.compile(b"#.*$")
 re_array_field = re.compile(b"(?P<field>\w+)\[(?P<length>\d+)\]")
@@ -126,6 +162,22 @@ class Struct(object):
         self.base = base
         self.fields = dict()
 
+    def update_default_values(self, **updates):
+        """Replace the default values of specified fields.
+
+        Parameters
+        ----------
+        Parameters are taken as keyword-arguments of `field=new_value`.
+
+        Raises
+        ------
+        KeyError
+            If a field doesn't exist in the struct.
+        """
+        for (field, value) in six.iteritems(updates):
+            fname = six.b(field)
+            self[fname] = self[fname]._replace(default=value)
+
     def __setitem__(self, name, field):
         """Set a field in the struct."""
         self.fields[name] = field
@@ -136,6 +188,25 @@ class Struct(object):
 
     def __contains__(self, name):
         return name in self.fields
+
+    def pack(self):
+        """Pack the struct (and its default values) into a string of bytes.
+
+        Returns
+        -------
+        :py:class:`bytes`
+            Byte-string representation of struct containing default values.
+        """
+        # Generate a buffer big enough to hold the packed values
+        data = bytearray(b"\x00" * self.size)
+
+        # Iterate over the fields, pack each value in little-endian format and
+        # insert into the buffered data.
+        for field in six.itervalues(self.fields):
+            packed_data = struct.pack(b"<" + field.pack_chars, field.default)
+            data[field.offset:len(packed_data)+field.offset] = packed_data
+
+        return bytes(data)
 
 
 StructField = collections.namedtuple("StructField",

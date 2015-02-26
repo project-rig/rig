@@ -1,2 +1,4 @@
 mock
 pytest>=2.6
+pytest-cov
+flake8
