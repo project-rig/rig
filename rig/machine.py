@@ -1,17 +1,4 @@
-"""Definitions of the resources available in a SpiNNaker machine.
-
-Overview
---------
-
-* :py:class:`~.rig.machine.Links` gives identifiers for links in a machine
-
-* :py:class:`~.rig.machine.Cores`, :py:class:`~.rig.machine.SDRAM` and
-  :py:class:`~.rig.machine.SDRAM` are (suggested) identifiers for common
-  resources in a SpiNNaker machine.
-
-* :py:class:`~.rig.machine.Machine` defines resources what resources are
-  available in a machine.
-
+"""Identifiers for resources available in a SpiNNaker machine.
 """
 
 from enum import Enum, IntEnum
@@ -19,10 +6,35 @@ from enum import Enum, IntEnum
 import sentinel
 
 
+Cores = sentinel.create("Cores")
+"""Resource identifier for (monitor and application) processor cores.
+
+Note that this identifier does not trigger any kind of special-case behaviour
+in library functions. Users are free to define their own alternatives.
+"""
+
+
+SDRAM = sentinel.create("SDRAM")
+"""Resource identifier for shared off-die SDRAM (in bytes).
+
+Note that this identifier does not trigger any kind of special-case behaviour
+in library functions. Users are free to define their own alternatives.
+"""
+
+
+SRAM = sentinel.create("SRAM")
+"""Resource identifier for shared on-die SRAM (in bytes).
+
+Note that this identifier does not trigger any kind of special-case behaviour
+in library functions. Users are free to define their own alternatives.
+"""
+
+
 class Links(IntEnum):
     """Enumeration of links from a SpiNNaker chip.
 
     Note that the numbers chosen have two useful properties:
+
     * The integer values assigned are chosen to match the numbers used to
       identify the links in the low-level software API and hardware registers.
     * The links are ordered consecutively in anticlockwise order meaning the
@@ -48,13 +60,13 @@ class Links(IntEnum):
         arbitrarily favour either wrap-around or non-wrap-around links. This
         function is not meaningful for 1x1 systems.
 
-        Argument
-        --------
+        Parameters
+        ----------
         vector : (x, y)
             The vector from one node to its logical neighbour.
 
-        Return
-        ------
+        Returns
+        -------
         :py:class:`~rig.machine.Links`
             The link direction to travel in the direction indicated by the
             vector.
@@ -88,30 +100,6 @@ _link_direction_lookup = {
     (+1, +1): Links.north_east,
     (-1, -1): Links.south_west,
 }
-
-
-"""Resource identifier for (monitor and application) processor cores.
-
-Note that this identifier does not trigger any kind of special-case behaviour
-in library functions. Users are free to define their own alternatives.
-"""
-Cores = sentinel.create("Cores")
-
-
-"""Resource identifier for shared off-die SDRAM (in bytes).
-
-Note that this identifier does not trigger any kind of special-case behaviour
-in library functions. Users are free to define their own alternatives.
-"""
-SDRAM = sentinel.create("SDRAM")
-
-
-"""Resource identifier for shared on-die SRAM (in bytes).
-
-Note that this identifier does not trigger any kind of special-case behaviour
-in library functions. Users are free to define their own alternatives.
-"""
-SRAM = sentinel.create("SRAM")
 
 
 class Machine(object):
