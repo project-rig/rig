@@ -5,7 +5,7 @@ Rig
 
 [![Build Status](https://travis-ci.org/project-rig/rig.svg?branch=master)](https://travis-ci.org/project-rig/rig)
 [![PyPi version](https://pypip.in/v/rig/badge.png?style=flat)](https://pypi.python.org/pypi/rig/)
-[![Documentation Status](https://readthedocs.org/projects/rig/badge/?version=master)](https://readthedocs.org/projects/rig/?badge=master)
+[![Documentation](https://readthedocs.org/projects/rig/badge/?version=master)](http://rig.readthedocs.org/)
 [![Coverage Status](https://coveralls.io/repos/project-rig/rig/badge.svg?branch=master)](https://coveralls.io/r/project-rig/rig?branch=master)
 
 Rig is a set of Python and C libraries for mapping computational problems to
@@ -149,3 +149,5 @@ installed version of sphinx may find that the build process fails. To install a
 local copy of Sphinx in the `virtualenv`, use:
 
     pip install -I sphinx
+
+The ReadTheDocs project page is available here: https://readthedocs.org/projects/rig/
