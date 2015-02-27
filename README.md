@@ -82,7 +82,7 @@ environment.
 A development installation of rig can be created straight out of the repository
 using [setuptools](https://pypi.python.org/pypi/setuptools) as usual:
 
-    git clone git@github.com:mundya/rig
+    git clone git@github.com:project-rig/rig.git
     cd rig
     python setup.py develop
 
