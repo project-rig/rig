@@ -1,4 +1,7 @@
-# Rig
+Rig
+===
+
+![The Rig Logo](docs/source/logo.png?raw=true)
 
 [![Build Status](https://travis-ci.org/project-rig/rig.svg?branch=master)](https://travis-ci.org/project-rig/rig)
 [![PyPi version](https://pypip.in/v/rig/badge.png)](https://pypi.python.org/pypi/rig/)
@@ -8,9 +11,12 @@ Rig is a set of Python and C libraries for mapping computational problems to
 SpiNNaker and interacting with them.  Above all it aims to be light weight and
 to present common and well-documented interfaces to all of its parts.
 
+Overview
+--------
+
 Rig is split into three primary groups of tools and utilities:
 
-## Execution specification
+### Execution specification
 
 Allows specification of the sets of executables that are to be simulated on
 SpiNNaker.  Tools exist for:
@@ -21,87 +27,124 @@ SpiNNaker.  Tools exist for:
  - Specifying a problem for SpiNNaker in terms of computational nodes and their
    communication.
 
-## Problem mapping
+### Problem mapping
 
  - Placing: Taking a set of computational nodes and determining which SpiNNaker
    processing cores they should be placed on.
  - Routing: Taking a set of computational nodes and determining the routing
    entries necessary to fulfil their communication needs.
 
-## Execution control
+### Execution control
 
  - A light-weight SCP interface to load applications and data onto a SpiNNaker
    machine and to control their execution.
 
-## Related projects
+### Related projects
 
  - Clock discipline
  - Routing table minimisation
  - Optimal routing key allocation
 
-## Developing Rig
+Using Rig
+---------
 
-### Installing in a `virtualenv`
+Users can install Rig from the [Python Package
+Index](https://pypi.python.org/pypi/rig/) using:
 
-Create a new [virtualenv](https://pypi.python.org/pypi/virtualenv) by running:
+    pip install rig
 
-    virtualenv --system-site-packages new_directory_name
+Documentation is available online on [ReadTheDocs](http://rig.readthedocs.org/).
 
-Note `--system-site-packages` optionally allows the virtualenv to use your
-system-wide installations of large packages (e.g. NUMPY)
+Developing Rig
+--------------
 
-Then activate the virtualenv before installing.
+Users wishing to work on Rig can download the latest code from the [official
+GitHub repository](https://github.com/project-rig/rig).
 
-    cd new_directory_name
+### `virtualenv` setup
+
+We recommend working in a [virtualenv](https://pypi.python.org/pypi/virtualenv)
+which can be set up like so:
+
+    # `--system-site-packages` optionally allows the virtualenv to use your
+    # system-wide installations of large packages (e.g. NUMPY)
+    virtualenv --system-site-packages rig_virtualenv
+    cd rig_virtualenv
     . bin/activate
 
-Clone and install.
+This will install the requirements and provide you with a sandboxed environment
+for testing and working with rig.  To leave the `virtualenv` just run
+`deactivate`. Run `. bin/activate` whenever you want to re-enter the
+environment.
+
+### Installing Rig
+
+A development installation of rig can be created straight out of the repository
+using [setuptools](https://pypi.python.org/pypi/setuptools) as usual:
 
     git clone git@github.com:mundya/rig
     cd rig
-    python setup.py install develop
+    python setup.py develop
 
-This will install the requirements and provide you with a sandboxed environment
-for testing and working with rig.  To leave the virtualenv just run
-`deactivate`.  Run `. bin/activate` whenever you want to re-enter the
-environment.
-
-### Running the tests
+### Running tests
 
 We use [py.test](http://pytest.org) to test rig,
-[pytest-cov](https://pypi.python.org/pypi/pytest-cov/1.8.1) to generate
-coverage reports and the [flake8](https://pypi.python.org/pypi/flake8) coding
-standard checker.
+[pytest-cov](https://pypi.python.org/pypi/pytest-cov/1.8.1) to generate coverage
+reports and the [flake8](https://pypi.python.org/pypi/flake8) coding standard
+checker. Developers should be careful to test for compliance before pushing
+code.
 
-Install py.test et al. in the virtualenv.
+The required tools can be installed via pip using:
 
-    pip install pytest pytest-cov flake8 mock
+    pip install -r requirements-test.txt
 
-*To run the tests*:
-
-(You must be in the rig module directory, e.g. `new_directory_name/rig/rig/`)
+The tests can now be run using:
 
     py.test
 
-To run the tests and get a coverage report.
+Some tests require a connected, non-booted, SpiNNaker system.  To run these use:
 
+    py.test --spinnaker HOSTNAME WIDTH HEIGHT
+
+To get a test coverage report run one of the following:
+
+    # Summary (for rig module)
     py.test --cov rig
-
-To run the tests and get a specific coverage report (with line numbers):
-
+    
+    # List missed line numbers (for rig module)
     py.test --cov rig --cov-report term-missing
+    
+    # Generate HTML report (for rig module)
+    py.test --cov rig --cov-report html
 
-Some tests require a connected, booted, SpiNNaker board.  To run these use:
+To test for coding standards problems run:
 
-    py.test --spinnaker=HOSTNAME_OF_BOOTED_BOARD
+    flake8 rig
 
-#### Using Tox
+### Using Tox
 
 We also use [Tox](https://pypi.python.org/pypi/tox/1.8.1) to run tests against
-multiple versions of Python.  To do this just execute `tox` in the root
+multiple versions of Python. To do this just execute `tox` in the root
 directory of the repository.
 
 
-# Documentation
+### Building documentation
 
-The Rig documentation is hosted at: http://rig.readthedocs.org/
+Documentation is built by
+[Sphinx](http://sphinx-doc.org/)/[numpydoc](https://github.com/numpy/numpydoc).
+Dependencies can be installed using:
+
+    pip install -r requirements-docs.txt
+
+HTML documentation can be built using:
+
+    cd docs
+    make html
+
+HTML documentation is created in `docs/build/html/`.
+
+Note: `virtualenv` users using `--system-site-packages` and who have a system-wide
+installed version of sphinx may find that the build process fails. To install a
+local copy of Sphinx in the `virtualenv`, use:
+
+    pip install -I sphinx
