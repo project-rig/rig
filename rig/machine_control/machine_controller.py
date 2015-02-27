@@ -336,14 +336,39 @@ class MachineController(ContextMixin):
             raise SpiNNakerMemoryError(size, x, y)
         return rv.arg1
 
+    @ContextMixin.use_contextual_arguments
+    def sdram_alloc_as_io(self, size, tag=0, x=Required, y=Required,
+                          app_id=Required):
+        """Like
+        :py:meth:`~rig.machine_controller.machine_control.MachineController.sdram_alloc`
+        but a file-like object which allows reading and writing to the region
+        is returned.
+
+        Returns
+        -------
+        :py:class:`~rig.machine_control.machine_controller.MemoryIO`
+            File-like object which allows accessing the newly allocated region
+            of memory.
+
+        Raises
+        ------
+        SpiNNakerMemoryError
+            If the memory cannot be allocated, or the tag is already taken or
+            invalid.
+        """
+        # Perform the malloc
+        start_address = self.sdram_alloc(size, tag, x, y, app_id)
+
+        return MemoryIO(self, x, y, start_address, start_address + size)
+
 
 class CoreInfo(collections.namedtuple(
     'CoreInfo', "p2p_address physical_cpu virt_cpu version buffer_size "
                 "build_date version_string")):
     """Information returned about a core by sver.
 
-    Paramters
-    ---------
+    Parameters
+    ----------
     p2p_address : (x, y)
         Logical location of the chip in the system.
     physical_cpu : int
@@ -400,3 +425,110 @@ class SpiNNakerMemoryError(Exception):
     def __str__(self):
         return ("Failed to allocate {} bytes of SDRAM on chip ({}, {})".
                 format(self.size, self.chip[0], self.chip[1]))
+
+
+class MemoryIO(object):
+    def __init__(self, machine_controller, x, y, start_address, end_address):
+        """Create a file-like view onto a subset of the memory-space of a chip.
+
+        Parameters
+        ----------
+        machine_controller : :py:class:`~rig.machine_control.MachineController`
+            A communicator to handle transmitting and receiving packets from
+            the SpiNNaker machine.
+        x : int
+            x co-ordinate of the chip.
+        y : int
+            y co-ordinate of the chip.
+        start_address : int
+            Starting address in memory.
+        end_address : int
+            End address in memory.
+        """
+        # Store parameters
+        self._x = x
+        self._y = y
+        self._machine_controller = machine_controller
+        self._start_address = start_address
+        self._end_address = end_address
+
+        # Current offset from start address
+        self._offset = 0
+
+    def read(self, n_bytes):
+        """Read a number of bytes from the SDRAM.
+
+        Parameters
+        ----------
+        n_bytes : int
+            A number of bytes to read.
+
+        .. note::
+            Reads beyond the specified memory range will be truncated.
+
+        Returns
+        -------
+        :py:class:`bytes`
+            Data read from SpiNNaker as a bytestring.
+        """
+        # Determine how far to read, then read nothing beyond that point.
+        if self.address + n_bytes > self._end_address:
+            n_bytes = min(n_bytes, self._end_address - self.address)
+
+            if n_bytes <= 0:
+                return b''
+
+        # Perform the read and increment the offset
+        data = self._machine_controller.read(
+            self._x, self._y, 0, self.address, n_bytes)
+        self._offset += n_bytes
+        return data
+
+    def write(self, bytes):
+        """Write data to the SDRAM.
+
+        Parameters
+        ----------
+        bytes : :py:class:`bytes`
+            Data to write to the SDRAM as a bytestring.
+
+        .. note::
+            Writes beyond the specified memory range will be truncated.
+
+        Returns
+        -------
+        int
+            Number of bytes written.
+        """
+        if self.address + len(bytes) > self._end_address:
+            n_bytes = min(len(bytes), self._end_address - self.address)
+
+            if n_bytes <= 0:
+                return 0
+
+            bytes = bytes[:n_bytes]
+
+        # Perform the write and increment the offset
+        self._machine_controller.write(
+            self._x, self._y, 0, self.address, bytes)
+        self._offset += len(bytes)
+        return len(bytes)
+
+    def tell(self):
+        """Get the current offset in the memory region.
+
+        Returns
+        -------
+        int
+            Current offset (starting at 0).
+        """
+        return self._offset
+
+    @property
+    def address(self):
+        """Get the current address (indexed from 0x00000000)."""
+        return self._offset + self._start_address
+
+    def seek(self, n_bytes):
+        """Seek to a new position in the memory region."""
+        self._offset += n_bytes
