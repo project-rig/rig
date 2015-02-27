@@ -6,6 +6,8 @@
 Rig - libraries for SpiNNaker application support
 =================================================
 
+.. image:: logo.png
+
 Rig is a set of Python and C libraries for mapping computational problems to
 SpiNNaker and interacting with them.  Above all it aims to be light weight and
 to present common and well-documented interfaces to all of its parts.
