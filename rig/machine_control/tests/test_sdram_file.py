@@ -35,6 +35,15 @@ class TestSDRAMFile(object):
         # controller.
         mock_controller.read.assert_has_calls(calls)
 
+    def test_read_beyond(self, mock_controller):
+        sdram_file = SDRAMFile(mock_controller, 0, 0,
+                               start_address=0, end_address=10)
+        sdram_file.read(100)
+        mock_controller.read.assert_called_with(0, 0, 0, 0, 10)
+
+        assert sdram_file.read(1) == b''
+        assert mock_controller.read.call_count == 1
+
     @pytest.mark.parametrize("x, y", [(4, 2), (255, 1)])
     @pytest.mark.parametrize("start_address", [0x60000004, 0x61000003])
     @pytest.mark.parametrize("lengths", [[100, 200], [100], [300, 128, 32]])
@@ -47,7 +56,8 @@ class TestSDRAMFile(object):
         calls = []
         offset = 0
         for i, n_bytes in enumerate(lengths):
-            sdram_file.write(chr(i % 256) * n_bytes)
+            n_written = sdram_file.write(chr(i % 256) * n_bytes)
+            assert n_written == n_bytes
             assert sdram_file.tell() == offset + n_bytes
             assert sdram_file.address == start_address + offset + n_bytes
             calls.append(mock.call(x, y, 0, start_address + offset,
@@ -57,6 +67,15 @@ class TestSDRAMFile(object):
         # Check the reads caused the appropriate calls to the machine
         # controller.
         mock_controller.write.assert_has_calls(calls)
+
+    def test_write_beyond(self, mock_controller):
+        sdram_file = SDRAMFile(mock_controller, 0, 0,
+                               start_address=0, end_address=10)
+
+        assert sdram_file.write(b"\x00\x00" * 12) == 10
+
+        assert sdram_file.write(b"\x00") == 0
+        assert mock_controller.write.call_count == 1
 
     @pytest.mark.parametrize("start_address", [0x60000004, 0x61000003])
     @pytest.mark.parametrize("seeks", [(100, -3, 32, 5, -7)])

@@ -2,6 +2,11 @@
 """
 import enum
 
+SCP_PORT = 17893  # TODO Reference spec
+# The smallest power of two large enough to handle the largest packet the
+# SpiNNaker SDP implementation can produce (256+8 bytes).
+SCP_RECEIVE_LENGTH = 512
+
 
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""
@@ -32,6 +37,7 @@ class LEDAction(enum.IntEnum):
 
 
 class IPTagCommands(enum.IntEnum):
+    """Indicate the action that should be performed to the given IPTag."""
     set = 1
     get = 2
     clear = 3

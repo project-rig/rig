@@ -1,5 +1,4 @@
 import collections
-import pkg_resources
 import socket
 import struct
 
@@ -15,42 +14,28 @@ class MachineController(ContextMixin):
     Attributes
     ----------
     """
-    def __init__(self, initial_host, n_tries=5, timeout=0.5, app_id=None,
-                 boot_data=None, struct_data=None):
+    def __init__(self, initial_host, n_tries=5, timeout=0.5,
+                 initial_context={"app_id": 30}):
         """Create a new controller for a SpiNNaker machine.
 
         Parameters
         ----------
         initial_host : string
+            Hostname or IP address of the SpiNNaker chip to connect to. If the
+            board has not yet been booted, this will become chip (0, 0).
         n_tries : int
+            Number of SDP packet retransmission attempts.
         timeout : float
-        app_id : int or None
-        boot_data : bytes or None
-            Data to boot the machine with.  If None then the default boot file
-            provided with rig will be used.
-        struct_data : bytes or None
-            Data to interpret as a representation of the memory layout of data
-            within the memory of a running core.  If None then the default
-            struct file provided with rig will be used.
+        initial_context : `{argument: value}`
+            Dictionary of default arguments to pass to methods in this class.
         """
         # Initialise the context stack
-        ContextMixin.__init__(self, {app_id: app_id})
+        ContextMixin.__init__(self, initial_context)
 
         # Store the initial parameters
         self.initial_host = initial_host
         self.n_tries = n_tries
         self.timeout = timeout
-        self.app_id = app_id
-
-        # Store the struct and boot data
-        if struct_data is None:
-            struct_data = pkg_resources.resource_string("rig",
-                                                        "boot/sark.struct")
-        self.struct_data = struct_data
-
-        if boot_data is None:
-            boot_data = pkg_resources.resource_string("rig", "boot/scamp.boot")
-        self.boot_data = boot_data
 
         # Create the initial connection
         self.connections = [
@@ -60,7 +45,8 @@ class MachineController(ContextMixin):
     def __call__(self, **context_args):
         """Create a new context for use with `with`.
 
-        E.g:
+        E.g::
+
             with controller(x=3, y=4):
                 # All commands will now communicate with chip (3, 4)
         """
@@ -87,28 +73,27 @@ class MachineController(ContextMixin):
             Height of the machine (0 < h < 256)
 
         For further boot arguments see
-        :py:func:`~rig.machine_controller.boot.boot`.  **Regardless** of the
-        values passed to this method the struct and boot data from `__init__`
-        will be used.
+        :py:func:`~rig.machine_controller.boot.boot`.
 
         Notes
         -----
-        The constants `rig.boot.spinX_boot_options` can be used to specify boot
-        parameters, for example:
+        The constants `rig.machine_control.boot.spinX_boot_options` can be used
+        to specify boot parameters, for example::
 
             controller.boot(**spin5_boot_options)
 
         Will boot the Spin5 board connected to by `controller`.
         """
-        boot_kwargs.update({
-            "boot_data": self.boot_data,
-            "struct_data": self.struct_data,
-        })
         boot.boot(self.initial_host, width=width, height=height, **boot_kwargs)
 
     @ContextMixin.use_contextual_arguments
-    def software_version(self, x=Required, y=Required, processor=0):
+    def get_software_version(self, x=Required, y=Required, processor=0):
         """Get the software version for a given SpiNNaker core.
+
+        Returns
+        -------
+        :py:class:`CoreInfo`
+            Information about the software running on a core.
         """
         sver = self.send_scp(x, y, processor, SCPCommands.sver)
 
@@ -126,7 +111,7 @@ class MachineController(ContextMixin):
                         sver.data)
 
     @ContextMixin.use_contextual_arguments
-    def write(self, address, data, x=Required, y=Required, p=Required):
+    def write(self, address, data, x=Required, y=Required, p=0):
         """Write a bytestring to an address in memory.
 
         Parameters
@@ -146,7 +131,7 @@ class MachineController(ContextMixin):
             address += len(block)
 
     def _write(self, x, y, p, address, data, data_type=DataType.byte):
-        """Write a bytestring to an address in memory.
+        """Write an SCP command's worth of data to an address in memory.
 
         It is better to use :py:func:`~.write` which wraps this method and
         allows writing bytestrings of arbitrary length.
@@ -156,7 +141,8 @@ class MachineController(ContextMixin):
         address : int
             The address at which to start writing the data.
         data : :py:class:`bytes`
-            Data to write into memory.  Must be <= 256 bytes.
+            Data to write into memory.  Must be <= the amount accepted by the
+            receiving core.
         data_type : :py:class:`~rig.machine_controller.consts.DataType`
             The size of the data to write into memory.
         """
@@ -165,7 +151,7 @@ class MachineController(ContextMixin):
                       int(data_type), data, expected_args=0)
 
     @ContextMixin.use_contextual_arguments
-    def read(self, address, length_bytes, x=Required, y=Required, p=Required):
+    def read(self, address, length_bytes, x=Required, y=Required, p=0):
         """Read a bytestring from an address in memory.
 
         Parameters
@@ -197,7 +183,7 @@ class MachineController(ContextMixin):
         return data
 
     def _read(self, x, y, p, address, length_bytes, data_type=DataType.byte):
-        """Read a bytestring from an address in memory.
+        """Read an SCP command's worth of data from an address in memory.
 
         It is better to use :py:func:`~.read` which wraps this method and
         allows reading bytestrings of arbitrary length.
@@ -229,6 +215,10 @@ class MachineController(ContextMixin):
         ----------
         iptag : int
             Index of the IPTag to set
+        addr : string
+            IP address or hostname that the IPTag should point at.
+        port : int
+            Port that the IPTag should direct packets to.
         """
         # Format the IP address
         ip_addr = struct.pack('!4B',
@@ -331,8 +321,7 @@ class MachineController(ContextMixin):
         assert 0 <= tag < 256
 
         # Construct arg1 (op_code << 8) | app_id
-        arg1 = (consts.AllocOperations.alloc_sdram << 8 |
-                (self.app_id if app_id is None else app_id))
+        arg1 = consts.AllocOperations.alloc_sdram << 8 | app_id
 
         # Send the packet and retrieve the address
         rv = self.send_scp(x, y, 0, SCPCommands.alloc_free, arg1, size, tag)
@@ -341,9 +330,34 @@ class MachineController(ContextMixin):
             raise SpiNNakerMemoryError(size, x, y)
         return rv.arg1
 
-CoreInfo = collections.namedtuple(
-    'CoreInfo', "p2p_address physical_cpu virt_cpu version "
-                "buffer_size build_date version_string")
+
+class CoreInfo(collections.namedtuple(
+    'CoreInfo', "p2p_address physical_cpu virt_cpu version buffer_size "
+                "build_date version_string")):
+    """Information returned about a core by sver.
+
+    Paramters
+    ---------
+    p2p_address : (x, y)
+        Logical location of the chip in the system.
+    physical_cpu : int
+        The physical ID of the core. (Not useful to most users).
+    virt_cpu : int
+        The virtual ID of the core. This is the number used by all high-level
+        software APIs.
+    version : float
+        Software version number. (Major version is integral part, minor version
+        is fractional part).
+    buffer_size : int
+        Maximum supported size (in bytes) of the data portion of an SCP packet.
+    build_date : int
+        The time at which the software was compiled as a unix timestamp. May be
+        zero if not set.
+    version_string : string
+        Human readable, textual version information split in to two fields by a
+        "/". In the first field is the kernal (e.g. SC&MP or SARK) and the
+        second the hardware platform (e.g. SpiNNaker).
+    """
 
 
 class IPTag(collections.namedtuple("IPTag",
@@ -353,7 +367,7 @@ class IPTag(collections.namedtuple("IPTag",
     @classmethod
     def from_bytestring(cls, bytestring):
         (ip, max, port, timeout, flags, count, rx_port, spin_addr,
-         spin_port) = struct.unpack("4s 6s 3H I 2H B", bytestring[:25])
+         spin_port) = struct.unpack("<4s 6s 3H I 2H B", bytestring[:25])
         # Convert the IP address into a string, otherwise save
         ip_addr = '.'.join(str(x) for x in struct.unpack("4B", ip))
 

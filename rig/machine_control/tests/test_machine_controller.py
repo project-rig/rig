@@ -48,17 +48,17 @@ class TestMachineControllerLive(object):
         controller.boot(width=spinnaker_width, height=spinnaker_height)
 
         # Assert that the board is booted, messy!
-        sver = controller.software_version(0, 0, 0)
+        sver = controller.get_software_version(0, 0, 0)
         assert sver.version >= 1.3
 
-    def test_software_version(self, controller, spinnaker_width,
+    def test_get_software_version(self, controller, spinnaker_width,
                               spinnaker_height):
         """Test getting the software version data."""
         # (Assuming a 4-node board) Get the software version for a number of
         # cores.
         for x in range(2):
             for y in range(2):
-                sver = controller.software_version(x=x, y=y, processor=0)
+                sver = controller.get_software_version(x=x, y=y, processor=0)
                 assert sver.virt_cpu == 0
                 assert b"SpiNNaker" in bytes(sver.version_string)
                 assert sver.version >= 1.3
@@ -132,7 +132,7 @@ class TestMachineController(object):
         - Check that transmitted packets are sensible.
         - Check that error codes / correct returns are dealt with correctly.
     """
-    def test_software_version(self, mock_conn):  # noqa
+    def test_get_software_version(self, mock_conn):  # noqa
         """Check that the reporting of the software version is correct.
 
         SCP Layout
@@ -181,7 +181,7 @@ class TestMachineController(object):
         cn.send_scp = mock_conn.send_scp
 
         # Run the software version command
-        sver = cn.software_version(0, 1, 2)
+        sver = cn.get_software_version(0, 1, 2)
 
         # Assert that the response is correct
         assert sver.p2p_address == (1 << 8) | 2
@@ -470,11 +470,11 @@ class TestMachineController(object):
         assert call == (x, y, 0, SCPCommands.led)
         assert kwargs["arg1"] == action << (led * 2)
 
-    @pytest.mark.parametrize("cn_id, app_id", [(None, 30), (33, None)])
+    @pytest.mark.parametrize("app_id", [30, 33])
     @pytest.mark.parametrize("size", [8, 200])
     @pytest.mark.parametrize("tag", [0, 2])
     @pytest.mark.parametrize("addr", [0x67000000, 0x61000000])
-    def test_sdram_alloc_success(self, cn_id, app_id, size, tag, addr):
+    def test_sdram_alloc_success(self, app_id, size, tag, addr):
         """Check allocating a region of SDRAM.
 
         Outgoing:
@@ -484,22 +484,20 @@ class TestMachineController(object):
             arg3 : tag
         """
         # Create the mock controller
-        cn = MachineController("localhost", app_id=cn_id)
+        cn = MachineController("localhost")
+
         cn.send_scp = mock.Mock()
         cn.send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
                                              0x80, 0, addr, None, None, b"")
 
         # Try the allocation
-        address = cn.sdram_alloc(size, tag, 1, 2, app_id)
+        address = cn.sdram_alloc(size, tag, 1, 2, app_id=app_id)
 
         # Check the return value
         assert address == addr
 
         # Check the packet was sent as expected
-        if cn_id is None:
-            cn.send_scp.assert_called_once_with(1, 2, 0, 28, app_id, size, tag)
-        elif app_id is None:
-            cn.send_scp.assert_called_once_with(1, 2, 0, 28, cn_id, size, tag)
+        cn.send_scp.assert_called_once_with(1, 2, 0, 28, app_id, size, tag)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (5, 6)])
     @pytest.mark.parametrize("size", [8, 200])

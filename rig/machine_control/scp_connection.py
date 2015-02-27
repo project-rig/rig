@@ -1,24 +1,24 @@
-"""A stop-and-wait blocking implementation of the SCP protocol.
+"""A blocking implementation of the SCP protocol.
 """
 import socket
-from . import packets
+from . import consts, packets
 
 
 class SCPConnection(object):
-    """Implements the SCP protocol for communicating with a SpiNNaker machine.
+    """Implements the SCP protocol for communicating with a SpiNNaker chip.
     """
     error_codes = {}
 
     def __init__(self, spinnaker_host, n_tries=5, timeout=0.5):
-        """Create a new communicator to handle control of the given SpiNNaker
-        host.
+        """Create a new communicator to handle control of the SpiNNaker chip
+        with the supplied hostname.
 
         Parameters
         ----------
         spinnaker_host : str
-            A IP address or hostname of the SpiNNaker machine to control.
+            A IP address or hostname of the SpiNNaker chip to control.
         n_tries : int
-            The maximum number of tries to communicate with the machine before
+            The maximum number of tries to communicate with the chip before
             failing.
         timeout : float
             The timeout to use on the socket.
@@ -26,7 +26,7 @@ class SCPConnection(object):
         # Create a socket to communicate with the SpiNNaker machine
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(timeout)
-        self.sock.connect((spinnaker_host, 17893))
+        self.sock.connect((spinnaker_host, consts.SCP_PORT))
 
         # Store the number of tries that will be allowed
         self.n_tries = n_tries
@@ -64,7 +64,7 @@ class SCPConnection(object):
 
         Returns
         -------
-        :py:class:`~rig.communicator.SCPPacket`
+        :py:class:`~rig.machine_control.packets.SCPPacket`
             The packet that was received in acknowledgement of the transmitted
             packet.
         """
@@ -85,7 +85,7 @@ class SCPConnection(object):
 
             try:
                 # Try to receive the returned acknowledgement
-                ack = self.sock.recv(512)
+                ack = self.sock.recv(consts.SCP_RECEIVE_LENGTH)
             except IOError:
                 # There was nothing to receive from the socket
                 continue

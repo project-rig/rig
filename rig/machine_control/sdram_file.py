@@ -41,7 +41,12 @@ class SDRAMFile(object):
         :py:class:`bytes`
             Data read from SpiNNaker as a bytestring.
         """
-        assert self.address + n_bytes < self._end_address
+        # Determine how far to read, then read nothing beyond that point.
+        if self.address + n_bytes > self._end_address:
+            n_bytes = min(n_bytes, self._end_address - self.address)
+
+            if n_bytes <= 0:
+                return b''
 
         # Perform the read and increment the offset
         data = self._machine_controller.read(
@@ -56,13 +61,25 @@ class SDRAMFile(object):
         ----------
         bytes : :py:class:`bytes`
             Data to write to the SDRAM as a bytestring.
+
+        Returns
+        -------
+        int
+            Number of bytes written.
         """
-        assert self.address + len(bytes) < self._end_address
+        if self.address + len(bytes) > self._end_address:
+            n_bytes = min(len(bytes), self._end_address - self.address)
+
+            if n_bytes <= 0:
+                return 0
+
+            bytes = bytes[:n_bytes]
 
         # Perform the write and increment the offset
         self._machine_controller.write(
             self._x, self._y, 0, self.address, bytes)
         self._offset += len(bytes)
+        return len(bytes)
 
     def tell(self):
         """Get the current offset in SDRAM.

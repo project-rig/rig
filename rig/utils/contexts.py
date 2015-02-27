@@ -1,7 +1,13 @@
 """Utilities for building contextual functions.
 
 The MachineController has a lot of functions which take the same arguments,
-many of which are contextual.  Avoiding respecifying these arguments every time
+many of which are contextual.  For example, when performing multiple operations
+on a given chip::
+
+    controller.sdram_alloc(1000, 1, x=3, y=2)
+    controller.sdram_alloc(1000, 2, x=3, y=2)
+
+Avoiding respecifying these arguments every time
 will lead to cleaner and clearer code.  For example:
 
     with controller(app_id=32):
@@ -11,10 +17,12 @@ will lead to cleaner and clearer code.  For example:
         with controller(x=2, y=2):
             controller.do_something(...)
 
-Is arguably clearer and less prone to silly mistakes than:
+Is, in many cases, arguably clearer and less prone to silly mistakes than:
 
     controller.do_something(x=1, y=1, app_id=32)
     controller.do_something(x=2, y=2, app_id=32)
+
+Though this form is still useful and should be allowed.
 
 This module provides decorators for functions so that they can use contextual
 arguments and a mixin for classes that provides a `get_new_context` method
@@ -27,9 +35,16 @@ import sentinel
 from six import iteritems
 
 
-# Allow specifying keyword arguments as required, i.e., they must be satisfied
-# by either the context OR by the caller.
 Required = sentinel.create('Required')
+"""Allow specifying keyword arguments as required, i.e., they must be satisfied
+by either the context OR by the caller.
+
+This is useful when a method has optional parameters and contextual arguments::
+
+    @ContextMixin.use_contextual_arguments
+    def sdram_alloc(self, size, tag=0, x=Required, y=Required):
+        # ...
+"""
 
 
 class ContextMixin(object):
