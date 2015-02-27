@@ -1,7 +1,7 @@
 """Identifiers for resources available in a SpiNNaker machine.
 """
 
-from enum import Enum, IntEnum
+from enum import IntEnum
 
 import sentinel
 

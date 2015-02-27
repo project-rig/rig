@@ -1,5 +1,3 @@
-import pytest
-
 from rig.place_and_route.routing_tree import RoutingTree
 
 

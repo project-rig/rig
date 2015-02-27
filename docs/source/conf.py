@@ -102,7 +102,7 @@ pygments_style = 'sphinx'
 #keep_warnings = False
 
 # Search Python docs for extra definitions.
-intersphinx_mapping = {'python': ('http://docs.python.org/3.2', None)}
+intersphinx_mapping = {'python': ('http://docs.python.org/3', None)}
 
 
 # -- Options for HTML output ----------------------------------------------

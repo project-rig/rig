@@ -1,7 +1,7 @@
 """A minimal and dumb placement algorithm.
 """
 
-from six import next, iteritems
+from six import next
 
 from math import log, ceil
 

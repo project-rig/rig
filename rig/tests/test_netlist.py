@@ -1,5 +1,3 @@
-import mock
-
 from rig.netlist import Net
 
 

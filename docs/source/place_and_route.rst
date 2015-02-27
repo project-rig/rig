@@ -25,7 +25,7 @@ Application Graph
     describes how an application's computational resources (the *vertices*) are
     connected to each other by *nets*.
 Vertex
-    A *vertex* in *application graph*. Each vertex is mapped onto exactly one
+    A *vertex* in an *application graph*. Each vertex is mapped onto exactly one
     SpiNNaker chip by during the placement process. (Note: an individual
     SpiNNaker chip may have several *vertices* mapped to it). A vertex may
     consume a certain set of *resources*. In most applications a vertex will
@@ -47,7 +47,7 @@ Resource
     *vertex* during allocation. Users are welcome to define their own
     application-specific resources.
     
-    The type of a *resource* is represented by some unique python
+    The type of a *resource* is represented by some unique Python
     :py:class:`object`. Some common resources are defined in
     :py:mod:`rig.machine` (though users are free to use their own):
     
@@ -70,9 +70,9 @@ Constraint
     :py:class:`rig.place_and_route.constraints`.
 
 .. note::
-    It is worth emphasising that vertices being placed on SpiNNaker *chips*,
-    not specific cores. In this library, cores are just one of many chip
-    resources which vertices may consume.
+    It is worth emphasising that vertices are placed on SpiNNaker *chips*, not
+    specific cores. In this library, cores are just one of many chip resources
+    which vertices may consume.
     
     For most applications, each vertex represents exactly one core worth of
     work and so each vertex will consume a single core of spinnaker chip
@@ -84,7 +84,7 @@ Constraint
     Vertices which consume more than one core are typically only useful when a
     vertex represents a group of applications which share memory. This is
     because vertices will always be placed on a single SpiNNaker chip: they
-    cannot be split accross many chips. If an application requires this type of
+    cannot be split across many chips. If an application requires this type of
     behaviour, users must perform this step in an application-defined process
     prior to placement.
 

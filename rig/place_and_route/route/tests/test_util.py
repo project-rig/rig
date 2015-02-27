@@ -1,7 +1,3 @@
-import pytest
-
-from six import next
-
 from rig.place_and_route.route.util import \
     longest_dimension_first, has_wrap_around_links, links_between
 

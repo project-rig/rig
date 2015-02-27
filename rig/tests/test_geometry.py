@@ -1,5 +1,3 @@
-import pytest
-
 from ..geometry import concentric_hexagons, to_xyz, minimise_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \
     shortest_torus_path_length, shortest_torus_path
