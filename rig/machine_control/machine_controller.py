@@ -259,39 +259,18 @@ class MachineController(ContextMixin):
                       int(consts.IPTagCommands.clear) << 16 | iptag)
 
     @ContextMixin.use_contextual_arguments
-    def led_on(self, led, x=Required, y=Required):
-        """Turn an LED on.
-
-        Parameters
-        ----------
-        led : int
-            Number of the LED to set the state of (0-3)
-        """
-        arg1 = int(consts.LEDAction.on) << (led * 2)
-        self.send_scp(x, y, 0, SCPCommands.led, arg1=arg1, expected_args=0)
-
-    @ContextMixin.use_contextual_arguments
-    def led_off(self, led, x=Required, y=Required):
-        """Turn an LED off.
-
-        Parameters
-        ----------
-        led : int
-            Number of the LED to set the state of (0-3)
-        """
-        arg1 = int(consts.LEDAction.off) << (led * 2)
-        self.send_scp(x, y, 0, SCPCommands.led, arg1=arg1, expected_args=0)
-
-    @ContextMixin.use_contextual_arguments
-    def led_toggle(self, led, x=Required, y=Required):
+    def set_led(self, led, action=consts.LEDAction.toggle, 
+                x=Required, y=Required):
         """Toggle the state of an LED.
 
         Parameters
         ----------
         led : int
             Number of the LED to set the state of (0-3)
+        action : :py:class:`rig.machine_control.consts.LEDAction`
+            Action to perform on the LED (on, off or toggle [default])
         """
-        arg1 = int(consts.LEDAction.toggle) << (led * 2)
+        arg1 = int(action) << (led * 2)
         self.send_scp(x, y, 0, SCPCommands.led, arg1=arg1, expected_args=0)
 
     @ContextMixin.use_contextual_arguments

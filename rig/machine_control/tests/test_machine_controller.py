@@ -112,18 +112,18 @@ class TestMachineControllerLive(object):
     def test_led_on(self, controller):
         for x in range(2):
             for y in range(2):
-                controller.led_on(1, x=x, y=y)
+                controller.set_led(1, x=x, y=y, action=LEDAction.on)
 
     def test_led_off(self, controller):
         for x in range(2):
             for y in range(2):
-                controller.led_off(1, x=x, y=y)
+                controller.set_led(1, x=x, y=y, action=LEDAction.off)
 
     def test_led_toggle(self, controller):
         for _ in range(2):  # Toggle On -> Toggle Off
             for x in range(2):
                 for y in range(2):
-                    controller.led_toggle(1, x=x, y=y)
+                    controller.set_led(1, x=x, y=y, action=LEDAction.toggle)
 
 
 class TestMachineController(object):
@@ -443,14 +443,12 @@ class TestMachineController(object):
         call = cn.send_scp.call_args[0]
         assert call == (1, 2, 0, SCPCommands.iptag, 0x00030000 | iptag)
 
-    @pytest.mark.parametrize(
-        "method, action", [("led_on", LEDAction.on),
-                           ("led_off", LEDAction.off),
-                           ("led_toggle", LEDAction.toggle)])
+    @pytest.mark.parametrize("action", [LEDAction.on, LEDAction.off,
+                                        LEDAction.toggle, LEDAction.toggle])
     @pytest.mark.parametrize("x", [0, 1])
     @pytest.mark.parametrize("y", [0, 1])
     @pytest.mark.parametrize("led", [0, 1])
-    def test_led_controls(self, method, action, x, y, led):
+    def test_led_controls(self, action, x, y, led):
         """Check setting/clearing/toggling an LED.
 
         Outgoing:
@@ -462,7 +460,7 @@ class TestMachineController(object):
         cn.send_scp = mock.Mock()
 
         # Perform the action
-        getattr(cn, method)(led, x, y)
+        cn.set_led(led, x=x, y=y, action=action)
 
         # Assert that there was 1 packet sent and that it was sane
         assert cn.send_scp.call_count == 1
