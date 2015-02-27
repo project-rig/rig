@@ -1,5 +1,3 @@
-import pytest
-
 from six import iteritems
 
 from rig.machine import Machine, Cores, SDRAM

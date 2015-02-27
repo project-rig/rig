@@ -1,137 +1,61 @@
-import pytest
-
-from six import next
-
-from rig.place_and_route.route.util import \
-    longest_dimension_first, to_xyz, minimise_xyz, \
+from ..geometry import concentric_hexagons, to_xyz, minimise_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \
-    shortest_torus_path_length, shortest_torus_path, \
-    has_wrap_around_links, links_between
-
-from rig.machine import Machine, Links
+    shortest_torus_path_length, shortest_torus_path
 
 
-def test_longest_dimension_first():
-    # Null test
-    assert list(longest_dimension_first((0, 0, 0))) == []
+def test_concentric_hexagons():
+    # Zero layers should just give a singleton
+    assert set(concentric_hexagons(0)) == set([(0, 0)])
+    assert set(concentric_hexagons(0, (3, 2))) == set([(3, 2)])
 
-    # Single hop in each dimension
-    assert list(longest_dimension_first((1, 0, 0))) == [(1, 0)]
-    assert list(longest_dimension_first((0, 1, 0))) == [(0, 1)]
-    assert list(longest_dimension_first((0, 0, 1))) == [(-1, -1)]
+    # Test single layers exhaustively
+    assert set(concentric_hexagons(1)) \
+        == set([(0, 0),
+                (+1, 0), (-1, 0),     # Left and right
+                (0, +1), (0, -1),     # Above and below
+                (+1, +1), (-1, -1)])  # "Diagnoally"
 
-    # Negative single hop in each dimension
-    assert list(longest_dimension_first((-1, 0, 0))) == [(-1, 0)]
-    assert list(longest_dimension_first((0, -1, 0))) == [(0, -1)]
-    assert list(longest_dimension_first((0, 0, -1))) == [(1, 1)]
+    assert set(concentric_hexagons(1, (10, 100))) \
+        == set([(10, 100),
+                (11, 100), (9, 100),  # Left and right
+                (10, 101), (10, 99),  # Above and below
+                (11, 101), (9, 99)])  # "Diagnoally"
 
-    # Single hop from alternative starting point
-    assert list(longest_dimension_first((1, 0, 0), (10, 100))) == [(11, 100)]
-    assert list(longest_dimension_first((0, 1, 0), (10, 100))) == [(10, 101)]
-    assert list(longest_dimension_first((0, 0, 1), (10, 100))) == [(9, 99)]
+    # Test larger number of layers analytically
+    num_layers = 10
+    hexagons = set(concentric_hexagons(num_layers))
 
-    # Negative single hop from alternative starting point
-    assert list(longest_dimension_first((-1, 0, 0), (10, 100))) == [(9, 100)]
-    assert list(longest_dimension_first((0, -1, 0), (10, 100))) == [(10, 99)]
-    assert list(longest_dimension_first((0, 0, -1), (10, 100))) == [(11, 101)]
+    # Check total number of hexagons:
+    total_hexagons = 3 * num_layers * (num_layers + 1) + 1
+    assert len(hexagons) == total_hexagons
 
-    # Test wrap-around of single hop
-    assert list(longest_dimension_first((1, 0, 0), width=1, height=1)) \
-        == [(0, 0)]
-    assert list(longest_dimension_first((0, 1, 0), width=1, height=1)) \
-        == [(0, 0)]
-    assert list(longest_dimension_first((0, 0, 1), width=1, height=1)) \
-        == [(0, 0)]
-    assert list(longest_dimension_first((-1, 0, 0), width=1, height=1)) \
-        == [(0, 0)]
-    assert list(longest_dimension_first((0, -1, 0), width=1, height=1)) \
-        == [(0, 0)]
-    assert list(longest_dimension_first((0, 0, -1), width=1, height=1)) \
-        == [(0, 0)]
+    # Check that only the outer hexagons are not fully surrounded
+    outer_hexagons = set()
+    inner_hexagons = set()
+    for x, y in hexagons:
+        # Layer number calculated according to
+        # http://jhnet.co.uk/articles/torus_paths
+        m = sorted((x, y, 0))[1]
+        layer = abs(x-m) + abs(y-m) + abs(-m)
 
-    # Test wrap-around in each direction
-    assert list(longest_dimension_first((2, 0, 0), width=2, height=2)) \
-        == [(1, 0), (0, 0)]
-    assert list(longest_dimension_first((0, 2, 0), width=2, height=2)) \
-        == [(0, 1), (0, 0)]
-    assert list(longest_dimension_first((0, 0, 2), width=2, height=2)) \
-        == [(1, 1), (0, 0)]
-    assert list(longest_dimension_first((-2, 0, 0), width=2, height=2)) \
-        == [(1, 0), (0, 0)]
-    assert list(longest_dimension_first((0, -2, 0), width=2, height=2)) \
-        == [(0, 1), (0, 0)]
-    assert list(longest_dimension_first((0, 0, -2), width=2, height=2)) \
-        == [(1, 1), (0, 0)]
-
-    # Test wrap-around with different width & height
-    assert list(longest_dimension_first((0, 0, 1), width=2, height=3)) \
-        == [(1, 2)]
-
-    # Test multiple hops on single dimension
-    assert list(longest_dimension_first((2, 0, 0))) \
-        == [(1, 0), (2, 0)]
-    assert list(longest_dimension_first((0, 2, 0))) \
-        == [(0, 1), (0, 2)]
-    assert list(longest_dimension_first((0, 0, 2))) \
-        == [(-1, -1), (-2, -2)]
-
-    # Test dimension ordering with all positive magnitudes and some zero
-    assert list(longest_dimension_first((2, 1, 0))) \
-        == [(1, 0), (2, 0), (2, 1)]
-    assert list(longest_dimension_first((0, 2, 1))) \
-        == [(0, 1), (0, 2), (-1, 1)]
-    assert list(longest_dimension_first((1, 0, 2))) \
-        == [(-1, -1), (-2, -2), (-1, -2)]
-    assert list(longest_dimension_first((0, 1, 2))) \
-        == [(-1, -1), (-2, -2), (-2, -1)]
-
-    # Test dimension ordering with all positive magnitudes and no zeros
-    assert list(longest_dimension_first((3, 2, 1))) \
-        == [(1, 0), (2, 0), (3, 0), (3, 1), (3, 2), (2, 1)]
-    assert list(longest_dimension_first((1, 3, 2))) \
-        == [(0, 1), (0, 2), (0, 3), (-1, 2), (-2, 1), (-1, 1)]
-    assert list(longest_dimension_first((2, 1, 3))) \
-        == [(-1, -1), (-2, -2), (-3, -3), (-2, -3), (-1, -3), (-1, -2)]
-    assert list(longest_dimension_first((1, 2, 3))) \
-        == [(-1, -1), (-2, -2), (-3, -3), (-3, -2), (-3, -1), (-2, -1)]
-
-    # Test dimension ordering with mixed sign magnitudes
-    assert list(longest_dimension_first((1, -2, 0))) \
-        == [(0, -1), (0, -2), (1, -2)]
-    assert list(longest_dimension_first((-2, 1, 0))) \
-        == [(-1, 0), (-2, 0), (-2, 1)]
-
-    # Test that given ambiguity, ties are broken randomly. Note: we
-    # just test that in a large number of calls, each option is tried at least
-    # once. This test *could* fail due to random chance but the probability of
-    # this should be *very* low. We do not assert the fairness of the
-    # distribution.
-    generated_x_first = False
-    generated_y_first = False
-    generated_z_first = False
-    for _ in range(1000):
-        first_move = list(longest_dimension_first((1, 1, 1)))[0]
-        if first_move == (1, 0):
-            generated_x_first = True
-        elif first_move == (0, 1):
-            generated_y_first = True
-        elif first_move == (-1, -1):
-            generated_z_first = True
+        if set([(x, y),
+                (x + 1, y), (x - 1, y),
+                (x, y + 1), (x, y - 1),
+                (x + 1, y + 1), (x - 1, y - 1)]).issubset(hexagons):
+            inner_hexagons.add((x, y))
+            # Hexagons which are fully surrounded must not be on the outer
+            # layer.
+            assert layer < num_layers
         else:
-            assert False, "Unexpected move made!"
-        if generated_x_first and generated_y_first and generated_z_first:
-            break
-    assert generated_x_first
-    assert generated_y_first
-    assert generated_z_first
+            outer_hexagons.add((x, y))
+            # Hexagons which are not fully surrounded must be on the outer
+            # layer.
+            assert layer == num_layers
 
-    # The "just try some stuff" test: Check that correct number of steps is
-    # given for a a selection of larger vectors.
-    for vector in [(0, 0, 0), (1, 1, 1), (1, -1, 0),  # Test sanity checks
-                   (10, 10, 10), (10, -10, 5), (10, 20, 30)]:
-        assert len(list(longest_dimension_first(vector))) \
-            == sum(map(abs, vector)), \
-            vector
+    # Check there are the correct number of hexagons in each layer (though this
+    # is strictly unnecessary given the above test, but who tests the tests?)
+    assert len(outer_hexagons) == 6 * num_layers
+    assert len(inner_hexagons) == total_hexagons - (6 * num_layers)
 
 
 def test_to_xyz():
@@ -385,64 +309,3 @@ def test_shortest_torus_path():
                     break
             assert unseen_neg_minimiseds == set(), \
                 (start, end, width, height, neg_minimiseds)
-
-
-def test_has_wrap_around_links():
-    # Test singleton with wrap-arounds
-    machine = Machine(1, 1)
-    assert has_wrap_around_links(machine)
-    assert has_wrap_around_links(machine, 1.0)
-    assert has_wrap_around_links(machine, 0.1)
-
-    # Test singleton with dead chip
-    machine = Machine(1, 1, dead_chips=set([(0, 0)]))
-    assert not has_wrap_around_links(machine)
-    assert not has_wrap_around_links(machine, 1.0)
-    assert not has_wrap_around_links(machine, 0.1)
-
-    # Test singleton with one dead link
-    machine = Machine(1, 1, dead_links=set([(0, 0, Links.north)]))
-    assert has_wrap_around_links(machine, 5.0 / 6.0)
-    assert not has_wrap_around_links(machine, 1.0)
-
-    # Test fully-working larger machine
-    machine = Machine(10, 10)
-    assert has_wrap_around_links(machine)
-    assert has_wrap_around_links(machine, 1.0)
-    assert has_wrap_around_links(machine, 0.1)
-
-    # Test larger machine with 50% dead links (note that we simply kill 50% of
-    # links on border chips, not all chips, ensuring this function probably
-    # isn't testing all links, just those on the borders)
-    machine = Machine(10, 10, dead_links=set(
-        [(x, y, link)
-         for x in range(10)
-         for y in range(10)
-         for link in [Links.north, Links.west, Links.south_west]
-         if x == 0 or y == 0]))
-    assert not has_wrap_around_links(machine, 1.0)
-    assert has_wrap_around_links(machine, 0.5)
-    assert has_wrap_around_links(machine, 0.1)
-
-
-def test_links_between():
-    # Singleton torus system should be connected to itself on all links
-    machine = Machine(1, 1)
-    assert links_between((0, 0), (0, 0), machine) == set(Links)
-
-    # If some links are down, these should be omitted
-    machine = Machine(1, 1, dead_links=set([(0, 0, Links.north)]))
-    assert links_between((0, 0), (0, 0), machine) \
-        == set(l for l in Links if l != Links.north)
-
-    # Should work the same in large system
-    machine = Machine(10, 10, dead_links=set([(4, 4, Links.north)]))
-    assert links_between((4, 4), (5, 4), machine) == set([Links.east])
-    assert links_between((4, 4), (3, 4), machine) == set([Links.west])
-    assert links_between((4, 4), (3, 3), machine) == set([Links.south_west])
-    assert links_between((4, 4), (4, 3), machine) == set([Links.south])
-    assert links_between((4, 4), (5, 5), machine) == set([Links.north_east])
-    assert links_between((4, 4), (4, 5), machine) == set([])  # Link is dead
-
-    # Non-adjacent chips shouldn't be connected
-    assert links_between((0, 0), (2, 2), machine) == set([])

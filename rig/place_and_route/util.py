@@ -1,4 +1,5 @@
-"""Utilities for common-case usage of place-and-route facilities.
+"""Utilities functions which assist in the generation of commonly required data
+structures from the products of placement, allocation and routing.
 """
 
 from collections import defaultdict, deque
@@ -20,8 +21,8 @@ def build_application_map(vertices_applications, placements, allocations,
     This utility function assumes that each vertex is associated with a
     specific application.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     vertices_applications : {vertex: application, ...}
         Applications are represented by the path of their APLX file.
     placements : {vertex: (x, y), ...}
@@ -55,9 +56,9 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     Note: The routing trees provided are assumed to be correct and continuous
     (not missing any hops). If this is not the case, the output is undefined.
 
-    Argument
-    --------
-    routes : {net: :py:class:`~rig.place_and_route.routing_tree.RoutingTree`,
+    Parameters
+    ----------
+    routes : {net: :py:class:`~rig.place_and_route.routing_tree.RoutingTree`, \
               ...}
         The complete set of RoutingTrees representing all routes in the system.
         (Note: this is the same datastructure produced by routers in the `par`

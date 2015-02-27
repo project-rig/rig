@@ -8,65 +8,10 @@ from rig.place_and_route.routing_tree import RoutingTree
 
 from rig.place_and_route.route.util import links_between
 
-from rig.place_and_route.route.ner import concentric_hexagons, ner_net, \
+from rig.place_and_route.route.ner import ner_net, \
     copy_and_disconnect_tree, a_star, avoid_dead_links
 
 from rig.place_and_route.exceptions import MachineHasDisconnectedSubregion
-
-
-def test_concentric_hexagons():
-    # Zero layers should just give a singleton
-    assert set(concentric_hexagons(0)) == set([(0, 0)])
-    assert set(concentric_hexagons(0, (3, 2))) == set([(3, 2)])
-
-    # Test single layers exhaustively
-    assert set(concentric_hexagons(1)) \
-        == set([(0, 0),
-                (+1, 0), (-1, 0),     # Left and right
-                (0, +1), (0, -1),     # Above and below
-                (+1, +1), (-1, -1)])  # "Diagnoally"
-
-    assert set(concentric_hexagons(1, (10, 100))) \
-        == set([(10, 100),
-                (11, 100), (9, 100),  # Left and right
-                (10, 101), (10, 99),  # Above and below
-                (11, 101), (9, 99)])  # "Diagnoally"
-
-    # Test larger number of layers analytically
-    num_layers = 10
-    hexagons = set(concentric_hexagons(num_layers))
-
-    # Check total number of hexagons:
-    total_hexagons = 3 * num_layers * (num_layers + 1) + 1
-    assert len(hexagons) == total_hexagons
-
-    # Check that only the outer hexagons are not fully surrounded
-    outer_hexagons = set()
-    inner_hexagons = set()
-    for x, y in hexagons:
-        # Layer number calculated according to
-        # http://jhnet.co.uk/articles/torus_paths
-        m = sorted((x, y, 0))[1]
-        layer = abs(x-m) + abs(y-m) + abs(-m)
-
-        if set([(x, y),
-                (x + 1, y), (x - 1, y),
-                (x, y + 1), (x, y - 1),
-                (x + 1, y + 1), (x - 1, y - 1)]).issubset(hexagons):
-            inner_hexagons.add((x, y))
-            # Hexagons which are fully surrounded must not be on the outer
-            # layer.
-            assert layer < num_layers
-        else:
-            outer_hexagons.add((x, y))
-            # Hexagons which are not fully surrounded must be on the outer
-            # layer.
-            assert layer == num_layers
-
-    # Check there are the correct number of hexagons in each layer (though this
-    # is strictly unnecessary given the above test, but who tests the tests?)
-    assert len(outer_hexagons) == 6 * num_layers
-    assert len(inner_hexagons) == total_hexagons - (6 * num_layers)
 
 
 def test_ner_net_childless():
@@ -325,8 +270,8 @@ def test_copy_and_disconnect_tree():
             # disconnected or on dead chips
             assert old_children.difference(new_children) \
                 == set(c for c in old_children
-                       if c not in machine
-                       or not links_between(chip, c, machine))
+                       if c not in machine or
+                       not links_between(chip, c, machine))
 
 
 def test_a_star():
@@ -395,8 +340,8 @@ def test_a_star_impossible():
     # (0, 0).
     machine = Machine(2, 1, dead_links=set((x, 0, l)
                                            for l in Links for x in range(2)
-                                           if not (x == 1
-                                                   and l == Links.west)))
+                                           if not (x == 1 and
+                                                   l == Links.west)))
 
     # Ensure we can't get a route out of (0, 0) to (1, 0) since all links
     # leaving it are dead

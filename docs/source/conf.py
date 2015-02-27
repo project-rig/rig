@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.doctest',
     'numpydoc',
 ]
@@ -63,6 +64,9 @@ master_doc = 'index'
 # General information about the project.
 project = u'Rig'
 copyright = u'2015, Andrew Mundy, Jonathan Heathcote'
+
+# Autodoc should list members in the same order as the source code.
+autodoc_member_order = "bysource"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -110,6 +114,9 @@ pygments_style = 'sphinx'
 
 # If true, keep warnings as "system message" paragraphs in the built documents.
 #keep_warnings = False
+
+# Search Python docs for extra definitions.
+intersphinx_mapping = {'python': ('http://docs.python.org/3', None)}
 
 
 # -- Options for HTML output ----------------------------------------------

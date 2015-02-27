@@ -37,6 +37,6 @@ def resources_after_reservation(res, constraint):
     reserved regieon, only its magnitude.
     """
     res = res.copy()
-    res[constraint.resource] -= (constraint.reservation.stop
-                                 - constraint.reservation.start)
+    res[constraint.resource] -= (constraint.reservation.stop -
+                                 constraint.reservation.start)
     return res
