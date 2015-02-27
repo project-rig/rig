@@ -52,7 +52,34 @@ class MachineController(ContextMixin):
         """
         return self.get_new_context(**context_args)
 
-    def send_scp(self, x, y, *args, **kwargs):
+    def send_scp(self, *args, **kwargs):
+        """Transmit an SCP Packet.
+
+        See the arguments for
+        :py:method:`~rig.machine_controller.scp_connection.SCPConnection` for
+        details.
+        """
+        # XXX: This is here because the Contexts system messes with the *args
+        # variable, so this following code manually processes the current
+        # context and the kwargs to attempt to get context arguments.  At some
+        # point this should be fixed.
+        # Retrieve, if possible the x, y and p from the current context or the
+        # keyword arguments.
+        cargs = self.get_context_arguments()
+        x = kwargs.pop("x", cargs.get("x", Required))
+        y = kwargs.pop("y", cargs.get("y", Required))
+        p = kwargs.pop("p", cargs.get("p", Required))
+
+        if x is Required:
+            raise TypeError("{}: requires argument x".format(self.send_scp))
+        if y is Required:
+            raise TypeError("{}: requires argument y".format(self.send_scp))
+        if p is Required:
+            raise TypeError("{}: requires argument p".format(self.send_scp))
+
+        return self._send_scp(x, y, p, *args, **kwargs)
+
+    def _send_scp(self, x, y, p, *args, **kwargs):
         """Determine the best connection to use to send an SCP packet and use
         it to transmit.
 
@@ -60,7 +87,7 @@ class MachineController(ContextMixin):
         :py:method:`~rig.machine_controller.scp_connection.SCPConnection` for
         details.
         """
-        return self.connections[0].send_scp(x, y, *args, **kwargs)
+        return self.connections[0].send_scp(x, y, p, *args, **kwargs)
 
     def boot(self, width, height, **boot_kwargs):
         """Boot a SpiNNaker machine of the given size.
@@ -95,7 +122,7 @@ class MachineController(ContextMixin):
         :py:class:`CoreInfo`
             Information about the software running on a core.
         """
-        sver = self.send_scp(x, y, processor, SCPCommands.sver)
+        sver = self._send_scp(x, y, processor, SCPCommands.sver)
 
         # Format the result
         # arg1 => p2p address, physical cpu, virtual cpu
@@ -147,8 +174,8 @@ class MachineController(ContextMixin):
             The size of the data to write into memory.
         """
         length_bytes = len(data)
-        self.send_scp(x, y, p, SCPCommands.write, address, length_bytes,
-                      int(data_type), data, expected_args=0)
+        self._send_scp(x, y, p, SCPCommands.write, address, length_bytes,
+                       int(data_type), data, expected_args=0)
 
     @ContextMixin.use_contextual_arguments
     def read(self, address, length_bytes, x=Required, y=Required, p=0):
@@ -202,9 +229,9 @@ class MachineController(ContextMixin):
         :py:class:`bytes`
             The data is read back from memory as a bytestring.
         """
-        read_scp = self.send_scp(x, y, p, SCPCommands.read, address,
-                                 length_bytes, int(data_type),
-                                 expected_args=0)
+        read_scp = self._send_scp(x, y, p, SCPCommands.read, address,
+                                  length_bytes, int(data_type),
+                                  expected_args=0)
         return read_scp.data
 
     @ContextMixin.use_contextual_arguments
@@ -223,9 +250,9 @@ class MachineController(ContextMixin):
         # Format the IP address
         ip_addr = struct.pack('!4B',
                               *map(int, socket.gethostbyname(addr).split('.')))
-        self.send_scp(x, y, 0, SCPCommands.iptag,
-                      int(consts.IPTagCommands.set) << 16 | iptag,
-                      port, struct.unpack('<I', ip_addr)[0])
+        self._send_scp(x, y, 0, SCPCommands.iptag,
+                       int(consts.IPTagCommands.set) << 16 | iptag,
+                       port, struct.unpack('<I', ip_addr)[0])
 
     @ContextMixin.use_contextual_arguments
     def iptag_get(self, iptag, x=Required, y=Required):
@@ -241,9 +268,9 @@ class MachineController(ContextMixin):
         :py:class:`IPTag`
             The IPTag returned from SpiNNaker.
         """
-        ack = self.send_scp(x, y, 0, SCPCommands.iptag,
-                            int(consts.IPTagCommands.get) << 16 | iptag, 1,
-                            expected_args=0)
+        ack = self._send_scp(x, y, 0, SCPCommands.iptag,
+                             int(consts.IPTagCommands.get) << 16 | iptag, 1,
+                             expected_args=0)
         return IPTag.from_bytestring(ack.data)
 
     @ContextMixin.use_contextual_arguments
@@ -255,11 +282,11 @@ class MachineController(ContextMixin):
         iptag : int
             Index of the IPTag to clear.
         """
-        self.send_scp(x, y, 0, SCPCommands.iptag,
-                      int(consts.IPTagCommands.clear) << 16 | iptag)
+        self._send_scp(x, y, 0, SCPCommands.iptag,
+                       int(consts.IPTagCommands.clear) << 16 | iptag)
 
     @ContextMixin.use_contextual_arguments
-    def set_led(self, led, action=consts.LEDAction.toggle, 
+    def set_led(self, led, action=consts.LEDAction.toggle,
                 x=Required, y=Required):
         """Toggle the state of an LED.
 
@@ -271,7 +298,7 @@ class MachineController(ContextMixin):
             Action to perform on the LED (on, off or toggle [default])
         """
         arg1 = int(action) << (led * 2)
-        self.send_scp(x, y, 0, SCPCommands.led, arg1=arg1, expected_args=0)
+        self._send_scp(x, y, 0, SCPCommands.led, arg1=arg1, expected_args=0)
 
     @ContextMixin.use_contextual_arguments
     def sdram_alloc(self, size, tag=0, x=Required, y=Required,
@@ -303,7 +330,7 @@ class MachineController(ContextMixin):
         arg1 = consts.AllocOperations.alloc_sdram << 8 | app_id
 
         # Send the packet and retrieve the address
-        rv = self.send_scp(x, y, 0, SCPCommands.alloc_free, arg1, size, tag)
+        rv = self._send_scp(x, y, 0, SCPCommands.alloc_free, arg1, size, tag)
         if rv.arg1 == 0:
             # Allocation failed
             raise SpiNNakerMemoryError(size, x, y)

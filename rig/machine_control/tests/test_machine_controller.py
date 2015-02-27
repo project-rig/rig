@@ -52,7 +52,7 @@ class TestMachineControllerLive(object):
         assert sver.version >= 1.3
 
     def test_get_software_version(self, controller, spinnaker_width,
-                              spinnaker_height):
+                                  spinnaker_height):
         """Test getting the software version data."""
         # (Assuming a 4-node board) Get the software version for a number of
         # cores.
@@ -132,6 +132,41 @@ class TestMachineController(object):
         - Check that transmitted packets are sensible.
         - Check that error codes / correct returns are dealt with correctly.
     """
+    def test_send_scp(self):
+        """Check that arbitrary SCP commands can be sent using the context
+        system.
+        """
+        # Create the controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock(spec_set=[])
+
+        # Assert a failure with no context
+        with pytest.raises(TypeError):
+            cn.send_scp(SCPCommands.sver, y=0, p=0)
+
+        with pytest.raises(TypeError):
+            cn.send_scp(SCPCommands.sver, x=0, p=0)
+
+        with pytest.raises(TypeError):
+            cn.send_scp(SCPCommands.sver, x=0, y=0)
+
+        # Provide a context, should work
+        with cn(x=3, y=2, p=0):
+            cn.send_scp(SCPCommands.sver)
+        cn._send_scp.assert_called_once_with(3, 2, 0, SCPCommands.sver)
+
+        with cn(x=3, y=2, p=0):
+            cn.send_scp(SCPCommands.sver, x=4)
+        cn._send_scp.assert_called_with(4, 2, 0, SCPCommands.sver)
+
+        with cn(x=3, y=2, p=0):
+            cn.send_scp(SCPCommands.sver, y=4)
+        cn._send_scp.assert_called_with(3, 4, 0, SCPCommands.sver)
+
+        with cn(x=3, y=2, p=0):
+            cn.send_scp(SCPCommands.sver, p=4)
+        cn._send_scp.assert_called_with(3, 2, 4, SCPCommands.sver)
+
     def test_get_software_version(self, mock_conn):  # noqa
         """Check that the reporting of the software version is correct.
 
@@ -178,7 +213,7 @@ class TestMachineController(object):
 
         # Create the machine controller
         cn = MachineController("localhost")
-        cn.send_scp = mock_conn.send_scp
+        cn._send_scp = mock_conn.send_scp
 
         # Run the software version command
         sver = cn.get_software_version(0, 1, 2)
@@ -217,13 +252,13 @@ class TestMachineController(object):
         """
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.send_scp = mock.Mock()
+        cn._send_scp = mock.Mock()
 
         # Try the write
         cn._write(0, 1, 2, address, data, dtype)
 
         # Assert that there was 1 packet sent and that it was sane
-        call = cn.send_scp.call_args[0]
+        call = cn._send_scp.call_args[0]
         assert call == (0, 1, 2, SCPCommands.write, address, len(data),
                         int(dtype), data)
 
@@ -286,16 +321,16 @@ class TestMachineController(object):
         """
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.send_scp = mock.Mock()
-        cn.send_scp.return_value = mock.Mock(spec_set=SCPPacket)
-        cn.send_scp.return_value.data = data
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = mock.Mock(spec_set=SCPPacket)
+        cn._send_scp.return_value.data = data
 
         # Try the read
         read = cn._read(0, 1, 2, address, len(data), dtype)
 
         # Assert that there was 1 packet sent and that it was sane
-        assert cn.send_scp.call_count == 1
-        call = cn.send_scp.call_args[0]
+        assert cn._send_scp.call_count == 1
+        call = cn._send_scp.call_args[0]
         assert call == (0, 1, 2, SCPCommands.read, address, len(data),
                         int(dtype))
         assert read == data
@@ -364,14 +399,14 @@ class TestMachineController(object):
         """
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.send_scp = mock.Mock()
+        cn._send_scp = mock.Mock()
 
         # Set the IPTag
         cn.iptag_set(iptag, addr, port, x=0, y=1)
 
         # Assert that there was 1 packet sent and that it was sane
-        assert cn.send_scp.call_count == 1
-        call = cn.send_scp.call_args[0]
+        assert cn._send_scp.call_count == 1
+        call = cn._send_scp.call_args[0]
         assert call == (0, 1, 0, SCPCommands.iptag, 0x00010000 | iptag,
                         port, 0x0100007f)
 
@@ -400,16 +435,16 @@ class TestMachineController(object):
 
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.send_scp = mock.Mock()
-        cn.send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                                             0x80, 0, 0, 0, 0, data)
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                                              0x80, 0, 0, 0, 0, data)
 
         # Get the IPtag
         r_iptag = cn.iptag_get(iptag, x=1, y=2)
 
         # Assert that there was 1 packet sent and that it was sane
-        assert cn.send_scp.call_count == 1
-        call = cn.send_scp.call_args[0]
+        assert cn._send_scp.call_count == 1
+        call = cn._send_scp.call_args[0]
         assert call == (1, 2, 0, SCPCommands.iptag, 0x00020000 | iptag, 1)
 
         # Assert that the returned IPtag was as specified
@@ -433,14 +468,14 @@ class TestMachineController(object):
         """
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.send_scp = mock.Mock()
+        cn._send_scp = mock.Mock()
 
         # Clear the IPtag
         cn.iptag_clear(iptag, x=1, y=2)
 
         # Assert that there was 1 packet sent and that it was sane
-        assert cn.send_scp.call_count == 1
-        call = cn.send_scp.call_args[0]
+        assert cn._send_scp.call_count == 1
+        call = cn._send_scp.call_args[0]
         assert call == (1, 2, 0, SCPCommands.iptag, 0x00030000 | iptag)
 
     @pytest.mark.parametrize("action", [LEDAction.on, LEDAction.off,
@@ -457,14 +492,14 @@ class TestMachineController(object):
         """
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.send_scp = mock.Mock()
+        cn._send_scp = mock.Mock()
 
         # Perform the action
         cn.set_led(led, x=x, y=y, action=action)
 
         # Assert that there was 1 packet sent and that it was sane
-        assert cn.send_scp.call_count == 1
-        call, kwargs = cn.send_scp.call_args
+        assert cn._send_scp.call_count == 1
+        call, kwargs = cn._send_scp.call_args
         assert call == (x, y, 0, SCPCommands.led)
         assert kwargs["arg1"] == action << (led * 2)
 
@@ -484,9 +519,9 @@ class TestMachineController(object):
         # Create the mock controller
         cn = MachineController("localhost")
 
-        cn.send_scp = mock.Mock()
-        cn.send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                                             0x80, 0, addr, None, None, b"")
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                                              0x80, 0, addr, None, None, b"")
 
         # Try the allocation
         address = cn.sdram_alloc(size, tag, 1, 2, app_id=app_id)
@@ -495,7 +530,7 @@ class TestMachineController(object):
         assert address == addr
 
         # Check the packet was sent as expected
-        cn.send_scp.assert_called_once_with(1, 2, 0, 28, app_id, size, tag)
+        cn._send_scp.assert_called_once_with(1, 2, 0, 28, app_id, size, tag)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (5, 6)])
     @pytest.mark.parametrize("size", [8, 200])
@@ -503,9 +538,9 @@ class TestMachineController(object):
         """Test that sdram_alloc raises an exception when ALLOC fails."""
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.send_scp = mock.Mock()
-        cn.send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                                             0x80, 0, 0, None, None, b"")
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                                              0x80, 0, 0, None, None, b"")
 
         with pytest.raises(SpiNNakerMemoryError) as excinfo:
             cn.sdram_alloc(size, x=x, y=y, app_id=30)

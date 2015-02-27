@@ -66,6 +66,13 @@ class ContextMixin(object):
         """Create a new context with the given keyword arguments."""
         return Context(kwargs, self.__context_stack)
 
+    def get_context_arguments(self):
+        """Return a dictionary containing the current context arguments."""
+        cargs = {}
+        for context in self.__context_stack:
+            cargs.update(context.context_arguments)
+        return cargs
+
     @staticmethod
     def use_contextual_arguments(f):
         """Decorator which modifies a function so that it is passed arguments
@@ -82,9 +89,7 @@ class ContextMixin(object):
             kwargs.update(dict(zip(arg_names[1:], args[1:])))
 
             # Update the arguments using values from the context
-            cargs = {}
-            for context in self.__context_stack:
-                cargs.update(context.context_arguments)
+            cargs = self.get_context_arguments()
             calls = {k: cargs.get(k, v) for (k, v) in iteritems(default_call)}
 
             # Update the arguments using values from the call
