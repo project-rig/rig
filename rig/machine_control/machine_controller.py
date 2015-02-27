@@ -56,7 +56,7 @@ class MachineController(ContextMixin):
         """Transmit an SCP Packet.
 
         See the arguments for
-        :py:method:`~rig.machine_controller.scp_connection.SCPConnection` for
+        :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
         # XXX: This is here because the Contexts system messes with the *args
@@ -84,7 +84,7 @@ class MachineController(ContextMixin):
         it to transmit.
 
         See the arguments for
-        :py:method:`~rig.machine_controller.scp_connection.SCPConnection` for
+        :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
         return self.connections[0].send_scp(x, y, p, *args, **kwargs)
@@ -100,7 +100,7 @@ class MachineController(ContextMixin):
             Height of the machine (0 < h < 256)
 
         For further boot arguments see
-        :py:func:`~rig.machine_controller.boot.boot`.
+        :py:func:`~rig.machine_control.boot.boot`.
 
         Notes
         -----
@@ -170,7 +170,7 @@ class MachineController(ContextMixin):
         data : :py:class:`bytes`
             Data to write into memory.  Must be <= the amount accepted by the
             receiving core.
-        data_type : :py:class:`~rig.machine_controller.consts.DataType`
+        data_type : :py:class:`~rig.machine_control.consts.DataType`
             The size of the data to write into memory.
         """
         length_bytes = len(data)
@@ -339,14 +339,12 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments
     def sdram_alloc_as_io(self, size, tag=0, x=Required, y=Required,
                           app_id=Required):
-        """Like
-        :py:meth:`~rig.machine_controller.machine_control.MachineController.sdram_alloc`
-        but a file-like object which allows reading and writing to the region
-        is returned.
+        """Like :py:meth:`.sdram_alloc` but a file-like object which allows
+        reading and writing to the region is returned.
 
         Returns
         -------
-        :py:class:`~rig.machine_control.machine_controller.MemoryIO`
+        :py:class:`~MemoryIO`
             File-like object which allows accessing the newly allocated region
             of memory.
 
@@ -433,7 +431,7 @@ class MemoryIO(object):
 
         Parameters
         ----------
-        machine_controller : :py:class:`~rig.machine_control.MachineController`
+        machine_controller : :py:class:`~MachineController`
             A communicator to handle transmitting and receiving packets from
             the SpiNNaker machine.
         x : int
