@@ -1,6 +1,6 @@
 # Rig
 
-[![Build Status](https://travis-ci.org/mundya/rig.svg?branch=master)](https://travis-ci.org/mundya/rig)
+[![Build Status](https://travis-ci.org/project-rig/rig.svg?branch=master)](https://travis-ci.org/project-rig/rig)
 [![PyPi version](https://pypip.in/v/rig/badge.png)](https://pypi.python.org/pypi/rig/)
 
 Rig is a set of Python and C libraries for mapping computational problems to
