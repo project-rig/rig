@@ -1,5 +1,3 @@
-import mock
-
 from rig.netlist import Net
 
 
@@ -22,6 +20,12 @@ class TestNet(object):
         assert net.sinks == sinks
         assert net.weight == 0.5
 
+        # Assert that membership test succeeds
+        assert source in net
+        for sink in sinks:
+            assert sink in net
+        assert Vertex() not in net
+
     def test_init_with_object(self):
         source = Vertex()
         sink = Vertex()
@@ -32,11 +36,3 @@ class TestNet(object):
         assert net.source is source
         assert net.sinks == [sink]
         assert net.weight == 5
-
-    def test_init_with_keyspace(self):
-        source = Vertex()
-        sinks = [Vertex() for _ in range(5)]
-        ks = mock.Mock()
-
-        net = Net(source, sinks, 1, keyspace=ks)
-        assert net.keyspace == ks

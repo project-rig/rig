@@ -21,7 +21,7 @@ SpiNNaker.  Tools exist for:
 .. toctree::
         :maxdepth: 2
 
-        keyspaces
+        bitfield
         regions
 
 Problem mapping
@@ -29,6 +29,11 @@ Problem mapping
 
 .. toctree::
         :maxdepth: 2
+        
+        place_and_route
+        machine
+        routing_table
+        geometry
 
 
 Execution control

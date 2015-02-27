@@ -1,7 +1,8 @@
 # Rig
 
-[![Build Status](https://travis-ci.org/mundya/rig.svg?branch=master)](https://travis-ci.org/mundya/rig)
+[![Build Status](https://travis-ci.org/project-rig/rig.svg?branch=master)](https://travis-ci.org/project-rig/rig)
 [![PyPi version](https://pypip.in/v/rig/badge.png)](https://pypi.python.org/pypi/rig/)
+[![Documentation Status](https://readthedocs.org/projects/rig/badge/?version=master)](https://readthedocs.org/projects/rig/?badge=master)
 
 Rig is a set of Python and C libraries for mapping computational problems to
 SpiNNaker and interacting with them.  Above all it aims to be light weight and
@@ -99,3 +100,8 @@ Some tests require a connected, booted, SpiNNaker board.  To run these use:
 We also use [Tox](https://pypi.python.org/pypi/tox/1.8.1) to run tests against
 multiple versions of Python.  To do this just execute `tox` in the root
 directory of the repository.
+
+
+# Documentation
+
+The Rig documentation is hosted at: http://rig.readthedocs.org/
