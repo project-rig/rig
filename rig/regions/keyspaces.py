@@ -5,7 +5,8 @@ from .region import Region
 
 class KeyspacesRegion(Region):
     """A region of memory which represents data formed from a list of
-    :py:class:`~rig.keyspaces.Keyspace` instances.
+    :py:class:`~rig.bitfield.BitField` instances representing SpiNNaker routing
+    keys.
 
     Each "row" represents a keyspace, and each "column" is formed by getting
     the result of a function applied to the keyspace.  Each field will be one
@@ -13,13 +14,13 @@ class KeyspacesRegion(Region):
     """
     def __init__(self, keyspaces, fields=list(), partitioned_by_atom=False,
                  prepend_num_keyspaces=False):
-        """Create a new region representing Keyspace information.
+        """Create a new region representing keyspace information.
 
         Parameters
         ----------
         keyspaces : iterable
             An iterable containing instances of
-            :py:class:`~rig.keyspaces.Keyspace`
+            :py:class:`~rig.bitfield.BitField`
         fields : iterable
             An iterable of callables which will be called on each key and must
             return an appropriate sized bytestring representing the data to
@@ -122,7 +123,7 @@ def KeyField(maps={}, field=None, tag=None):
         # Build the key with these fills made
         key = keyspace(**fills)
 
-        return key.get_key(field=key_field, tag=tag)
+        return key.get_value(field=key_field, tag=tag)
 
     return key_getter
 

@@ -1,6 +1,9 @@
-"""A system for defining and representing routing keys.
+"""A system for defining and representing bit fields.
 
-See the :py:class:`~.spinnaker.keyspaces.Keyspace` class.
+A common use-ase for this module is defining SpiNNaker routing keys based on
+hierarchical bit-fields.
+
+See the :py:class:`.BitField` class.
 """
 
 from collections import OrderedDict
@@ -8,210 +11,78 @@ from collections import OrderedDict
 from math import log
 
 
-class Keyspace(object):
-    """Defines the format & value of routing keys for SpiNNaker.
+class BitField(object):
+    """Defines a hierarchical bit field and the values of those fields.
 
-    Notes
-    -----
-    This model presumes that routing keys are made up of a number of (unsigned,
-    integral) fields. For example, there might be a field which specifies which
-    chip a message is destined for, another which specifies the core and
-    another which specifies the type of message::
+    Conceptually, a bit field is a sequence of bits which are logically broken
+    up into individual fields which represent independent, unsigned integer
+    values. For example, one could represent a pair of eight-bit values `x` and
+    `y` as a sixteen-bit bit field where the upper eight bits are `x` and the
+    lower eight bits are `y`. Bit fields are used when multiple pieces of
+    information must be conveyed by a single binary value.
 
-        # Create a new 32-bit Keyspace
-        ks = Keyspace(32)
+    For example, one method of allocating SpiNNaker routing keys (which are
+    32-bit values) is to define each route a key as bit field with three
+    fields. The fields `x`, `y`, and `p` can be used to represent the x- and
+    y-chip-coordinate and processor id of a route's source.
 
-        ks.add_field("chip")
-        ks.add_field("core")
-        ks.add_field("type")
+    A hierarchical bit field is a bit field with fields which only exist
+    dependent on the values of other fields. For a further routing-key related
+    example, different key formats may be used by external devices and the rest
+    of the SpiNNaker application. In these cases, a single bit could be used in
+    the key to determine which key format is in use. Depending on the value of
+    this bit, different fields would become available.
 
-    Given a keyspace with some fields defined, we can define the value of these
-    fields to define a specific key::
+    This class supports the following key features:
 
-        # Returns a new `Keyspace` object with the specified fields set
-        # accordingly.
-        start_master = ks(chip=0, core=1, type=0x01)
-
-    We can also specify just some keys at a time. This means that the fields
-    can be specified at different points in execution where it makes most
-    sense. As an example::
-
-        master_core = ks(chip=0, core=1)
-
-        # chip = 0, core = 1, type = 0x01 (same as previous example)
-        start_master = master_core(type=0x01)
-
-        # chip = 0, core = 1, type = 0x02
-        stop_master = master_core(type=0x02)
-
-    Fields can also exist in a hierarchical structure. For example, we may have
-    a field which defines that a key is destined for an external device which
-    expects a different set of fields to those for internal use::
-
-        # Starting a new example...
-        ks2 = Keyspace(32)
-
-        ks2.add_field("external")
-
-        ks2_internal = ks2(external=0)
-        ks2_internal.add_field("chip")
-        ks2_internal.add_field("core")
-        ks2_internal.add_field("type")
-
-        ks2_external = ks2(external=1)
-        ks2_internal.add_field("device_id")
-        ks2_internal.add_field("command")
-
-        # Keys can be derived from the top-level object
-        example_internal = ks(external=0, chip=0, core=1, type=0x01)
-        example_external = ks(external=1, device_id=0xBEEF, command=0x0)
-
-    Now, whenever the `external` field is '0' we have fields `external`,
-    `chip`, `core` and `type`. Whenever the `external` field is '1' we have
-    fields `external`, `device_id` and `command`. In this example, the
-    `device_id` and `command` fields are free to overlap with the `chip`,
-    `core` and `type` fields since they are never present in the same key.
-
-    APIs making use of the `Keyspace` module can use this mechanism to create
-    'holes' in their keyspace within which API users can add their fields which
-    are guaranteed not to collide with the API's key space. For example, we
-    could allow developers to set up their own custom fields for their specific
-    devices by exposing the following `Keyspace`::
-
-        ks2(external = 1)
-
-    Note only one `Keyspace` object should ever be directly constructed in an
-    application from which all new keyspaces are produced ensuring that all
-    fields are defined in a non-conflicting manner.
-
-    Certain fields may have fixed lengths and positions within a routing key,
-    for example, those required by a hardware peripheral. Conversely, some
-    fields' lengths and positions are unimportant and are only required to be
-    long enough to represent the maximum value held by a key. Lets re-write the
-    above example but this time lets specify the length and position of the
-    fields used by external peripherals while leaving internal fields' lengths
-    and positions unspecified. These fields will be assigned a free space
-    (working from the least-significant bit upwards) in the keyspace large
-    enough for the largest value ever assigned to the field when we call
-    `assign_fields()`.::
-
-        ks3 = Keyspace(32)
-
-        # Top-most bit
-        ks3.add_field("external", length = 1, start_at = 31)
-
-        # Length and position to be determined automatically
-        ks3_internal = ks3(external = 0)
-        ks3_internal.add_field("chip")
-        ks3_internal.add_field("core")
-        ks3_internal.add_field("type")
-
-        # Manually specified field sizes/positions
-        ks3_external = ks3(external = 1)
-        ks3_internal.add_field("device_id", length=16, start_at=0)
-        ks3_internal.add_field("command", length=4, start_at=24)
-
-        start_master = ks3(external=0, chip=0, core=1, type=0x01)
-        # ... assign all other keys ...
-
-        # Set field sizes/positions accordingly
-        ks3.assign_fields()
-
-    In order to turn a `Keyspace` whose fields have been given values into an
-    actual routing key we can use::
-
-        print(hex(start_master.get_key()))
-
-    We can also generate a mask which selects only those bits used by fields in
-    the key::
-
-        print(hex(start_master.get_mask()))
-
-    Generating a key with `get_key()` requires that all fields involved have
-    fixed lengths and positions. Note that `assign_fields()` sets field sizes
-    according to the largest value observed being assigned to a field prior to
-    that call. As a result, users should be careful to create keyspaces with
-    all required field values prior to calling `assign_fields()` since fields
-    cannot later be enlarged.
-
-    With keys broken down into fields, routing can also be simplified by only
-    routing based on only a subset of fields. Continuing our example we need
-    only route based on the `external`, `device_id`, `chip` and `core` fields.
-    In fact, we can route entirely based on `external`, `device_id` and `chip`
-    when we're not on the target chip. If we re-write our keyspace definition
-    one final time we can apply tags to these subsets of fields to enable us to
-    easily generate keys/masks based only on these fields. When a tag is
-    applied, it is added to all currently set fields too. This means we can
-    easily identify the fields used for routing by just assigning a tag to the
-    fields that, semantically, are actually used for routing.::
-
-        ks4 = Keyspace(32)
-
-        ks4.add_field("external", length=1, start_at=31)
-
-        ks4_internal = ks4(external=0)
-        ks4_internal.add_field("chip", tags="routing local_routing")
-        ks4_internal.add_field("core", tags="local_routing")
-        ks4_internal.add_field("type")
-
-        ks4_external = ks4(external = 1)
-        ks4_internal.add_field("device_id", length=16, start_at=0,
-            tags = "routing local_routing")
-        ks4_internal.add_field("command", length=4, start_at=24)
-
-        start_master = ks4(external=0, chip=0, core=1, type=0x01)
-        device = ks4(external = 1, device_id = 12)
-
-        ks4.assign_fields()
-
-        # Keys/masks for the target chip
-        print(hex(start_master.get_key(tag="local_routing")))
-        print(hex(start_master.get_mask(tag="local_routing")))
-
-        # Keys/masks for other chips
-        print(hex(start_master.get_key(tag="routing")))
-        print(hex(start_master.get_mask(tag="routing")))
-
-        # Keys/masks for a device (note that we don't need to define the
-        # command field since it does not have the routing tag.
-        print(hex(device.get_key(tag="routing")))
-        print(hex(device.get_mask(tag="routing")))
-
-        # Equivalently:
-        print(hex(device.get_key(tag="local_routing")))
-        print(hex(device.get_mask(tag="local_routing")))
+    * Construction of guaranteed-safe hierarchical bit field formats.
+    * Generation of bit-masks which select only defined fields
+    * Automatic allocation of field sizes based on values actually used.
+    * Partial-definition of a bit field (i.e. defining only a subset of
+      available fields).
     """
 
-    def __init__(self, length=32, fields=None, field_values=None):
-        """Create a new Keyspace.
+    def __init__(self, length=32, _fields=None, _field_values=None):
+        """Create a new BitField.
+
+        An instance, `b`, of :py:class:`.BitField` represents a fixed-length
+        hierarchical bit field with initially no fields. Fields can be added
+        using :py:meth:`.BitField.add_field`. Derivatives of this instance
+        with fields set to specific values can be created using the 'call'
+        syntax: `b(field_name=value, other_field_name=other_value)` (see
+        :py:meth:`.BitField.__call__`).
+
+        .. Note::
+            Only one :py:class:`.BitField` instance should be explicitly
+            created for each bit field.
 
         Parameters
         ----------
         length : int
-            The total number of bits in routing keys.
-        fields : dict
+            The total number of bits in the bit field.
+        _fields : dict
             For internal use only. The shared, global field dictionary.
-        field_values : dict
+        _field_values : dict
             For internal use only. Mapping of field-identifier to value.
         """
         self.length = length
 
         # An OrderedDict if field definitions (globally shared by all
-        # derivatives of the same keyspace) which maps human-friendly
-        # field-identifiers (e.g.  strings) to corresponding Keyspace.Field
+        # derivatives of the same BitField) which maps human-friendly
+        # field-identifiers (e.g.  strings) to corresponding BitField._Field
         # instances. An OrderedDict preserves insertion ordering which is used
         # to automatic field positioning more predictable and also ensures the
         # fields are stored under the partial ordering of their hierarchy (a
         # property used by this code).
-        self.fields = fields if fields is not None else OrderedDict()
+        self.fields = _fields if _fields is not None else OrderedDict()
 
-        if field_values is not None:
-            self.field_values = field_values
+        if _field_values is not None:
+            self.field_values = _field_values
         else:
             self.field_values = dict()
 
     def add_field(self, identifier, length=None, start_at=None, tags=None):
-        """Add a new field to the Keyspace.
+        """Add a new field to the BitField.
 
         If any existing fields' values are set, the newly created field will
         become a child of those fields. This means that this field will exist
@@ -224,13 +95,13 @@ class Keyspace(object):
             Field names must be unique and users are encouraged to sensibly
             name-space fields in the `prefix_` style to avoid collisions.
         length : int or None
-            The number of bits in the field. If *None* the field will be
+            The number of bits in the field. If None the field will be
             automatically assigned a length long enough for the largest value
             assigned.
         start_at : int or None
             0-based index of least significant bit of the field within the
-            keyspace. If *None* the field will be automatically located in free
-            space in the keyspace.
+            bit field. If None the field will be automatically located in free
+            space in the bit field.
         tags : string or collection of strings or None
             A (possibly empty) set of tags used to classify the field.  Tags
             should be valid Python identifiers. If a string, the string must be
@@ -240,9 +111,9 @@ class Keyspace(object):
 
         Raises
         ------
-        :py:class:`ValueError`
+        ValueError
             If any the field overlaps with another one or does not fit within
-            the Keyspace. Note that fields with unspecified lengths and
+            the bit field. Note that fields with unspecified lengths and
             positions do not undergo such checks until their length and
             position become known.
         """
@@ -256,12 +127,12 @@ class Keyspace(object):
         if length is not None and length <= 0:
             raise ValueError("Fields must be at least one bit in length.")
 
-        # Check for fields which don't fit in the keyspace
-        if (start_at is not None
-            and (0 <= start_at >= self.length
-                 or start_at + (length or 1) > self.length)):
+        # Check for fields which don't fit in the bit field
+        if (start_at is not None and
+            (0 <= start_at >= self.length or
+             start_at + (length or 1) > self.length)):
             raise ValueError(
-                "Field doesn't fit within {}-bit keyspace.".format(
+                "Field doesn't fit within {}-bit bit field.".format(
                     self.length))
 
         # Check for fields which occupy the same bits
@@ -297,25 +168,25 @@ class Keyspace(object):
             parent_identifiers.extend(parent.conditions.keys())
 
         # Add the field
-        self.fields[identifier] = Keyspace.Field(
+        self.fields[identifier] = BitField._Field(
             length, start_at, tags, dict(self.field_values))
 
     def __call__(self, **field_values):
-        """Return a new Keyspace instance with fields assigned values as
+        """Return a new BitField instance with fields assigned values as
         specified in the keyword arguments.
 
         Returns
         -------
-        :py:class:`~.spinnaker.keyspaces.Keyspace`
-            A `Keyspace` derived from this one but with the specified fields
+        :py:class:`.BitField`
+            A `BitField` derived from this one but with the specified fields
             assigned a value.
 
         Raises
         ------
-        :py:class:`ValueError`
+        ValueError
             If any field has already been assigned a value or the value is too
             large for the field.
-        :py:class:`AttributeError`
+        AttributeError
             If a field is specified which is not present.
         """
         # Ensure fields exist
@@ -350,7 +221,7 @@ class Keyspace(object):
             self.fields[identifier].max_value = max(
                 self.fields[identifier].max_value, value)
 
-        return Keyspace(self.length, self.fields, field_values)
+        return BitField(self.length, self.fields, field_values)
 
     def __getattr__(self, identifier):
         """Get the value of a field.
@@ -363,37 +234,37 @@ class Keyspace(object):
 
         Raises
         ------
-        :py:class:`AttributeError`
+        AttributeError
             If the field requested does not exist or is not available given
             current field values.
         """
         self._assert_field_available(identifier)
         return self.field_values.get(identifier, None)
 
-    def get_key(self, tag=None, field=None):
-        """Generate a key whose fields are set appropriately and with all other
-        bits set to zero.
+    def get_value(self, tag=None, field=None):
+        """Generate an integer whose bits are set according to the values of
+        fields in this bit field. All bits not in a field are set to zero.
 
         Parameters
         ----------
         tag : str
-            Optionally specifies that the key should only include fields with
+            Optionally specifies that the value should only include fields with
             the specified tag.
         field : str
-            Optionally specifies that the key should only include the specified
-            field.
+            Optionally specifies that the value should only include the
+            specified field.
 
         Raises
         ------
-        :py:class:`ValueError`
+        ValueError
             If a field whose length or position has not been defined. (i.e.
-            `assign_fields()` has not been called when a field's size/position
-            has not been fixed.
+            `assign_fields()` has not been called when a field's
+            length/position has not been fixed.
         """
         assert not (tag is not None and field is not None), \
             "Cannot filter by tag and field simultaneously."
 
-        # Build a filtered list of fields to be used in the key
+        # Build a filtered list of fields to be used in the value
         if field is not None:
             self._assert_field_available(field)
             selected_field_idents = [field]
@@ -409,24 +280,24 @@ class Keyspace(object):
             set(selected_field_idents) - set(self.field_values.keys())
         if missing_fields_idents:
             raise ValueError(
-                "Cannot generate key with undefined fields {}.".format(
+                "Cannot generate value with undefined fields {}.".format(
                     ", ".join(missing_fields_idents)))
 
-        # Build the key
-        key = 0
+        # Build the value
+        value = 0
         for identifier in selected_field_idents:
             field = self.fields[identifier]
             if field.length is None or field.start_at is None:
                 raise ValueError(
                     "Field '{}' does not have a fixed size/position.".format(
                         identifier))
-            key |= (self.field_values[identifier] <<
-                    field.start_at)
+            value |= (self.field_values[identifier] <<
+                      field.start_at)
 
-        return key
+        return value
 
     def get_mask(self, tag=None, field=None):
-        """Get the mask for all fields which exist in the current keyspace.
+        """Get the mask for all fields which exist in the current bit field.
 
         Parameters
         ----------
@@ -439,14 +310,14 @@ class Keyspace(object):
 
         Raises
         ------
-        :py:class:`ValueError`
+        ValueError
             If a field whose length or position has not been defined. (i.e.
             `assign_fields()` has not been called when a field's size/position
             has not been fixed.
         """
         assert not (tag is not None and field is not None)
 
-        # Build a filtered list of fields to be used in the key
+        # Build a filtered list of fields to be used in the mask
         if field is not None:
             self._assert_field_available(field)
             selected_field_idents = [field]
@@ -474,14 +345,13 @@ class Keyspace(object):
         """Assign a position & length to any fields which do not have one.
 
         Users should typically call this method after all field values have
-        been assigned to keyspaces otherwise fields may be fixed at an
-        inadequate size.
+        been assigned, otherwise fields may be fixed at an inadequate size.
         """
         # We must fix fields at every level of the heirarchy sepeartely
         # (otherwise fields of children won't be allowed to overlap). Here we
         # do a breadth-first iteration over the heirarchy, fixing the fields at
         # each level.
-        unsearched_heirarchy = [Keyspace(self.length, self.fields)]
+        unsearched_heirarchy = [BitField(self.length, self.fields)]
         while unsearched_heirarchy:
             ks = unsearched_heirarchy.pop(0)
             ks._assign_enabled_fields()
@@ -502,37 +372,37 @@ class Keyspace(object):
                     unsearched_heirarchy.append(ks(**set_fields))
 
     def __eq__(self, other):
-        """Test that this keyspace is equivalent to another.
+        """Test that this :py:class:`.BitField` is equivalent to another.
 
-        In order to be equal, the other keyspace must be a descendent of the
-        same original Keyspace (and thus will *always* have exactly the same
-        set of fields). It must also have the same field values defined.
+        In order to be equal, the other :py:class:`.BitField` must be a
+        descendent of the same original :py:class:`.BitField` (and thus will
+        *always* have exactly the same set of fields). It must also have the
+        same field values defined.
         """
-        return (self.length == other.length
-                and self.fields is other.fields
-                and self.field_values == other.field_values)
+        return (self.length == other.length and
+                self.fields is other.fields and
+                self.field_values == other.field_values)
 
     def __repr__(self):
-        """Produce a human-readable representation of this Keyspace and its
+        """Produce a human-readable representation of this bit field and its
         current value.
         """
         enabled_field_idents = [
             i for (i, f) in self._enabled_fields()]
 
-        return "<{}-bit Keyspace {}>".format(
+        return "<{}-bit BitField {}>".format(
             self.length,
             ", ".join("'{}':{}".format(identifier,
                                        self.field_values.get(identifier, "?"))
                       for identifier in enabled_field_idents))
 
-    class Field(object):
+    class _Field(object):
         """Internally used class which defines a field.
         """
 
         def __init__(self, length=None, start_at=None, tags=None,
                      conditions=None, max_value=1):
-            """Field definition used internally by
-            :py:class:`~.spinnaker.keyspaces.Keyspace`.
+            """Field definition used internally by :py:class:`.BitField`.
 
             Parameters/Attributes
             ---------------------
@@ -541,8 +411,8 @@ class Keyspace(object):
                 determined based on the values assigned to it.
             start_at : int
                 0-based index of least significant bit of the field within the
-                keyspace.  *None* if this field is to be automatically placed
-                into an unused area of the keyspace.
+                bit field.  *None* if this field is to be automatically placed
+                into an unused area of the bit field.
             tags : set
                 A (possibly empty) set of tags used to classify the field.
             conditions : dict
@@ -562,8 +432,8 @@ class Keyspace(object):
             self.max_value = max_value
 
     def _assert_field_available(self, identifier, field_values=None):
-        """Raise a human-readable ValueError if the specified field does not
-        exist or is not enabled by the current field values.
+        """Raise a human-readable :py:exc:`ValueError` if the specified field
+        does not exist or is not enabled by the current field values.
 
         Parameters
         ----------
@@ -598,8 +468,8 @@ class Keyspace(object):
                           for cond_ident, cond_val in unmet_conditions)))
 
     def _assert_tag_exists(self, tag):
-        """Raise a human-readable ValueError if the supplied tag is not used by
-        any enabled field.
+        """Raise a human-readable :py:exc:`ValueError` if the supplied tag is
+        not used by any enabled field.
         """
 
         for identifier, field in self._enabled_fields():
@@ -615,7 +485,7 @@ class Keyspace(object):
         ----------
         field_values : dict or None
             Dictionary of field identifier to value mappings to use in the
-            test. If *None*, uses `self.field_values`.
+            test. If None, uses `self.field_values`.
         """
         if field_values is None:
             field_values = self.field_values
@@ -691,12 +561,12 @@ class Keyspace(object):
                         assigned_bits |= field_bits
                         break
 
-            # Check that the calculated field is within the Keyspace
+            # Check that the calculated field is within the bit field
             if start_at + length <= self.length:
                 field.length = length
                 field.start_at = start_at
             else:
                 raise ValueError(
                     "{}-bit field '{}' "
-                    "does not fit in keyspace.".format(
+                    "does not fit in bit field.".format(
                         field.length, identifier))
