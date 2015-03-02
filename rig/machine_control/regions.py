@@ -12,7 +12,7 @@ Regions are split into 4 levels (0, 1, 2 and 3) referring to increasing
 coarseness in the number of chips they are able to represent.  Level 3 splits a
 256x256 SpiNNaker machine (the largest possible) into a grid of m nxn chunks,
 in each chunk blocks of pxp chips may be selected.  Level 2 splits each nxn
-chunk into m oxo chunks, and so on.  By level 0 it is possible to select
+chunk into m oxo chunks, and so on.  By level 3 it is possible to select
 individual chips from a 4x4 grid of chips.
 
 A 32-bit value representing a region uses the top 16 bits (31:16) to represent
@@ -24,7 +24,7 @@ import collections
 from six import iteritems
 
 
-def get_region_for_chip(x, y, level=0):
+def get_region_for_chip(x, y, level=3):
     """Get the region word for the given chip co-ordinates.
 
     Parameters
@@ -104,7 +104,7 @@ def get_minimal_flood_fills(targets):
 
         # Get the level-3 region: bits (31:16) indicate the 4x4 block of chips,
         # bits (15:0) indicate which of those 16 chips are selected.
-        region = get_region_for_chip(x, y, 3)
+        region = get_region_for_chip(x, y)
 
         # Build the region dict, chips containing equivalent sets of cores in a
         # given level-3 region get placed into the same flood-fill region by
