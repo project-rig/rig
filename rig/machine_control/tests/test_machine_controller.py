@@ -1,12 +1,14 @@
 import mock
 import pytest
 import struct
+import tempfile
 from .test_scp_connection import SendReceive, mock_conn  # noqa
 
-from ..consts import DataType, SCPCommands, LEDAction
+from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
     MachineController, SpiNNakerMemoryError, MemoryIO)
 from ..packets import SCPPacket
+from .. import regions, consts
 
 
 @pytest.fixture(scope="module")
@@ -33,6 +35,23 @@ def controller_rw_mock():
 def mock_controller():
     cn = mock.Mock(spec=MachineController)
     return cn
+
+
+@pytest.fixture
+def aplx_file(request):
+    """Create an APLX file containing nonsense data."""
+    # Create the APLX data
+    aplx_file = tempfile.NamedTemporaryFile(delete=False)
+    test_string = b"Must be word aligned"
+    assert len(test_string) % 4 == 0
+    aplx_file.write(test_string * 100)
+
+    # Delete the file when done
+    def teardown():
+        aplx_file.delete = True
+        aplx_file.close()
+
+    return aplx_file.name
 
 
 def rc_ok(last):
@@ -292,9 +311,9 @@ class TestMachineController(object):
         addresses = []
         while len(data) > 0:
             addresses.append(address)
-            segments.append(data[0:256])
+            segments.append(data[0:consts.SCP_DATA_LENGTH])
 
-            data = data[256:]
+            data = data[consts.SCP_DATA_LENGTH:]
             address += len(segments[-1])
 
         controller_rw_mock._write.assert_has_calls(
@@ -374,9 +393,9 @@ class TestMachineController(object):
         lens = []
         while n_bytes > 0:
             offsets += [offset]
-            lens += [min((256, n_bytes))]
+            lens += [min((consts.SCP_DATA_LENGTH, n_bytes))]
             offset += lens[-1]
-            n_bytes -= 256
+            n_bytes -= consts.SCP_DATA_LENGTH
 
         assert len(lens) == len(offsets) == n_packets, "Test is broken"
 
@@ -580,6 +599,117 @@ class TestMachineController(object):
         assert fp._machine_controller is cn
         assert fp._x == x
         assert fp._y == y
+
+    @pytest.mark.parametrize("n_args", [0, 3])
+    def test_load_aplx_args_fails(self, n_args):
+        """Test that calling load_aplx with an invalid number of arguments
+        raises a TypeError.
+        """
+        # Create the mock controller
+        cn = MachineController("localhost")
+
+        with pytest.raises(TypeError):
+            cn.load_aplx(*([0] * n_args))
+
+    def test_get_next_nn_id(self):
+        cn = MachineController("localhost")
+
+        for i in range(1, 127):
+            assert cn._get_next_nn_id() == 2*i
+        assert cn._get_next_nn_id() == 2
+
+    @pytest.mark.parametrize(
+        "app_id, app_flags, cores",
+        [(31, {}, [1, 2, 3]), (12, {consts.AppFlags.wait}, [5])]
+    )
+    @pytest.mark.parametrize("present_map", [False, True])
+    def test_load_aplx_single_aplx(self, aplx_file, app_id, app_flags, cores,
+                                   present_map):
+        """Test loading a single APLX to a set of cores."""
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+
+        # Target cores for APLX
+        targets = {(0, 1): set(cores)}
+
+        # Attempt to load
+        with cn(app_id=app_id, app_flags=app_flags):
+            if present_map:
+                cn.load_aplx({aplx_file: targets})
+            else:
+                cn.load_aplx(aplx_file, targets)
+
+        # Determine the expected core mask
+        coremask = 0x00000000
+        for c in cores:
+            coremask |= 1 << c
+
+        # Read the aplx_data
+        with open(aplx_file, "rb") as f:
+            aplx_data = f.read()
+
+        n_blocks = ((len(aplx_data) + consts.SCP_DATA_LENGTH - 1) //
+                    consts.SCP_DATA_LENGTH)
+
+        # Assert that the transmitted packets were sensible, do this by
+        # decoding each call to send_scp.
+        assert cn._send_scp.call_count == n_blocks + 2
+        # Flood-fill start
+        (x, y, p, cmd, arg1, arg2, arg3) = cn._send_scp.call_args_list[0][0]
+        assert x == y == p == 0
+        assert cmd == SCPCommands.nearest_neighbour_packet
+        op = (arg1 & 0xff000000) >> 24
+        assert op == NNCommands.flood_fill_start
+        blocks = (arg1 & 0x0000ff00) >> 8
+        assert blocks == n_blocks
+
+        assert arg2 == regions.get_region_for_chip(0, 1, level=3)
+
+        assert arg3 & 0x80000000  # Assert that we allocate ID on SpiNNaker
+        assert arg3 & 0x0000ff00 == NNConstants.forward << 8
+        assert arg3 & 0x000000ff == NNConstants.retry
+
+        # Flood fill data
+        address = consts.SARK_DATA_BASE
+        for n in range(0, n_blocks):
+            # Get the next block of data
+            (block_data, aplx_data) = (aplx_data[:consts.SCP_DATA_LENGTH],
+                                       aplx_data[consts.SCP_DATA_LENGTH:])
+
+            # Check the sent SCP packet
+            (x_, y_, p_, cmd, arg1, arg2, arg3, data) = \
+                cn._send_scp.call_args_list[n+1][0]
+
+            # Assert the x, y and p are the same
+            assert x_ == x and y_ == y and p_ == p
+
+            # Arguments
+            assert cmd == SCPCommands.flood_fill_data
+            assert arg1 & 0xff000000 == NNConstants.forward << 24
+            assert arg1 & 0x00ff0000 == NNConstants.retry << 16
+            assert arg2 & 0x00ff0000 == (n << 16)
+            assert arg2 & 0x0000ff00 == (len(data) // 4 - 1) << 8
+            assert arg3 == address
+            assert data == block_data
+
+            # Progress address
+            address += len(data)
+
+        # Flood fill end
+        (x_, y_, p_, cmd, arg1, arg2, arg3) = \
+            cn._send_scp.call_args_list[-1][0]
+        assert x_ == x and y_ == y and p_ == p
+        assert cmd == SCPCommands.nearest_neighbour_packet
+        print(hex(NNCommands.flood_fill_end << 24))
+        assert arg1 & 0xff000000 == NNCommands.flood_fill_end << 24
+        assert arg2 & 0xff000000 == app_id << 24
+        assert arg2 & 0x0003ffff == coremask
+
+        exp_flags = 0x00000000
+        for flag in app_flags:
+            exp_flags |= flag
+        assert arg2 & 0x00fc0000 == exp_flags << 18
 
 
 class TestMemoryIO(object):

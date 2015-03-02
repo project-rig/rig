@@ -110,8 +110,8 @@ class ContextMixin(object):
 
     @staticmethod
     def require_named_contextual_arguments(*names):
-        """Decorator which modifies a function that it is guaranteed to receive
-        contextual arguments in its kwargs.
+        """Decorator which modifies a function such that it is guaranteed to
+        receive contextual arguments in its kwargs.
 
         Parameters
         ----------
@@ -137,7 +137,7 @@ class ContextMixin(object):
                             "{!s}: missing argument {}".format(f.__name__, k))
 
                 return f(self, *args, **new_kwargs)
-            
+
             f_.__doc__ = f.__doc__
             return f_
 

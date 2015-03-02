@@ -14,7 +14,7 @@ def object_to_test():
         @contexts.ContextMixin.use_contextual_arguments
         def method_a(self, arg0, arg1=contexts.Required, arg2=30):
             return (arg0, arg1, arg2)
-        
+
         # NOTE The following method can ONLY be called in a context or with
         # named arguments, i.e., "arg1" is NEVER a positional argument.
         @contexts.ContextMixin.require_named_contextual_arguments("arg1")
@@ -76,7 +76,7 @@ def test_contextmixin_required_not_passed_context(object_to_test, arg1):
         obj.method_b(23)
     assert "arg1" in str(excinfo.value)
     assert "method_b" in str(excinfo.value)
-    
+
 
 @pytest.mark.parametrize("arg1", [1, None, 5])
 def test_contextmixin_required_not_passed(object_to_test, arg1):
@@ -99,6 +99,7 @@ def test_contextmixin_required_not_passed(object_to_test, arg1):
             obj.method_b(23)
         assert "arg1" in str(excinfo.value)
         assert "method_b" in str(excinfo.value)
+
 
 def test_nested(object_to_test):
     # Create the object

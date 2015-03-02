@@ -1,6 +1,6 @@
 import pytest
 
-from ..regions import get_region_for_chip
+from ..regions import get_region_for_chip, get_minimal_flood_fills
 
 
 # NOTE: Test vectors taken from C implementation
@@ -25,3 +25,30 @@ from ..regions import get_region_for_chip
      ])
 def test_get_region_for_chip(x, y, level, region):
     assert get_region_for_chip(x, y, level) == region
+
+
+def test_get_regions_and_cores_for_floodfill():
+    """This test looks at trying to minimise the number of flood-fills required
+    to load an application.  The required chips are in two level-3 regions and
+    have different core requirements for each chip.
+    """
+    targets = {
+        # One region (the same cores)
+        (0, 0): {1, 2, 4},
+        (0, 1): {1, 2, 4},
+        # The next region (same block, different cores)
+        (1, 0): {2, 3},
+        # The next region (different block)
+        (4, 0): {1, 2, 4},
+    }
+
+    # This is the return data structure format
+    fills = {
+        (get_region_for_chip(0, 0, 3) | get_region_for_chip(0, 1, 3),
+         (1 << 1) | (1 << 2) | (1 << 4)),
+        (get_region_for_chip(1, 0, 3), (1 << 2) | (1 << 3)),
+        (get_region_for_chip(4, 0, 3), (1 << 1) | (1 << 2) | (1 << 4)),
+    }
+
+    # Test
+    assert get_minimal_flood_fills(targets) == fills

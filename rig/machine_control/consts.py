@@ -3,9 +3,16 @@
 import enum
 
 SCP_PORT = 17893  # TODO Reference spec
-# The smallest power of two large enough to handle the largest packet the
-# SpiNNaker SDP implementation can produce (256+8 bytes).
 SCP_RECEIVE_LENGTH = 512
+"""The smallest power of two large enough to handle the largest packet the
+SpiNNaker SDP implementation can produce (256+8 bytes).
+"""
+
+SCP_DATA_LENGTH = 256
+"""Length of data that can be inserted into an SCP packet."""
+
+SARK_DATA_BASE = 0x67800000
+"""Base of buffer in SARK memory map."""
 
 
 class SCPCommands(enum.IntEnum):
@@ -13,6 +20,10 @@ class SCPCommands(enum.IntEnum):
     sver = 0  # Get the software version
     read = 2  # Read data
     write = 3  # Write data
+
+    nearest_neighbour_packet = 20  # Send a nearest neighbour packet
+    signal = 22  # Transmit a signal to applications
+    flood_fill_data = 23  # Transmit flood-fill data
 
     led = 25  # Change the state of an LED
     iptag = 26  # Change/clear/get the value of an IPTag
@@ -52,3 +63,20 @@ class AllocOperations(enum.IntEnum):
     alloc_rtr = 3  # Allocate a region of routing table entries
     free_rtr_by_pos = 4  # Free routing table entries by index
     free_rtr_by_app = 5  # Free routing table entries by app_id
+
+
+class NNCommands(enum.IntEnum):
+    """Nearest Neighbour operations."""
+    flood_fill_start = 6
+    flood_fill_end = 15
+
+
+class NNConstants(enum.IntEnum):
+    """Constants for use with nearest neighbour commands."""
+    forward = 0x3f  # Forwarding configuration
+    retry = 0x18  # Retry configuration
+
+
+class AppFlags(enum.IntEnum):
+    """Flags for application loading."""
+    wait = 0x01

@@ -1,9 +1,10 @@
 import collections
+from six import iteritems
 import socket
 import struct
 
-from .consts import SCPCommands, DataType
-from . import boot, consts
+from .consts import SCPCommands, DataType, NNCommands, NNConstants
+from . import boot, consts, regions
 from .scp_connection import SCPConnection
 from rig.utils.contexts import ContextMixin, Required
 
@@ -15,7 +16,7 @@ class MachineController(ContextMixin):
     ----------
     """
     def __init__(self, initial_host, n_tries=5, timeout=0.5,
-                 initial_context={"app_id": 30}):
+                 initial_context={"app_id": 30, "app_flags": {}}):
         """Create a new controller for a SpiNNaker machine.
 
         Parameters
@@ -36,6 +37,7 @@ class MachineController(ContextMixin):
         self.initial_host = initial_host
         self.n_tries = n_tries
         self.timeout = timeout
+        self._nn_id = 0  # ID for nearest neighbour packets
 
         # Create the initial connection
         self.connections = [
@@ -140,7 +142,8 @@ class MachineController(ContextMixin):
         # this time around, determine the data type, perform the write and
         # increment the address
         while len(data) > 0:
-            block, data = data[:256], data[256:]
+            block, data = (data[:consts.SCP_DATA_LENGTH],
+                           data[consts.SCP_DATA_LENGTH:])
             dtype = address_length_dtype[(address % 4, len(block) % 4)]
             self._write(x, y, p, address, block, dtype)
             address += len(block)
@@ -186,7 +189,7 @@ class MachineController(ContextMixin):
         data = b''
         while len(data) < length_bytes:
             # Determine the number of bytes to read
-            reads = min(256, length_bytes - len(data))
+            reads = min(consts.SCP_DATA_LENGTH, length_bytes - len(data))
 
             # Determine the data type to use
             dtype = address_length_dtype[(address % 4, reads % 4)]
@@ -208,7 +211,7 @@ class MachineController(ContextMixin):
         address : int
             The address at which to start reading the data.
         length_bytes : int
-            The number of bytes to read from memory, must be <= 256.
+            The number of bytes to read from memory, must be <= SCP_DATA_LENGTH
         data_type : DataType
             The size of the data to write into memory.
 
@@ -346,6 +349,120 @@ class MachineController(ContextMixin):
         start_address = self.sdram_alloc(size, tag, x, y, app_id)
 
         return MemoryIO(self, x, y, start_address, start_address + size)
+
+    def _get_next_nn_id(self):
+        """Get the next nearest neighbour ID."""
+        self._nn_id = self._nn_id + 1 if self._nn_id < 126 else 1
+        return self._nn_id * 2
+
+    def _send_ffs(self, pid, region, n_blocks, fr):
+        """Send a flood-fill start packet."""
+        sfr = fr | (1 << 31)
+        self._send_scp(
+            0, 0, 0, SCPCommands.nearest_neighbour_packet,
+            (NNCommands.flood_fill_start << 24) | (pid << 16) |
+            (n_blocks << 8),
+            region, sfr
+        )
+
+    def _send_ffd(self, pid, aplx_data, address):
+        """Send flood-fill data packets."""
+        block = 0
+        while len(aplx_data) > 0:
+            # Get the next block of data, send and progress the block
+            # counter and the address
+            data, aplx_data = (aplx_data[:consts.SCP_DATA_LENGTH],
+                               aplx_data[consts.SCP_DATA_LENGTH:])
+            size = len(data) // 4 - 1
+
+            arg1 = (NNConstants.forward << 24 | NNConstants.retry << 16 | pid)
+            arg2 = (block << 16) | (size << 8)
+            self._send_scp(0, 0, 0, SCPCommands.flood_fill_data,
+                           arg1, arg2, address, data)
+
+            # Increment the address and the block counter
+            block += 1
+            address += len(data)
+
+    def _send_ffe(self, pid, app_id, app_flags, cores, fr):
+        """Send a flood-fill end packet."""
+        arg1 = (NNCommands.flood_fill_end << 24) | pid
+        arg2 = (app_id << 24) | (app_flags << 18) | (cores & 0x3fff)
+        self._send_scp(0, 0, 0, SCPCommands.nearest_neighbour_packet,
+                       arg1, arg2, fr)
+
+    @ContextMixin.require_named_contextual_arguments("app_id", "app_flags")
+    def load_aplx(self, *args, **kwargs):
+        """Load an APLX to a set of application cores.
+
+        If a :py:class:`str` APLX filename is the first argument then the
+        second is assumed to be a dictionary mapping {(x, y): set([cores]),
+        ...}.  Otherwise the return value of
+        :py:func:`~rig.place_and_route.util.build_application_map` may be used
+        directly.
+
+        An `app_id` can be entered as a keyword argument OR from a context.::
+
+            # Either
+            controller.load_aplx(targets, app_id=30)
+
+            # Or
+            with controller(app_id=30):
+                # ...
+                controller.load_aplx(targets)
+        """
+        # Coerce the arguments into a single form.  If there are two arguments
+        # then assume that we have filename and a map of chips and cores;
+        # otherwise there should be ONE argument which is of the form of the
+        # return value of `build_application_map`.
+        application_map = {}
+        if len(args) == 1:
+            application_map = args[0]
+        elif len(args) == 2:
+            application_map = {args[0]: args[1]}
+        else:
+            raise TypeError(
+                "load_aplx: accepts either 1 or 2 positional arguments: a map "
+                "of filenames to targets OR a single filename and its targets"
+            )
+
+        # Get the application ID, the context system will guarantee that this
+        # is available, likewise the application flags.
+        app_id = kwargs.pop("app_id")
+        app_flags = kwargs.pop("app_flags")
+
+        flags = 0x0000
+        for flag in app_flags:
+            flags |= flag
+
+        # The forward and retry parameters
+        fr = NNConstants.forward << 8 | NNConstants.retry
+
+        # Load each APLX in turn
+        for (aplx, targets) in iteritems(application_map):
+            # Determine the minimum number of flood-fills that are necessary to
+            # load the APLX using level-3 regions.
+            fills = regions.get_minimal_flood_fills(targets)
+
+            # Load the APLX data
+            with open(aplx, "rb+") as f:
+                aplx_data = f.read()
+            n_blocks = ((len(aplx_data) + consts.SCP_DATA_LENGTH - 1) //
+                        consts.SCP_DATA_LENGTH)
+
+            # Perform each flood-fill.
+            for (region, cores) in fills:
+                # Get an index for the nearest neighbour operation
+                pid = self._get_next_nn_id()
+
+                # Send the flood-fill start packet
+                self._send_ffs(pid, region, n_blocks, fr)
+
+                # Send the data
+                self._send_ffd(pid, aplx_data, consts.SARK_DATA_BASE)
+
+                # Send the flood-fill END packet
+                self._send_ffe(pid, app_id, flags, cores, fr)
 
 
 class CoreInfo(collections.namedtuple(
