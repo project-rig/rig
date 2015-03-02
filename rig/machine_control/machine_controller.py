@@ -52,6 +52,7 @@ class MachineController(ContextMixin):
         """
         return self.get_new_context(**context_args)
 
+    @ContextMixin.require_named_contextual_arguments("x", "y", "p")
     def send_scp(self, *args, **kwargs):
         """Transmit an SCP Packet.
 
@@ -59,24 +60,11 @@ class MachineController(ContextMixin):
         :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
-        # XXX: This is here because the Contexts system messes with the *args
-        # variable, so this following code manually processes the current
-        # context and the kwargs to attempt to get context arguments.  At some
-        # point this should be fixed.
-        # Retrieve, if possible the x, y and p from the current context or the
-        # keyword arguments.
-        cargs = self.get_context_arguments()
-        x = kwargs.pop("x", cargs.get("x", Required))
-        y = kwargs.pop("y", cargs.get("y", Required))
-        p = kwargs.pop("p", cargs.get("p", Required))
-
-        if x is Required:
-            raise TypeError("{}: requires argument x".format(self.send_scp))
-        if y is Required:
-            raise TypeError("{}: requires argument y".format(self.send_scp))
-        if p is Required:
-            raise TypeError("{}: requires argument p".format(self.send_scp))
-
+        # Retrieve contextual arguments from the keyword arguments.  The
+        # context system ensures that these values are present.
+        x = kwargs.pop("x")
+        y = kwargs.pop("y")
+        p = kwargs.pop("p")
         return self._send_scp(x, y, p, *args, **kwargs)
 
     def _send_scp(self, x, y, p, *args, **kwargs):

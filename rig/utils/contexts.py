@@ -108,6 +108,41 @@ class ContextMixin(object):
         f_.__doc__ = f.__doc__
         return f_
 
+    @staticmethod
+    def require_named_contextual_arguments(*names):
+        """Decorator which modifies a function that it is guaranteed to receive
+        contextual arguments in its kwargs.
+
+        Parameters
+        ----------
+        Arguments which are required by the method.
+        """
+        def decorator(f):
+            def f_(self, *args, **kwargs):
+                # Construct the list of required arguments, update using the
+                # context arguments and the kwargs passed to the method.
+                new_kwargs = {name: Required for name in names}
+
+                cargs = self.get_context_arguments()
+                for name, val in iteritems(cargs):
+                    if name in names:
+                        new_kwargs.update({name: val})
+
+                new_kwargs.update(kwargs)
+
+                # Raise a TypeError if any `Required` sentinels remain
+                for k, v in iteritems(new_kwargs):
+                    if v is Required:
+                        raise TypeError(
+                            "{!s}: missing argument {}".format(f.__name__, k))
+
+                return f(self, *args, **new_kwargs)
+            
+            f_.__doc__ = f.__doc__
+            return f_
+
+        return decorator
+
 
 class Context(object):
     """A context object that stores arguments that may be passed to
