@@ -8,17 +8,13 @@ SpiNNaker machine for the purposes of transmitting nearest neighbour packets or
 for determining which chips should be included in any flood-fill of data or
 application loading.
 
-Regions are split into 4 levels (0, 1, 2 and 3) referring to increasing
-coarseness in the number of chips they are able to represent.  Level 3 splits a
-256x256 SpiNNaker machine (the largest possible) into a grid of m nxn chunks,
-in each chunk blocks of pxp chips may be selected.  Level 2 splits each nxn
-chunk into m oxo chunks, and so on.  By level 3 it is possible to select
-individual chips from a 4x4 grid of chips.
-
 A 32-bit value representing a region uses the top 16 bits (31:16) to represent
 the x- and y-coordinates of the region and the level and the lower 16 bits
 (15:0) to represent which of the 16 blocks contained within the chunk should be
 selected.
+
+A complete introduction and specification of the region system is given in
+"Managing Big SpiNNaker Machines" By Steve Temple.
 """
 import collections
 from six import iteritems
@@ -59,13 +55,13 @@ def get_region_for_chip(x, y, level=3):
     return region
 
 
-def reduce_regions_hierarchically(chips):
+def minimise_regions(chips):
     """Create a reduced set of regions by minimising a hierarchy tree.
 
     Parameters
     ----------
-    chips : {(x, y) ...}
-        Set of x and y co-ordinate pairs.
+    chips : iterable
+        An iterable returning x and y co-ordinate pairs.
 
     Returns
     -------
@@ -79,7 +75,7 @@ def reduce_regions_hierarchically(chips):
     return t.get_regions()
 
 
-def get_minimal_flood_fills(targets):
+def compress_flood_fill_regions(targets):
     """Generate a reduced set of flood fill parameters.
 
     Parameters
@@ -112,13 +108,39 @@ def get_minimal_flood_fills(targets):
 
     # For each of these cores build the minimal set of regions
     for core_mask, coordinates in iteritems(cores_to_targets):
-        regions = reduce_regions_hierarchically(coordinates)
+        regions = minimise_regions(coordinates)
         for r in regions:
             yield (r, core_mask)
 
 
 class RegionTree(object):
-    """Tree structure for use in minimising regions."""
+    """A tree structure for use in minimising sets of regions.
+
+    A tree is defined which reflects the definition of SpiNNaker regions like
+    so: The tree's root node represents a 256x256 grid of SpiNNaker chips. This
+    grid is broken up into 64x64 grids which are represented by the (level 1)
+    child nodes of the root.  Each of these level 1 nodes' 64x64 grids are
+    broken up into 16x16 grids which are represented by their (level 2)
+    children. These level 2 nodes have their 16x16 grids broken up into 4x4
+    grids represented by their (level 3) children. Level 3 children explicitly
+    list which of their sixteen cores are part of the region.
+
+    If any of a level 2 node's level 3 children have all of their cores
+    selected, these level 3 nodes can be removed and replaced by a level 2
+    region with the corresponding 4x4 grid selected. If multiple children can
+    be replaced with level 2 regions, these can be combined into a single level
+    2 region with the corresponding 4x4 grids selected, resulting in a
+    reduction in the number of regions required. The same process can be
+    repeated at each level of the hierarchy eventually producing a minimal set
+    of regions.
+
+    This data structure is specified by supplying a sequence of (x, y)
+    coordinates of chips to be represented by a series of regions using
+    :py:meth:`.add_coordinate`. This method minimises the tree during insertion
+    meaning a minimal set of regions can be extracted by
+    :py:meth:`.get_regions` which simply traverses the tree.
+    """
+
     def __init__(self, base_x=0, base_y=0, level=0):
         self.base_x = base_x
         self.base_y = base_y

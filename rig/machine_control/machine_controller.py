@@ -499,7 +499,7 @@ class MachineController(ContextMixin):
         for (aplx, targets) in iteritems(application_map):
             # Determine the minimum number of flood-fills that are necessary to
             # load the APLX using level-3 regions.
-            fills = regions.get_minimal_flood_fills(targets)
+            fills = regions.compress_flood_fill_regions(targets)
 
             # Load the APLX data
             with open(aplx, "rb+") as f:

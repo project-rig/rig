@@ -1,7 +1,7 @@
 import pytest
 
-from ..regions import (get_region_for_chip, get_minimal_flood_fills,
-                       reduce_regions_hierarchically, RegionTree)
+from ..regions import (get_region_for_chip, compress_flood_fill_regions,
+                       minimise_regions, RegionTree)
 
 
 # NOTE: Test vectors taken from C implementation
@@ -38,7 +38,7 @@ def test_get_region_for_chip(x, y, level, region):
      ])
 def test_reduce_regions(chips, regions):
     """Test hierarchical reduction of regions."""
-    assert set(reduce_regions_hierarchically(chips)) == regions
+    assert set(minimise_regions(chips)) == regions
 
 
 def test_get_regions_and_cores_for_floodfill():
@@ -65,7 +65,7 @@ def test_get_regions_and_cores_for_floodfill():
     }
 
     # Test
-    assert set(get_minimal_flood_fills(targets)) == fills
+    assert set(compress_flood_fill_regions(targets)) == fills
 
 
 class TestRegionTree(object):
