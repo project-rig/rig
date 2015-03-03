@@ -1,6 +1,7 @@
 import pytest
 
-from ..regions import get_region_for_chip, get_minimal_flood_fills
+from ..regions import (get_region_for_chip, get_minimal_flood_fills,
+                       reduce_regions_hierarchically, RegionTree)
 
 
 # NOTE: Test vectors taken from C implementation
@@ -25,6 +26,19 @@ from ..regions import get_region_for_chip, get_minimal_flood_fills
      ])
 def test_get_region_for_chip(x, y, level, region):
     assert get_region_for_chip(x, y, level) == region
+
+
+@pytest.mark.parametrize(
+    "chips, regions",
+    [({(i, j) for i in range(4) for j in range(4)}, {0x00020001}),
+     ({(i+4, j) for i in range(4) for j in range(4)}, {0x00020002}),
+     ({(i, j+4) for i in range(4) for j in range(4)}, {0x00020010}),
+     ({(i, j) for i in range(4) for j in range(4)} |
+      {(i+4, j) for i in range(4) for j in range(4)}, {0x00020003}),
+    ])
+def test_reduce_regions(chips, regions):
+    """Test hierarchical reduction of regions."""
+    assert reduce_regions_hierarchically(chips) == regions
 
 
 def test_get_regions_and_cores_for_floodfill():
@@ -52,3 +66,52 @@ def test_get_regions_and_cores_for_floodfill():
 
     # Test
     assert get_minimal_flood_fills(targets) == fills
+
+
+class TestRegionTree(object):
+    def test_add_coordinate_fails(self):
+        t = RegionTree(level=3)
+
+        with pytest.raises(ValueError):
+            t.add_coordinate(16, 0)
+
+        with pytest.raises(ValueError):
+            t.add_coordinate(0, 16)
+
+    def test_add_coordinate_normal(self):
+        t = RegionTree()
+        t.add_coordinate(8, 0)
+        assert (t.subregions[0].subregions[0].subregions[2].locally_selected ==
+                {0})
+
+        t.add_coordinate(0, 8)
+        assert (t.subregions[0].subregions[0].subregions[8].locally_selected ==
+                {0})
+
+        t.add_coordinate(255, 255)
+        assert (
+            t.subregions[15].subregions[15].subregions[15].locally_selected ==
+            {15}
+        )
+
+        pr = t.subregions[0].subregions[0]
+        pr.add_coordinate(0, 0)
+        sr = t.subregions[0].subregions[0].subregions[0]
+
+        # Should return true when all 16 subregions are filled
+        for i in range(4):
+            for j in range(4):
+                assert sr.add_coordinate(i, j) == (i == 3 and j == 3)
+
+        # This should propagate up
+        assert pr.add_coordinate(3, 3) == False
+        assert pr.locally_selected == {0}
+
+        # We should be able to get a minimised regions out of this tree
+        assert t.get_regions() == {
+            0x00020001,  # The last cores to be added should have caused this
+            # The other chips we added
+            get_region_for_chip(255, 255),
+            get_region_for_chip(0, 8),
+            get_region_for_chip(8, 0),
+        }
