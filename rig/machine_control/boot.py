@@ -91,6 +91,11 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
         boot("board1", **spin5_boot_options)
 
     Will boot the Spin5 board connected with hostname "board1".
+
+    Returns
+    -------
+    {struct_name: :py:class:`~rig.machine_control.struct_file.Struct`}
+        Layout of structs in memory.
     """
     # Get the boot and struct data if not specified.
     if struct_data is None:
@@ -102,7 +107,8 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
 
     # Read the struct file and modify the "sv" struct to contain the
     # configuration values and write this into the boot data.
-    sv = struct_file.read_struct_file(struct_data)[b"sv"]
+    structs = struct_file.read_struct_file(struct_data)[b"sv"]
+    sv = structs[b"sv"]
     sv.update_default_values(p2p_dims=(width << 8) | height,
                              hw_ver=hardware_version,
                              cpu_clk=cpu_frequency,
@@ -150,6 +156,8 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
     # Close the socket and give time to boot
     sock.close()
     time.sleep(POST_BOOT_DELAY)
+
+    return structs
 
 
 def boot_packet(sock, cmd, arg1=0, arg2=0, arg3=0, data=b""):

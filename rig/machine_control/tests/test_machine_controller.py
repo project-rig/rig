@@ -1,4 +1,5 @@
 import mock
+import pkg_resources
 import pytest
 import struct
 import tempfile
@@ -8,7 +9,7 @@ from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
     MachineController, SpiNNakerMemoryError, MemoryIO)
 from ..packets import SCPPacket
-from .. import regions, consts
+from .. import regions, consts, struct_file
 
 
 @pytest.fixture(scope="module")
@@ -599,6 +600,40 @@ class TestMachineController(object):
         assert fp._machine_controller is cn
         assert fp._x == x
         assert fp._y == y
+
+    @pytest.mark.parametrize("x, y, p", [(0, 1, 2), (2, 5, 6)])
+    @pytest.mark.parametrize(
+        "which_struct, field, expected",
+        [(b"sv", b"dbg_addr", 0),
+         (b"sv", b"status_map", (0, )*20),
+         (b"vcpu", b"sw_count", 0),
+         ])
+    def test_read_struct_field(self, x, y, p, which_struct, field, expected):
+        # Open the struct file
+        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
+        structs = struct_file.read_struct_file(struct_data)
+        assert (which_struct in structs and
+                field in structs[which_struct]), "Test is broken"
+
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn.structs = structs
+        cn.read = mock.Mock()
+        cn.read.return_value = b"\x00" * struct.calcsize(
+            structs[which_struct][field].pack_chars) * \
+            structs[which_struct][field].length
+
+        # Perform the struct read
+        with cn(x=x, y=y, p=p):
+            returned = cn.read_struct_field(which_struct, field)
+        assert returned == expected
+
+        # Check that read was called appropriately
+        assert cn.read.called_once_with(
+            structs[which_struct].base + structs[which_struct][field].offset,
+            struct.calcsize(structs[which_struct][field].pack_chars),
+            x, y, p
+        )
 
     @pytest.mark.parametrize("n_args", [0, 3])
     def test_load_aplx_args_fails(self, n_args):

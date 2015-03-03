@@ -39,6 +39,9 @@ class MachineController(ContextMixin):
         self.timeout = timeout
         self._nn_id = 0  # ID for nearest neighbour packets
 
+        # Empty structs until booted, or otherwise set
+        self.structs = {}
+
         # Create the initial connection
         self.connections = [
             SCPConnection(initial_host, n_tries, timeout)
@@ -101,7 +104,8 @@ class MachineController(ContextMixin):
 
         Will boot the Spin5 board connected to by `controller`.
         """
-        boot.boot(self.initial_host, width=width, height=height, **boot_kwargs)
+        self.structs = boot.boot(self.initial_host, width=width, height=height,
+                                 **boot_kwargs)
 
     @ContextMixin.use_contextual_arguments
     def get_software_version(self, x=Required, y=Required, processor=0):
@@ -224,6 +228,59 @@ class MachineController(ContextMixin):
                                   length_bytes, int(data_type),
                                   expected_args=0)
         return read_scp.data
+
+    @ContextMixin.use_contextual_arguments
+    def read_struct_field(self, struct_name, field_name,
+                          x=Required, y=Required, p=0):
+        """Read the value out of a struct maintained by SARK.
+
+        Parameters
+        ----------
+        struct_name : :py:class:`bytes`
+            Name of the struct to read from, e.g., `b"sv"`
+        field_name : :py:class:`bytes`
+            Name of the field to read, e.g., `b"eth_addr"`
+
+        .. note::
+            The value returned is unpacked given the struct specification.
+
+        .. warning::
+            This feature is only available if this machine controller was used
+            to boot a board OR an appropriate struct definition has been
+            provided.  To do this use, e.g::
+
+                from rig.machine_controller.struct_file import read_struct_file
+
+                with open("/path/to/struct/spec", "rb") as f:
+                    data = f.read()
+
+                cn.structs = read_struct_file(data)
+
+            Currently arrays are returned as tuples, e.g.::
+
+                # Returns a 20-tuple.
+                cn.read_struct_field(b"sv", b"status_map")
+
+                # Fails
+                cn.read_struct_field(b"sv", b"status_map[1]")
+        """
+        # Look up the struct and field
+        field = self.structs[struct_name][field_name]
+
+        address = self.structs[struct_name].base + field.offset
+        pack_chars = field.length * field.pack_chars  # NOTE Python 2 and 3 fix
+        length = struct.calcsize(pack_chars)
+
+        # Perform the read
+        data = self.read(address, length, x, y, p)
+
+        # Unpack the data
+        unpacked = struct.unpack(pack_chars, data)
+
+        if field.length == 1:
+            return unpacked[0]
+        else:
+            return unpacked
 
     @ContextMixin.use_contextual_arguments
     def iptag_set(self, iptag, addr, port, x=Required, y=Required):
