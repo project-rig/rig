@@ -35,10 +35,10 @@ def test_get_region_for_chip(x, y, level, region):
      ({(i, j+4) for i in range(4) for j in range(4)}, {0x00020010}),
      ({(i, j) for i in range(4) for j in range(4)} |
       {(i+4, j) for i in range(4) for j in range(4)}, {0x00020003}),
-    ])
+     ])
 def test_reduce_regions(chips, regions):
     """Test hierarchical reduction of regions."""
-    assert reduce_regions_hierarchically(chips) == regions
+    assert set(reduce_regions_hierarchically(chips)) == regions
 
 
 def test_get_regions_and_cores_for_floodfill():
@@ -65,7 +65,7 @@ def test_get_regions_and_cores_for_floodfill():
     }
 
     # Test
-    assert get_minimal_flood_fills(targets) == fills
+    assert set(get_minimal_flood_fills(targets)) == fills
 
 
 class TestRegionTree(object):
@@ -108,7 +108,7 @@ class TestRegionTree(object):
         assert pr.locally_selected == {0}
 
         # We should be able to get a minimised regions out of this tree
-        assert t.get_regions() == {
+        assert set(t.get_regions()) == {
             0x00020001,  # The last cores to be added should have caused this
             # The other chips we added
             get_region_for_chip(255, 255),
