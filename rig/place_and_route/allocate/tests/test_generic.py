@@ -2,9 +2,7 @@
 
 import pytest
 
-from six import iteritems
-
-from rig.machine import Machine, Cores, SDRAM, SRAM
+from rig.machine import Machine, Cores, SDRAM
 
 from rig.place_and_route.constraints import \
     ReserveResourceConstraint, AlignResourceConstraint

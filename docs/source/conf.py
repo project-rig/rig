@@ -1,4 +1,18 @@
 # -*- coding: utf-8 -*-
+
+# Allow the docs to be built by ReadTheDocs without building numpy.
+import sys
+from mock import Mock as MagicMock
+
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+            return Mock()
+
+MOCK_MODULES = ['pygtk', 'gtk', 'gobject', 'argparse', 'numpy', 'pandas']
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
+
 #
 # Rig documentation build configuration file, created by
 # sphinx-quickstart on Tue Jan 20 15:22:07 2015.
@@ -18,7 +32,7 @@ import os   # noqa
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../..'))
 
 # -- General configuration ------------------------------------------------
 
@@ -30,6 +44,8 @@ import os   # noqa
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.doctest',
     'numpydoc',
 ]
 
@@ -48,6 +64,9 @@ master_doc = 'index'
 # General information about the project.
 project = u'Rig'
 copyright = u'2015, Andrew Mundy, Jonathan Heathcote'
+
+# Autodoc should list members in the same order as the source code.
+autodoc_member_order = "bysource"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -95,6 +114,9 @@ pygments_style = 'sphinx'
 
 # If true, keep warnings as "system message" paragraphs in the built documents.
 #keep_warnings = False
+
+# Search Python docs for extra definitions.
+intersphinx_mapping = {'python': ('http://docs.python.org/3', None)}
 
 
 # -- Options for HTML output ----------------------------------------------

@@ -159,15 +159,15 @@ def test_location_constraint(algorithm, kwargs):
     machine = Machine(1, 1)
     vertex = object()
     constraints = [LocationConstraint(vertex, (0, 0))]
-    assert algorithm({vertex: {Cores: 1}}, [], machine, constraints, **kwargs) \
-        == {vertex: (0, 0)}
+    assert algorithm({vertex: {Cores: 1}}, [], machine, constraints,
+                     **kwargs) == {vertex: (0, 0)}
 
     # Should be able to constrain a single vertex in a large system
     machine = Machine(10, 10)
     vertex = object()
     constraints = [LocationConstraint(vertex, (5, 5))]
-    assert algorithm({vertex: {Cores: 1}}, [], machine, constraints, **kwargs) \
-        == {vertex: (5, 5)}
+    assert algorithm({vertex: {Cores: 1}}, [], machine, constraints,
+                     **kwargs) == {vertex: (5, 5)}
 
     # Should be able to constrain many vertices
     machine = Machine(5, 5)

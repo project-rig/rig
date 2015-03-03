@@ -18,7 +18,8 @@ class RoutingTree(object):
     chip : (x, y)
         The chip the route is currently passing through.
     children : set
-        A set of the next steps in the route. This may be one of:
+        A :py:class:`set` of the next steps in the route. This may be one of:
+
         * :py:class:`~.rig.place_and_route.routing_tree.RoutingTree`
           representing a step onto the next chip
         * :py:class:`~.rig.routing_table.Routes` representing a core or link to

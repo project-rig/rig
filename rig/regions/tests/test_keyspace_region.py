@@ -3,13 +3,13 @@ import pytest
 import struct
 import tempfile
 
-from rig.keyspaces import Keyspace
+from rig.bitfield import BitField
 from ..keyspaces import (KeyspacesRegion, KeyField, MaskField)
 
 
 @pytest.fixture
 def ks():
-    keyspace = Keyspace()
+    keyspace = BitField()
     keyspace.add_field("x", length=8, start_at=24, tags="routing")
     keyspace.add_field("y", length=8, start_at=16, tags="routing")
     keyspace.add_field("p", length=5, start_at=11, tags="routing")
@@ -26,7 +26,7 @@ class TestKeyspacesRegion(object):
     def test_sizeof_no_prepends(self, key_bits, n_keys, n_fields, partitioned,
                                 vertex_slice):
         # Generate the list of keys, prepends and fields
-        keys = [Keyspace(key_bits) for _ in range(n_keys)]
+        keys = [BitField(key_bits) for _ in range(n_keys)]
         fields = [mock.Mock() for _ in range(n_fields)]
 
         # Create the region
@@ -38,7 +38,7 @@ class TestKeyspacesRegion(object):
         assert r.sizeof(vertex_slice) == n_atoms * n_fields * 4
 
     def test_sizeof_with_prepends(self):
-        r = KeyspacesRegion([Keyspace(32)], fields=[],
+        r = KeyspacesRegion([BitField(32)], fields=[],
                             prepend_num_keyspaces=True)
         assert r.sizeof(slice(None)) == 4
 
@@ -47,7 +47,7 @@ class TestKeyspacesRegion(object):
         with each key and that any extra arguments are passed along.
         """
         # Create some keyspaces
-        keys = [Keyspace(32) for _ in range(10)]
+        keys = [BitField(32) for _ in range(10)]
 
         # Create two fields
         fields = [mock.Mock() for _ in range(2)]
@@ -103,9 +103,9 @@ class TestKeyspacesRegion(object):
         fp.seek(0)
         assert fp.read(4) == b'\x02\x00\x00\x00'  # Number of keyspaces
         assert fp.read() == struct.pack('4I',
-                                        keyspaces[0](c=5).get_key(),
+                                        keyspaces[0](c=5).get_value(),
                                         keyspaces[0].get_mask(tag='routing'),
-                                        keyspaces[1](c=5).get_key(),
+                                        keyspaces[1](c=5).get_value(),
                                         keyspaces[1].get_mask(tag='routing'))
 
 
@@ -141,7 +141,7 @@ class TestKeyField(object):
 
         # Create the field, then call the key field
         kf = KeyField()
-        assert kf(k, subvertex_index=3, spam=4) == k.get_key()
+        assert kf(k, subvertex_index=3, spam=4) == k.get_value()
 
     def test_key_single_fill(self, ks):
         """Check the key field when no key fields require filling in."""
@@ -150,7 +150,7 @@ class TestKeyField(object):
 
         # Create the field, then call the key field
         kf = KeyField(maps={'subvertex_index': 'p'})
-        assert kf(k, subvertex_index=3, spam=4) == k(p=3).get_key()
+        assert kf(k, subvertex_index=3, spam=4) == k(p=3).get_value()
 
     def test_key_multiple(self, ks):
         """Check the key field when no key fields require filling in."""
@@ -159,7 +159,7 @@ class TestKeyField(object):
 
         # Create the field, then call the key field
         kf = KeyField(maps={'subvertex_index': 'p', 'spam': 'y'})
-        assert kf(k, subvertex_index=3, spam=4) == k(y=4, p=3).get_key()
+        assert kf(k, subvertex_index=3, spam=4) == k(y=4, p=3).get_value()
 
     def test_key_limited_by_field(self, ks):
         # Fill in fields we're not using
@@ -168,7 +168,7 @@ class TestKeyField(object):
         # Create the field, then call the key field
         kf = KeyField(field='x', maps={'subvertex_index': 'p', 'spam': 'y'})
         assert (kf(k, subvertex_index=3, spam=4) ==
-                k(y=4, p=3).get_key(field='x'))
+                k(y=4, p=3).get_value(field='x'))
 
     def test_key_limited_by_tag(self, ks):
         # Fill in fields we're not using
@@ -178,4 +178,4 @@ class TestKeyField(object):
         kf = KeyField(tag='routing',
                       maps={'subvertex_index': 'p', 'spam': 'y'})
         assert (kf(k, subvertex_index=3, spam=4) ==
-                k(y=4, p=3).get_key(tag='routing'))
+                k(y=4, p=3).get_value(tag='routing'))

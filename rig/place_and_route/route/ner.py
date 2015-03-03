@@ -10,10 +10,11 @@ import heapq
 
 from collections import deque
 
-from .util import longest_dimension_first, to_xyz, \
+from ...geometry import concentric_hexagons, to_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \
-    shortest_torus_path_length, shortest_torus_path, \
-    has_wrap_around_links, links_between
+    shortest_torus_path_length, shortest_torus_path
+
+from .util import longest_dimension_first, has_wrap_around_links, links_between
 
 from ..exceptions import MachineHasDisconnectedSubregion
 
@@ -24,31 +25,6 @@ from ...machine import Links, Cores
 from ...routing_table import Routes
 
 from ..routing_tree import RoutingTree
-
-
-def concentric_hexagons(radius, start=(0, 0)):
-    """A generator which produces coordinates of concentric rings of hexagons.
-
-    Parameters
-    ----------
-    radius : int
-        Number of layers to produce (0 is just one hexagon)
-    x : int
-        Starting X-coordinate
-    y : int
-        Starting Y-coordinate
-    """
-    x, y = start
-    yield (x, y)
-    for r in range(1, radius + 1):
-        # Move to the next layer
-        y -= 1
-        # Walk around the hexagon of this radius
-        for dx, dy in [(1, 1), (0, 1), (-1, 0), (-1, -1), (0, -1), (1, 0)]:
-            for _ in range(r):
-                yield (x, y)
-                x += dx
-                y += dy
 
 
 def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
@@ -234,8 +210,8 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
     wrap_around : bool
         Consider wrap-around links in heuristic distance calculations.
 
-    Return
-    ------
+    Returns
+    -------
     [(x, y), ...]
         A path starting with a coordinate in `sources` and terminating at
         connected neighbour of `sink` (i.e. the path does not include `sink`).
@@ -383,23 +359,21 @@ def route(vertices_resources, nets, machine, constraints, placements,
           allocation, core_resource=Cores, radius=20):
     """Routing algorithm based on Neighbour Exploring Routing (NER).
 
+    Algorithm refrence: J. Navaridas et al. SpiNNaker: Enhanced multicast
+    routing, Parallel Computing (2014).
+    http://dx.doi.org/10.1016/j.parco.2015.01.002
+
     This algorithm attempts to use NER to generate routing trees for all nets
     and routes around broken links using A* graph search. If the system is
     fully connected, this algorithm will always succeed though no consideration
     of congestion or routing-table usage is attempted.
 
-    Router-Specific Parameters
-    --------------------------
+    Parameters
+    ----------
     radius : int
         Radius of area to search from each node. 20 is arbitrarily selected in
         the paper and shown to be acceptable in practice. If set to zero, this
         method is becomes longest dimension first routing.
-
-    Raises
-    ------
-    :py:class:~rig.place_and_route.exceptions.MachineHasDisconnectedSubregion`
-        If any pair of vertices in a net have no path between them (i.e.
-        the system is impossible to route).
     """
     wrap_around = has_wrap_around_links(machine)
 

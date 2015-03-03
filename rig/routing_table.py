@@ -1,9 +1,27 @@
-"""A representation for SpiNNaker routing tables.
+"""Data structures for the definition of SpiNNaker routing tables.
 """
 
 from enum import IntEnum
 
 from collections import namedtuple
+
+
+class RoutingTableEntry(namedtuple("RoutingTableEntry", "route key mask")):
+    """Named tuple representing a single routing entry in a SpiNNaker routing
+    table.
+
+    Parameters
+    ----------
+    route : set([Routes, ...])
+        The set of destinations a packet should be routed to where each element
+        in the set is a value from the enumeration
+        :py:class:`~rig.routing_table.Routes`.
+    key : int
+        32-bit unsigned integer routing key to match after applying the mask.
+    mask : int
+        32-bit unsigned integer mask to apply to keys of packets arriving at
+        the router.
+    """
 
 
 class Routes(IntEnum):
@@ -19,7 +37,7 @@ class Routes(IntEnum):
 
     @classmethod
     def core(cls, num):
-        """Get the identifier for the numbered core."""
+        """Get the :py:class:`.Routes` for the numbered core."""
         assert 0 <= num <= 17, "Cores are numbered from 0 to 17"
         return cls(6 + num)
 
@@ -48,20 +66,3 @@ class Routes(IntEnum):
     core_15 = 21
     core_16 = 22
     core_17 = 23
-
-
-class RoutingTableEntry(namedtuple("RoutingTableEntry", "route key mask")):
-    """Represents a single routing entry in a SpiNNaker routing table.
-
-    Entries
-    -------
-    route : set([Routes, ...])
-        The set of destinations a packet should be routed to where each element
-        in the set is a value from the enumeration
-        :py:class:`~rig.routing_table.Routes`.
-    key : int
-        32-bit unsigned integer routing key to match after applying the mask.
-    mask : int
-        32-bit unsigned integer mask to apply to keys of packets arriving at
-        the router.
-    """

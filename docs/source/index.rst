@@ -6,6 +6,8 @@
 Rig - libraries for SpiNNaker application support
 =================================================
 
+.. image:: logo.png
+
 Rig is a set of Python and C libraries for mapping computational problems to
 SpiNNaker and interacting with them.  Above all it aims to be light weight and
 to present common and well-documented interfaces to all of its parts.
@@ -21,7 +23,7 @@ SpiNNaker.  Tools exist for:
 .. toctree::
         :maxdepth: 2
 
-        keyspaces
+        bitfield
         regions
 
 Problem mapping
@@ -29,6 +31,11 @@ Problem mapping
 
 .. toctree::
         :maxdepth: 2
+        
+        place_and_route
+        machine
+        routing_table
+        geometry
 
 
 Execution control

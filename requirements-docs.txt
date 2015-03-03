@@ -1,2 +1,5 @@
 sphinx
 numpydoc
+six
+enum34
+mock

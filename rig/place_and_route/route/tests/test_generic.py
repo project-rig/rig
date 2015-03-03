@@ -12,8 +12,7 @@ from rig.place_and_route.routing_tree import RoutingTree
 
 from rig.place_and_route.constraints import RouteEndpointConstraint
 
-from rig.place_and_route.exceptions import MachineHasDisconnectedSubregion, \
-    InvalidConstraintError
+from rig.place_and_route.exceptions import MachineHasDisconnectedSubregion
 
 from rig.place_and_route.route.util import links_between
 

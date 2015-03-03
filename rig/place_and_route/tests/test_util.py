@@ -1,5 +1,3 @@
-import pytest
-
 from rig.place_and_route.util import build_application_map, \
     build_routing_tables
 

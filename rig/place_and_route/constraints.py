@@ -1,4 +1,4 @@
-"""Definitions of constraints for placement and routing.
+"""Specifications of constraints for placement, allocation and routing.
 
 All constraints defined in this module should be respected by any placement and
 routing algorithm. Individual algorithms are permitted to define their own

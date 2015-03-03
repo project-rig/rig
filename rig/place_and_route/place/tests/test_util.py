@@ -1,8 +1,6 @@
 """Test utility functions for placers."""
 
-import pytest
-
-from rig.machine import Cores, SDRAM, SRAM
+from rig.machine import Cores
 
 from rig.place_and_route.constraints import ReserveResourceConstraint
 
