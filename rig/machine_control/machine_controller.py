@@ -570,7 +570,8 @@ class IPTag(collections.namedtuple("IPTag",
 address_length_dtype = {
     (i, j): (DataType.word if (i == j == 0) else
              (DataType.short if (i % 2 == j % 2 == 0) else
-              DataType.byte)) for i in range(4) for j in range(4)
+              DataType.byte))
+    for i in range(4) for j in range(4)
 }
 
 
