@@ -521,6 +521,26 @@ class MachineController(ContextMixin):
                 # Send the flood-fill END packet
                 self._send_ffe(pid, app_id, flags, cores, fr)
 
+    @ContextMixin.use_contextual_arguments
+    def send_signal(self, signal, app_id=Required):
+        """Transmit a signal to applications.
+
+        Arguments
+        ---------
+        signal : :py:class:`~rig.machine_control.consts.AppSignal`
+            Signal to transmit.
+        """
+        if signal not in consts.AppSignal:
+            raise ValueError(
+                "send_signal: Cannot transmit signal of type {}".format(signal)
+            )
+
+        # Construct the packet for transmission
+        arg1 = consts.signal_types[signal]
+        arg2 = (signal << 16) | 0xff00 | app_id
+        arg3 = 0x0000ffff  # Meaning "transmit to all"
+        self._send_scp(0, 0, 0, SCPCommands.signal, arg1, arg2, arg3)
+
 
 class CoreInfo(collections.namedtuple(
     'CoreInfo', "p2p_address physical_cpu virt_cpu version buffer_size "

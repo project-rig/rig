@@ -80,3 +80,91 @@ class NNConstants(enum.IntEnum):
 class AppFlags(enum.IntEnum):
     """Flags for application loading."""
     wait = 0x01
+
+
+class AppState(enum.IntEnum):
+    """States that an application may be in."""
+    # Error states - further information may be available
+    dead = 0
+    power_down = 1
+    runtime_exception = 2
+    watchdog = 3
+
+    # General states
+    init = 4  # Transitory "(hopefully)"
+    ready = 5
+    c_main = 6
+    run = 7
+    pause = 10
+    exit = 11
+    idle = 15  # Prior to application loading
+
+    # Awaiting synchronisation (at a barrier)
+    sync0 = 8
+    sync1 = 9
+
+
+class AppSignal(enum.IntEnum):
+    """Signals that may be transmitted to applications."""
+    # General purpose signals
+    init = 0
+    power_down = 1
+    stop = 2
+    start = 3
+    pause = 6
+    cont = 7
+    exit = 8
+    timer = 9
+
+    # Barrier synchronisation
+    sync0 = 4
+    sync1 = 5
+
+    # User defined signals
+    usr0 = 10
+    usr1 = 11
+    usr2 = 12
+    usr3 = 13
+
+
+class AppDiagnosticSignal(enum.IntEnum):
+    """Signals which interrogate the state of a machine.
+
+    Note that a value is returned when any of these signals is sent.
+    """
+    OR = 16  # Is ANY core in a given state
+    AND = 17  # Are ALL cores in a given state
+    count = 18  # How many cores are in a state
+
+
+class MessageType(enum.IntEnum):
+    """Internally used to specify the type of a message."""
+    multicast = 0
+    peer_to_peer = 1
+    nearest_neighbour = 2
+
+
+signal_types = {
+    AppSignal.init: MessageType.nearest_neighbour,
+    AppSignal.power_down: MessageType.nearest_neighbour,
+    AppSignal.start: MessageType.nearest_neighbour,
+    AppSignal.stop: MessageType.nearest_neighbour,
+    AppSignal.exit: MessageType.nearest_neighbour,
+
+    AppSignal.sync0: MessageType.multicast,
+    AppSignal.sync1: MessageType.multicast,
+    AppSignal.pause: MessageType.multicast,
+    AppSignal.cont: MessageType.multicast,
+    AppSignal.timer: MessageType.multicast,
+    AppSignal.usr0: MessageType.multicast,
+    AppSignal.usr1: MessageType.multicast,
+    AppSignal.usr2: MessageType.multicast,
+    AppSignal.usr3: MessageType.multicast,
+
+    AppDiagnosticSignal.AND: MessageType.peer_to_peer,
+    AppDiagnosticSignal.OR: MessageType.peer_to_peer,
+    AppDiagnosticSignal.count: MessageType.peer_to_peer,
+}
+"""Mapping from an :py:class:`AppSignal` to the :py:class:`MessageType`
+used to transmit it.
+"""

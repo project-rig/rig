@@ -746,6 +746,41 @@ class TestMachineController(object):
             exp_flags |= flag
         assert arg2 & 0x00fc0000 == exp_flags << 18
 
+    def test_send_signal_fails(self):
+        """Test that we refuse to send diagnostic signals which need treating
+        specially.
+        """
+        cn = MachineController("localhost")
+
+        with pytest.raises(ValueError):
+            cn.send_signal(consts.AppDiagnosticSignal.AND)
+
+    @pytest.mark.parametrize("app_id", [16, 30])
+    @pytest.mark.parametrize("signal", [consts.AppSignal.sync0,
+                                        consts.AppSignal.timer,
+                                        consts.AppSignal.start])
+    def test_send_signal_one_target(self, app_id, signal):
+        # Create the controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+
+        # Send the signal
+        with cn(app_id=app_id):
+            cn.send_signal(signal)
+
+        # Check an appropriate packet was sent
+        assert cn._send_scp.call_count == 1
+        cargs = cn._send_scp.call_args[0]
+        assert cargs[:3] == (0, 0, 0)  # x, y, p
+
+        (cmd, arg1, arg2, arg3) = cargs[3:8]
+        assert cmd == SCPCommands.signal
+        assert arg1 == consts.signal_types[signal]
+        assert arg2 & 0x000000ff == app_id
+        assert arg2 & 0x0000ff00 == 0xff00  # App mask for 1 app_id
+        assert arg2 & 0x00ff0000 == signal << 16
+        assert arg3 == 0x0000ffff  # Transmit to all
+
 
 class TestMemoryIO(object):
     """Test the SDRAM file-like object."""
