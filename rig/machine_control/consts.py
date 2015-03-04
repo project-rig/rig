@@ -29,6 +29,7 @@ class SCPCommands(enum.IntEnum):
     iptag = 26  # Change/clear/get the value of an IPTag
 
     alloc_free = 28  # Allocate or free SDRAM and routing_table entries
+    router = 29  # Router related commands
 
 
 class DataType(enum.IntEnum):
@@ -63,6 +64,14 @@ class AllocOperations(enum.IntEnum):
     alloc_rtr = 3  # Allocate a region of routing table entries
     free_rtr_by_pos = 4  # Free routing table entries by index
     free_rtr_by_app = 5  # Free routing table entries by app_id
+
+
+class RouterOperations(enum.IntEnum):
+    """Operations that may be performed to the router."""
+    init = 0
+    clear = 1
+    load = 2
+    fixed_route_set_get = 3
 
 
 class NNCommands(enum.IntEnum):

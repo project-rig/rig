@@ -7,9 +7,11 @@ from .test_scp_connection import SendReceive, mock_conn  # noqa
 
 from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
-    MachineController, SpiNNakerMemoryError, MemoryIO)
+    MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError)
 from ..packets import SCPPacket
 from .. import regions, consts, struct_file
+
+from rig.routing_table import RoutingTableEntry, Routes
 
 
 @pytest.fixture(scope="module")
@@ -780,6 +782,89 @@ class TestMachineController(object):
         assert arg2 & 0x0000ff00 == 0xff00  # App mask for 1 app_id
         assert arg2 & 0x00ff0000 == signal << 16
         assert arg3 == 0x0000ffff  # Transmit to all
+
+    @pytest.mark.parametrize("x, y, app_id", [(1, 2, 32), (4, 10, 17)])
+    @pytest.mark.parametrize(
+        "entries",
+        [[RoutingTableEntry({Routes.east}, 0xffff0000, 0xffff0000),
+          RoutingTableEntry({Routes.west}, 0xfffc0000, 0xfffff000)],
+          ]
+    )
+    @pytest.mark.parametrize("base_addr, rtr_base", [(0x67800000, 3)])
+    def test_load_routing_table_entries(self, x, y, app_id, entries,
+                                        base_addr, rtr_base):
+        # Create the controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = SCPPacket(
+            False, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0x80, rtr_base,
+            None, None, b""
+        )
+
+        # Allow writing to a file
+        temp_mem = tempfile.TemporaryFile()
+        cn.write = mock.Mock()
+        cn.write.side_effect = lambda addr, data, x, y: temp_mem.write(data)
+
+        # Allow reading the struct field
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.return_value = base_addr
+
+        # Try the load
+        with cn(x=x, y=y, app_id=app_id):
+            cn.load_routing_table_entries(entries)
+
+        # Try loading some routing table entries, this should cause
+        # (1) Request for the table entries
+        cn._send_scp.assert_any_call(
+            x, y, 0, SCPCommands.alloc_free,
+            (app_id << 8) | consts.AllocOperations.alloc_rtr,
+            len(entries)
+        )
+
+        # (2) Request for the b"sv" b"sdram_sys" value
+        cn.read_struct_field.assert_called_once_with(b"sv", b"sdram_sys", x, y)
+
+        # (3) A write to this address of the routing table entries
+        temp_mem.seek(0)
+        rte_data = temp_mem.read()
+        i = 0
+        while len(rte_data) > 0:
+            entry_data, rte_data = rte_data[:16], rte_data[16:]
+            next, free, route, key, mask = struct.unpack("<2H 3I", entry_data)
+
+            assert next == i
+            assert free == 0
+            assert key == entries[i].key and mask == entries[i].mask
+
+            exp_route = 0x00000000
+            for route in entries[i].route:
+                exp_route |= route
+
+            assert exp_route == route
+            i += 1
+
+        # (4) A call to RTR_LOAD
+        cn._send_scp.assert_called_with(
+            x, y, 0, SCPCommands.router,
+            ((len(entries) << 16) | (app_id << 8) |
+             consts.RouterOperations.load),
+            base_addr, rtr_base
+        )
+
+    def test_load_routing_table_entries_fails(self):
+        # Create the controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = SCPPacket(
+            False, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0x0, 0,
+            None, None, b""
+        )  # Indicates NO space for entries
+
+        with pytest.raises(SpiNNakerRouterError) as excinfo:
+            cn.load_routing_table_entries([None] * 100, 0, 4, 32)
+        assert "100" in str(excinfo.value)
+        assert "(0, 4)" in str(excinfo.value)
 
 
 class TestMemoryIO(object):

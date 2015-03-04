@@ -541,6 +541,48 @@ class MachineController(ContextMixin):
         arg3 = 0x0000ffff  # Meaning "transmit to all"
         self._send_scp(0, 0, 0, SCPCommands.signal, arg1, arg2, arg3)
 
+    @ContextMixin.use_contextual_arguments
+    def load_routing_table_entries(self, entries, x=Required, y=Required,
+                                   app_id=Required):
+        """Load routing table entries into the router of a SpiNNaker chip.
+
+        Parameters
+        ----------
+        entries : [RoutingTableEntry(...), ...]
+            List of :py:class:`rig.routing_table.RoutingTableEntry`\ s.
+        """
+        count = len(entries)
+
+        # Try to allocate room for the entries
+        rv = self._send_scp(
+            x, y, 0, SCPCommands.alloc_free,
+            (app_id << 8) | consts.AllocOperations.alloc_rtr, count
+        )
+        rtr_base = rv.arg1  # Index of the first allocated entry, 0 if failed
+
+        if rtr_base == 0:
+            raise SpiNNakerRouterError(count, x, y)
+
+        # Determine where to write into memory
+        buf = self.read_struct_field(b"sv", b"sdram_sys", x, y)
+
+        # Build the data to write in, then perform the write
+        data = b""
+        for i, entry in enumerate(entries):
+            # Build the route as a 32-bit value
+            route = 0x00000000
+            for r in entry.route:
+                route |= r
+
+            data += struct.pack("<2H 3I", i, 0, r, entry.key, entry.mask)
+        self.write(buf, data, x, y)
+
+        # Perform the load of the data into the router
+        self._send_scp(
+            x, y, 0, SCPCommands.router,
+            (count << 16) | (app_id << 8) | consts.RouterOperations.load,
+            buf, rtr_base
+        )
 
 class CoreInfo(collections.namedtuple(
     'CoreInfo', "p2p_address physical_cpu virt_cpu version buffer_size "
@@ -606,6 +648,19 @@ class SpiNNakerMemoryError(Exception):
     def __str__(self):
         return ("Failed to allocate {} bytes of SDRAM on chip ({}, {})".
                 format(self.size, self.chip[0], self.chip[1]))
+
+
+class SpiNNakerRouterError(Exception):
+    """Raised when it is not possible to allocated routing table entries on a
+    SpiNNaker chip.
+    """
+    def __init__(self, count, x, y):
+        self.count = count
+        self.chip = (x, y)
+
+    def __str__(self):
+        return ("Failed to allocate {} routing table entries on chip ({}, {})".
+                format(self.count, self.chip[0], self.chip[1]))
 
 
 class MemoryIO(object):
