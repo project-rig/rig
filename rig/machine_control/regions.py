@@ -8,6 +8,9 @@ SpiNNaker machine for the purposes of transmitting nearest neighbour packets or
 for determining which chips should be included in any flood-fill of data or
 application loading.
 
+A complete introduction and specification of the region system is given in
+"Managing Big SpiNNaker Machines" By Steve Temple.
+
 A 32-bit value representing a region uses the top 16 bits (31:16) to represent
 the x- and y-coordinates of the region and the level and the lower 16 bits
 (15:0) to represent which of the 16 blocks contained within the chunk should be

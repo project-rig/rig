@@ -452,21 +452,43 @@ class MachineController(ContextMixin):
     def load_aplx(self, *args, **kwargs):
         """Load an APLX to a set of application cores.
 
-        If a :py:class:`str` APLX filename is the first argument then the
-        second is assumed to be a dictionary mapping {(x, y): set([cores]),
-        ...}.  Otherwise the return value of
-        :py:func:`~rig.place_and_route.util.build_application_map` may be used
-        directly.
+        This method can be called in either of the following ways::
 
-        An `app_id` can be entered as a keyword argument OR from a context.::
+            load_aplx("/path/to/app.aplx", {(x, y): {core, ...}, ...})
+            load_aplx({"/path/to/app.aplx": {(x, y): {core, ...}, ...}, ...})
 
-            # Either
-            controller.load_aplx(targets, app_id=30)
+        Note that the latter format is the same format produced by
+        :py:func:`~rig.place_and_route.util.build_application_map`.
 
-            # Or
-            with controller(app_id=30):
-                # ...
-                controller.load_aplx(targets)
+        .. warning::
+            The loading process is likely, but not guaranteed, to succeed.
+            This is because the flood-fill packets used during loading are not
+            guaranteed to arrive. The effect of this is one of the following:
+
+            * Some regions may be included/excluded incorrectly.
+            * Some chips will not receive the complete application binary and
+              will silently not execute the binary.
+
+            As a result, the user is responsible for checking that each core
+            was successfully loaded with the correct binary. At present, the
+            two recommended approaches to this are:
+
+            * The user should check that the correct number of application
+              binaries reach their initial barrier (SYNC0), when this facility
+              is used. This is not fool-proof but will flag up all but
+              situations where exactly the right number, but the wrong
+              selection of cores were loaded. (At the time of writing, this
+              situation is not possible but will become a concern in future
+              versions of SC&MP.
+            * The user can check the process list of each chip to ensure the
+              application was loaded into the correct set of cores.
+
+        Parameters
+        ----------
+        app_id : int
+        app_flags : :py:class:`~rig.machine_control.consts.AppFlags`
+            The set of flags (ORred into an int) to use when booting. The
+            default is no flags.
         """
         # Coerce the arguments into a single form.  If there are two arguments
         # then assume that we have filename and a map of chips and cores;
@@ -486,7 +508,7 @@ class MachineController(ContextMixin):
         # Get the application ID, the context system will guarantee that this
         # is available, likewise the application flags.
         app_id = kwargs.pop("app_id")
-        app_flags = kwargs.pop("app_flags")
+        app_flags = kwargs.pop("app_flags", 0)
 
         flags = 0x0000
         for flag in app_flags:
@@ -524,6 +546,12 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments
     def send_signal(self, signal, app_id=Required):
         """Transmit a signal to applications.
+
+        .. warning::
+            In current implementations of the SpiNNaker system software,
+            signals are highly likely to arrive but this is not guaranteed
+            (especially when the system's network is heavily utilised). Users
+            should treat this mechanism with caution.
 
         Arguments
         ---------

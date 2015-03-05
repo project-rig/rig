@@ -101,11 +101,11 @@ class AppState(enum.IntEnum):
 
     # General states
     init = 4  # Transitory "(hopefully)"
-    ready = 5
-    c_main = 6
-    run = 7
-    pause = 10
-    exit = 11
+    wait = 5  # Awaiting signal AppSignal.start (due to AppFlags.wait)
+    c_main = 6  # Entered c_main
+    run = 7  # Running application event loop
+    pause = 10  # Paused by signal AppSignal.pause
+    exit = 11  # Application returned from c_main
     idle = 15  # Prior to application loading
 
     # Awaiting synchronisation (at a barrier)
@@ -116,18 +116,18 @@ class AppState(enum.IntEnum):
 class AppSignal(enum.IntEnum):
     """Signals that may be transmitted to applications."""
     # General purpose signals
-    init = 0
-    power_down = 1
-    stop = 2
-    start = 3
-    pause = 6
-    cont = 7
-    exit = 8
-    timer = 9
+    init = 0  # (Re-)load default application (i.e. SARK)
+    power_down = 1  # Power down cores.
+    stop = 2  # Forcefully stop and cleanup an application
+    start = 3  # Start applications in AppState.wait
+    pause = 6  # Pause execution of an application
+    cont = 7  # Continue execution after pausing
+    exit = 8  # Request that an application terminate (drop to AppState.exit)
+    timer = 9  # Manually trigger a timer interrupt
 
     # Barrier synchronisation
-    sync0 = 4
-    sync1 = 5
+    sync0 = 4  # Continue from AppState.sync0
+    sync1 = 5  # Continue from AppState.sync1
 
     # User defined signals
     usr0 = 10
@@ -174,6 +174,6 @@ signal_types = {
     AppDiagnosticSignal.OR: MessageType.peer_to_peer,
     AppDiagnosticSignal.count: MessageType.peer_to_peer,
 }
-"""Mapping from an :py:class:`AppSignal` to the :py:class:`MessageType`
+"""Mapping from an :py:class:`.AppSignal` to the :py:class:`.MessageType`
 used to transmit it.
 """
