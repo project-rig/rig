@@ -1,6 +1,7 @@
 """A blocking implementation of the SCP protocol.
 """
 import socket
+import struct
 from . import consts, packets
 
 

@@ -1,6 +1,7 @@
 import mock
 import pkg_resources
 import pytest
+from six import iteritems
 import struct
 import tempfile
 from .test_scp_connection import SendReceive, mock_conn  # noqa
@@ -153,6 +154,37 @@ class TestMachineControllerLive(object):
             for x in range(2):
                 for y in range(2):
                     controller.set_led(1, x=x, y=y, action=LEDAction.toggle)
+
+    @pytest.mark.parametrize(
+        "targets",
+        [{(1, 1): {3, 4}, (1, 0): {5}},
+         {(0, 1): {2}}]
+    )
+    def test_load_aplx(self, controller, targets):
+        """Test loading an APLX.  The given APLX writes (x << 24) | (y << 16) |
+        p into sdram_base + p*4; so we can check everything works by looking at
+        that memory address.
+        """
+        assert isinstance(controller, MachineController)
+        controller.load_aplx(
+            pkg_resources.resource_filename("rig", "binaries/rig_test.aplx"),
+            targets
+        )
+
+        # Read back a word to test that the application loaded
+        for (t_x, t_y), cores in iteritems(targets):
+            with controller(x=t_x, y=t_y):
+                print(t_x, t_y)
+                addr_base = controller.read_struct_field(b"sv", b"sdram_base")
+
+                for t_p in cores:
+                    addr = addr_base + 4 * t_p
+                    data = struct.unpack("<I", controller.read(addr, 4, t_x, t_y))[0]
+                    print(hex(data))
+                    x = (data & 0xff000000) >> 24
+                    y = (data & 0x00ff0000) >> 16
+                    p = (data & 0x0000ffff)
+                    assert p == t_p and x == t_x and y == t_y
 
 
 class TestMachineController(object):

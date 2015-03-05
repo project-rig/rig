@@ -15,8 +15,8 @@ import time
 # board, and to which port.
 DTCM_SIZE = 32 * 1024
 BOOT_BYTE_SIZE = 1024  # Block size for data in boot packets
-BOOT_WORD_SIZE = BOOT_BYTE_SIZE / 4
-BOOT_MAX_BLOCKS = DTCM_SIZE / BOOT_BYTE_SIZE
+BOOT_WORD_SIZE = BOOT_BYTE_SIZE // 4
+BOOT_MAX_BLOCKS = DTCM_SIZE // BOOT_BYTE_SIZE
 PORT = 54321
 BOOT_DELAY = 0.01  # Pause between transmitting boot packets
 POST_BOOT_DELAY = 2.0  # Delay to allow the boot to complete
@@ -107,7 +107,7 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
 
     # Read the struct file and modify the "sv" struct to contain the
     # configuration values and write this into the boot data.
-    structs = struct_file.read_struct_file(struct_data)[b"sv"]
+    structs = struct_file.read_struct_file(struct_data)
     sv = structs[b"sv"]
     sv.update_default_values(p2p_dims=(width << 8) | height,
                              hw_ver=hardware_version,
