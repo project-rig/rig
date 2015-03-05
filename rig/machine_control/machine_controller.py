@@ -584,6 +584,7 @@ class MachineController(ContextMixin):
             buf, rtr_base
         )
 
+
 class CoreInfo(collections.namedtuple(
     'CoreInfo', "p2p_address physical_cpu virt_cpu version buffer_size "
                 "build_date version_string")):

@@ -179,7 +179,9 @@ class TestMachineControllerLive(object):
 
                 for t_p in cores:
                     addr = addr_base + 4 * t_p
-                    data = struct.unpack("<I", controller.read(addr, 4, t_x, t_y))[0]
+                    data = struct.unpack(
+                        "<I", controller.read(addr, 4, t_x, t_y)
+                    )[0]
                     print(hex(data))
                     x = (data & 0xff000000) >> 24
                     y = (data & 0x00ff0000) >> 16
@@ -820,7 +822,7 @@ class TestMachineController(object):
         "entries",
         [[RoutingTableEntry({Routes.east}, 0xffff0000, 0xffff0000),
           RoutingTableEntry({Routes.west}, 0xfffc0000, 0xfffff000)],
-          ]
+         ]
     )
     @pytest.mark.parametrize("base_addr, rtr_base", [(0x67800000, 3)])
     def test_load_routing_table_entries(self, x, y, app_id, entries,
