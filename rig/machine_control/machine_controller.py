@@ -2,6 +2,7 @@ import collections
 from six import iteritems
 import socket
 import struct
+import time
 
 from .consts import SCPCommands, DataType, NNCommands, NNConstants, AppFlags
 from . import boot, consts, regions
@@ -450,13 +451,14 @@ class MachineController(ContextMixin):
                        arg1, arg2, fr)
 
     @ContextMixin.use_named_contextual_arguments(app_id=Required, wait=True)
-    def load_aplx(self, *args, **kwargs):
+    def flood_fill_aplx(self, *args, **kwargs):
         """Load an APLX to a set of application cores.
 
         This method can be called in either of the following ways::
 
-            load_aplx("/path/to/app.aplx", {(x, y): {core, ...}, ...})
-            load_aplx({"/path/to/app.aplx": {(x, y): {core, ...}, ...}, ...})
+            flood_fill_aplx("/path/to/app.aplx", {(x, y): {core, ...}, ...})
+            flood_fill_aplx({"/path/to/app.aplx": {(x, y): {core, ...}, ...},
+                             ...})
 
         Note that the latter format is the same format produced by
         :py:func:`~rig.place_and_route.util.build_application_map`.
@@ -502,8 +504,9 @@ class MachineController(ContextMixin):
             application_map = {args[0]: args[1]}
         else:
             raise TypeError(
-                "load_aplx: accepts either 1 or 2 positional arguments: a map "
-                "of filenames to targets OR a single filename and its targets"
+                "flood_fill_aplx: accepts either 1 or 2 positional arguments: "
+                "a map of filenames to targets OR a single filename and its"
+                "targets"
             )
 
         # Get the application ID, the context system will guarantee that this
@@ -542,6 +545,94 @@ class MachineController(ContextMixin):
 
                 # Send the flood-fill END packet
                 self._send_ffe(pid, app_id, flags, cores, fr)
+
+    @ContextMixin.use_named_contextual_arguments(app_id=Required, n_tries=2,
+                                                 wait=False)
+    def load_application(self, *args, **kwargs):
+        """Load an application to a set of application cores.
+
+        This method can be called in either of the following ways::
+
+            load_application("/path/to/app.aplx", {(x, y): {core, ...}, ...})
+            load_application({"/path/to/app.aplx": {(x, y): {core, ...}, ...},
+                              ...})
+
+        Note that the latter format is the same format produced by
+        :py:func:`~rig.place_and_route.util.build_application_map`.
+
+        Parameters
+        ----------
+        app_id : int
+        wait : bool
+            Leave the application in a wait state after successfully loading
+            it.
+        n_tries : int
+            Number attempts to make to load the application.
+        """
+        # Get keyword arguments
+        app_id = kwargs.pop("app_id")
+        wait = kwargs.pop("wait", False)
+        n_tries = kwargs.pop("n_tries", 2)
+
+        # Coerce the arguments into a single form.  If there are two arguments
+        # then assume that we have filename and a map of chips and cores;
+        # otherwise there should be ONE argument which is of the form of the
+        # return value of `build_application_map`.
+        application_map = {}
+        if len(args) == 1:
+            application_map = args[0]
+        elif len(args) == 2:
+            application_map = {args[0]: args[1]}
+        else:
+            raise TypeError(
+                "load_application: accepts either 1 or 2 positional arguments:"
+                "a map of filenames to targets OR a single filename and its"
+                "targets"
+            )
+
+        # Mark all targets as unloaded
+        unloaded = application_map
+
+        # Try to load the applications, then determine which are unloaded
+        tries = 0
+        while unloaded != {} and tries <= n_tries:
+            tries += 1
+
+            # Load all unloaded applications, then pause
+            self.flood_fill_aplx(unloaded, app_id=app_id, wait=True)
+            time.sleep(0.1)
+
+            # Query each target in turn to determine if it is loaded or
+            # otherwise.  If it is loaded (in the wait state) then remove it
+            # from the unloaded list.
+            new_unloadeds = dict()
+            for app_name, targets in iteritems(unloaded):
+                unloaded_targets = {}
+                for (x, y), cores in iteritems(targets):
+                    unloaded_cores = set()
+                    for p in cores:
+                        # Read the struct value vcpu->cpu_state, if it is
+                        # anything BUT wait then we mark this core as unloaded.
+                        state = consts.AppState(
+                            self.read_struct_field(b"vcpu", b"cpu_state",
+                                                   x, y, p)
+                        )
+                        if state is not consts.AppState.wait:
+                            unloaded_cores.add(p)
+
+                    if len(unloaded_cores) > 0:
+                        unloaded_targets[(x, y)] = unloaded_cores
+                if len(unloaded_targets) > 0:
+                    new_unloadeds[app_name] = unloaded_targets
+            unloaded = new_unloadeds
+
+        # If there are still unloaded cores then we bail
+        if unloaded != {}:
+            raise SpiNNakerLoadingError(unloaded)
+
+        # If not waiting then send the start signal
+        if not wait:
+            self.send_signal(consts.AppSignal.start, app_id)
 
     @ContextMixin.use_contextual_arguments
     def send_signal(self, signal, app_id=Required):
@@ -690,6 +781,21 @@ class SpiNNakerRouterError(Exception):
     def __str__(self):
         return ("Failed to allocate {} routing table entries on chip ({}, {})".
                 format(self.count, self.chip[0], self.chip[1]))
+
+
+class SpiNNakerLoadingError(Exception):
+    """Raised when it has not been possible to load applications to cores."""
+    def __init__(self, application_map):
+        self.app_map = application_map
+
+    def __str__(self):
+        cores = []
+        for app, targets in iteritems(self.app_map):
+            for (x, y), ps in iteritems(targets):
+                for p in ps:
+                    cores.append("({}, {}, {})".format(x, y, p))
+        return (
+            "Failed to load applications to cores {}".format(", ".join(cores)))
 
 
 class MemoryIO(object):

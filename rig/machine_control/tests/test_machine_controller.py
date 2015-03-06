@@ -8,7 +8,9 @@ from .test_scp_connection import SendReceive, mock_conn  # noqa
 
 from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
-    MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError)
+    MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError,
+    SpiNNakerLoadingError
+)
 from ..packets import SCPPacket
 from .. import regions, consts, struct_file
 
@@ -160,13 +162,13 @@ class TestMachineControllerLive(object):
         [{(1, 1): {3, 4}, (1, 0): {5}},
          {(0, 1): {2}}]
     )
-    def test_load_aplx(self, controller, targets):
+    def test_flood_fill_aplx(self, controller, targets):
         """Test loading an APLX.  The given APLX writes (x << 24) | (y << 16) |
         p into sdram_base + p*4; so we can check everything works by looking at
         that memory address.
         """
         assert isinstance(controller, MachineController)
-        controller.load_aplx(
+        controller.flood_fill_aplx(
             pkg_resources.resource_filename("rig", "binaries/rig_test.aplx"),
             targets
         )
@@ -672,15 +674,18 @@ class TestMachineController(object):
         )
 
     @pytest.mark.parametrize("n_args", [0, 3])
-    def test_load_aplx_args_fails(self, n_args):
-        """Test that calling load_aplx with an invalid number of arguments
-        raises a TypeError.
+    def test_flood_fill_aplx_args_fails(self, n_args):
+        """Test that calling flood_fill_aplx with an invalid number of
+        arguments raises a TypeError.
         """
         # Create the mock controller
         cn = MachineController("localhost")
 
         with pytest.raises(TypeError):
-            cn.load_aplx(*([0] * n_args))
+            cn.flood_fill_aplx(*([0] * n_args))
+
+        with pytest.raises(TypeError):
+            cn.load_application(*([0] * n_args))
 
     def test_get_next_nn_id(self):
         cn = MachineController("localhost")
@@ -694,8 +699,8 @@ class TestMachineController(object):
         [(31, False, [1, 2, 3]), (12, True, [5])]
     )
     @pytest.mark.parametrize("present_map", [False, True])
-    def test_load_aplx_single_aplx(self, aplx_file, app_id, wait, cores,
-                                   present_map):
+    def test_flood_fill_aplx_single_aplx(self, aplx_file, app_id, wait, cores,
+                                         present_map):
         """Test loading a single APLX to a set of cores."""
         # Create the mock controller
         cn = MachineController("localhost")
@@ -707,9 +712,9 @@ class TestMachineController(object):
         # Attempt to load
         with cn(app_id=app_id, wait=wait):
             if present_map:
-                cn.load_aplx({aplx_file: targets})
+                cn.flood_fill_aplx({aplx_file: targets})
             else:
-                cn.load_aplx(aplx_file, targets)
+                cn.flood_fill_aplx(aplx_file, targets)
 
         # Determine the expected core mask
         coremask = 0x00000000
@@ -781,6 +786,133 @@ class TestMachineController(object):
         if wait:
             exp_flags |= consts.AppFlags.wait
         assert arg2 & 0x00fc0000 == exp_flags << 18
+
+    def test_load_and_check_aplxs(self):
+        """Test that APLX loading takes place multiple times if one of the
+        chips fails to be placed in the wait state.
+        """
+        # Construct the machine controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn.flood_fill_aplx = mock.Mock()
+        cn.read_struct_field = mock.Mock()
+        cn.send_signal = mock.Mock()
+
+        # Construct a list of targets and a list of failed targets
+        app_id = 27
+        targets = {(0, 1): {2, 4}}
+        failed_targets = {(0, 1, 4)}
+        faileds = {(0, 1): {4}}
+
+        def read_struct_field(sn, fn, x, y, p):
+            if (x, y, p) in failed_targets:
+                failed_targets.remove((x, y, p))  # Succeeds next time
+                return consts.AppState.idle
+            else:
+                return consts.AppState.wait
+        cn.read_struct_field.side_effect = read_struct_field
+
+        # Test that loading applications results in calls to flood_fill_aplx,
+        # and read_struct_field and that failed cores are reloaded.
+        with cn(app_id=app_id):
+            cn.load_application("test.aplx", targets, wait=True)
+
+        # First and second loads
+        cn.flood_fill_aplx.assert_has_calls([
+            mock.call({"test.aplx": targets}, app_id=app_id, wait=True),
+            mock.call({"test.aplx": faileds}, app_id=app_id, wait=True),
+        ])
+
+        # Reading struct values
+        cn.read_struct_field.assert_has_calls([
+            mock.call(b"vcpu", b"cpu_state", x, y, p)
+            for (x, y), ps in iteritems(targets) for p in ps
+        ] + [
+            mock.call(b"vcpu", b"cpu_state", x, y, p)
+            for (x, y), ps in iteritems(faileds) for p in ps
+        ])
+
+        # No signals sent
+        assert not cn.send_signal.called
+
+    def test_load_and_check_aplxs_no_wait(self):
+        """Test that APLX loading takes place multiple times if one of the
+        chips fails to be placed in the wait state.
+        """
+        # Construct the machine controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn.flood_fill_aplx = mock.Mock()
+        cn.read_struct_field = mock.Mock()
+        cn.send_signal = mock.Mock()
+
+        # Construct a list of targets and a list of failed targets
+        app_id = 27
+        targets = {(0, 1): {2, 4}}
+        failed_targets = {(0, 1, 4)}
+        faileds = {(0, 1): {4}}
+
+        def read_struct_field(sn, fn, x, y, p):
+            if (x, y, p) in failed_targets:
+                failed_targets.remove((x, y, p))  # Succeeds next time
+                return consts.AppState.idle
+            else:
+                return consts.AppState.wait
+        cn.read_struct_field.side_effect = read_struct_field
+
+        # Test that loading applications results in calls to flood_fill_aplx,
+        # and read_struct_field and that failed cores are reloaded.
+        with cn(app_id=app_id):
+            cn.load_application({"test.aplx": targets})
+
+        # First and second loads
+        cn.flood_fill_aplx.assert_has_calls([
+            mock.call({"test.aplx": targets}, app_id=app_id, wait=True),
+            mock.call({"test.aplx": faileds}, app_id=app_id, wait=True),
+        ])
+
+        # Reading struct values
+        cn.read_struct_field.assert_has_calls([
+            mock.call(b"vcpu", b"cpu_state", x, y, p)
+            for (x, y), ps in iteritems(targets) for p in ps
+        ] + [
+            mock.call(b"vcpu", b"cpu_state", x, y, p)
+            for (x, y), ps in iteritems(faileds) for p in ps
+        ])
+
+        # Start signal sent
+        cn.send_signal.assert_called_once_with(consts.AppSignal.start, app_id)
+
+    def test_load_and_check_aplxs_fails(self):
+        """Test that APLX loading takes place multiple times if one of the
+        chips fails to be placed in the wait state.
+        """
+        # Construct the machine controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn.flood_fill_aplx = mock.Mock()
+        cn.read_struct_field = mock.Mock()
+        cn.send_signal = mock.Mock()
+
+        # Construct a list of targets and a list of failed targets
+        app_id = 27
+        targets = {(0, 1): {2, 4}}
+        failed_targets = {(0, 1, 4)}
+
+        def read_struct_field(sn, fn, x, y, p):
+            if (x, y, p) in failed_targets:
+                return consts.AppState.idle
+            else:
+                return consts.AppState.wait
+        cn.read_struct_field.side_effect = read_struct_field
+
+        # Test that loading applications results in calls to flood_fill_aplx,
+        # and read_struct_field and that failed cores are reloaded.
+        with cn(app_id=app_id):
+            with pytest.raises(SpiNNakerLoadingError) as excinfo:
+                cn.load_application({"test.aplx": targets})
+
+        assert "(0, 1, 4)" in str(excinfo.value)
 
     def test_send_signal_fails(self):
         """Test that we refuse to send diagnostic signals which need treating
