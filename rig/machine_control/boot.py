@@ -18,8 +18,6 @@ BOOT_BYTE_SIZE = 1024  # Block size for data in boot packets
 BOOT_WORD_SIZE = BOOT_BYTE_SIZE // 4
 BOOT_MAX_BLOCKS = DTCM_SIZE // BOOT_BYTE_SIZE
 PORT = 54321
-BOOT_DELAY = 0.01  # Pause between transmitting boot packets
-POST_BOOT_DELAY = 2.0  # Delay to allow the boot to complete
 
 # Specifies where in the boot data the struct containing default values should
 # be written, and how many bytes of it should be written.
@@ -52,7 +50,8 @@ spin5_boot_options = {
 
 
 def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
-         led_config=0x00000001, boot_data=None, struct_data=None):
+         led_config=0x00000001, boot_data=None, struct_data=None,
+         boot_delay=0.01, post_boot_delay=5.0):
     """Boot a SpiNNaker machine of the given size.
 
     Parameters
@@ -82,6 +81,13 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
     struct_data : bytes or None
         Data to interpret as a representation of the memory layout of data
         within the boot data.
+    boot_delay : float
+        Number of seconds to pause between sending boot data packets.
+    post_boot_delay : float
+        Time in seconds to sleep after the boot has finished. This delay is
+        important since after boot it takes some time for P2P routing tables to
+        be built by SARK (order 5 seconds). Before these tables have been
+        assembled, many useful commands will not function.
 
     Notes
     -----
@@ -136,7 +142,7 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
     assert n_blocks <= BOOT_MAX_BLOCKS
 
     boot_packet(sock, BootCommand.start, arg3=n_blocks - 1)
-    time.sleep(BOOT_DELAY)
+    time.sleep(boot_delay)
 
     block = 0
     while len(boot_data) > 0:
@@ -147,7 +153,7 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
         # Transmit, delay and increment the block count
         a1 = ((BOOT_WORD_SIZE - 1) << 8) | block
         boot_packet(sock, BootCommand.send_block, a1, data=data)
-        time.sleep(BOOT_DELAY)
+        time.sleep(boot_delay)
         block += 1
 
     # Send the END command
@@ -155,7 +161,7 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
 
     # Close the socket and give time to boot
     sock.close()
-    time.sleep(POST_BOOT_DELAY)
+    time.sleep(post_boot_delay)
 
     return structs
 
