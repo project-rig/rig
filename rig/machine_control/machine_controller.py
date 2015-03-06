@@ -39,6 +39,7 @@ class MachineController(ContextMixin):
         self.n_tries = n_tries
         self.timeout = timeout
         self._nn_id = 0  # ID for nearest neighbour packets
+        self._scp_data_length = None
 
         # Empty structs until booted, or otherwise set
         self.structs = {}
@@ -47,6 +48,13 @@ class MachineController(ContextMixin):
         self.connections = [
             SCPConnection(initial_host, n_tries, timeout)
         ]
+
+    @property
+    def scp_data_length(self):
+        if self._scp_data_length is None:
+            data = self.get_software_version(0, 0)
+            self._scp_data_length = data.buffer_size
+        return self._scp_data_length
 
     def __call__(self, **context_args):
         """Create a new context for use with `with`.
@@ -148,8 +156,8 @@ class MachineController(ContextMixin):
         # this time around, determine the data type, perform the write and
         # increment the address
         while len(data) > 0:
-            block, data = (data[:consts.SCP_DATA_LENGTH],
-                           data[consts.SCP_DATA_LENGTH:])
+            block, data = (data[:self.scp_data_length],
+                           data[self.scp_data_length:])
             dtype = address_length_dtype[(address % 4, len(block) % 4)]
             self._write(x, y, p, address, block, dtype)
             address += len(block)
@@ -195,7 +203,7 @@ class MachineController(ContextMixin):
         data = b''
         while len(data) < length_bytes:
             # Determine the number of bytes to read
-            reads = min(consts.SCP_DATA_LENGTH, length_bytes - len(data))
+            reads = min(self.scp_data_length, length_bytes - len(data))
 
             # Determine the data type to use
             dtype = address_length_dtype[(address % 4, reads % 4)]
@@ -430,8 +438,8 @@ class MachineController(ContextMixin):
         while len(aplx_data) > 0:
             # Get the next block of data, send and progress the block
             # counter and the address
-            data, aplx_data = (aplx_data[:consts.SCP_DATA_LENGTH],
-                               aplx_data[consts.SCP_DATA_LENGTH:])
+            data, aplx_data = (aplx_data[:self.scp_data_length],
+                               aplx_data[self.scp_data_length:])
             size = len(data) // 4 - 1
 
             arg1 = (NNConstants.forward << 24 | NNConstants.retry << 16 | pid)
@@ -529,8 +537,8 @@ class MachineController(ContextMixin):
             # Load the APLX data
             with open(aplx, "rb+") as f:
                 aplx_data = f.read()
-            n_blocks = ((len(aplx_data) + consts.SCP_DATA_LENGTH - 1) //
-                        consts.SCP_DATA_LENGTH)
+            n_blocks = ((len(aplx_data) + self.scp_data_length - 1) //
+                        self.scp_data_length)
 
             # Perform each flood-fill.
             for (region, cores) in fills:

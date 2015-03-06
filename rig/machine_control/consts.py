@@ -8,9 +8,6 @@ SCP_RECEIVE_LENGTH = 512
 SpiNNaker SDP implementation can produce (256+8 bytes).
 """
 
-SCP_DATA_LENGTH = 256
-"""Length of data that can be inserted into an SCP packet."""
-
 
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""

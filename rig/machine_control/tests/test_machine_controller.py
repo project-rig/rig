@@ -9,7 +9,7 @@ from .test_scp_connection import SendReceive, mock_conn  # noqa
 from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
     MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError,
-    SpiNNakerLoadingError
+    SpiNNakerLoadingError, CoreInfo
 )
 from ..packets import SCPPacket
 from .. import regions, consts, struct_file
@@ -23,11 +23,19 @@ def controller(spinnaker_ip):
 
 
 @pytest.fixture
+def cn():
+    cn = MachineController("localhost")
+    cn._scp_data_length = 256
+    return cn
+
+
+@pytest.fixture
 def controller_rw_mock():
     """Create a controller with mock _read and _write methods."""
     cn = MachineController("localhost")
     cn._read = mock.Mock(spec_set=[])
     cn._write = mock.Mock(spec_set=[])
+    cn._scp_data_length = 256
 
     def read_mock(x, y, p, address, length_bytes, data_type=DataType.byte):
         return b'\x00' * length_bytes
@@ -292,6 +300,17 @@ class TestMachineController(object):
         assert sver.build_date == 888999
         assert sver.version_string == b"Hello, World!"
 
+    @pytest.mark.parametrize("size", [128, 256])
+    def test_scp_data_length(self, size):
+        cn = MachineController("localhost")
+        cn._scp_data_length = None
+        cn.get_software_version = mock.Mock()
+        cn.get_software_version.return_value = CoreInfo(
+            None, None, None, None, size, None, None)
+
+        assert cn.scp_data_length == size
+        cn.get_software_version.assert_called_once_with(0, 0)
+
     @pytest.mark.parametrize(  # noqa
         "address, data, dtype",
         [(0x60000000, b"Hello, World", DataType.byte),
@@ -350,9 +369,9 @@ class TestMachineController(object):
         addresses = []
         while len(data) > 0:
             addresses.append(address)
-            segments.append(data[0:consts.SCP_DATA_LENGTH])
+            segments.append(data[0:controller_rw_mock._scp_data_length])
 
-            data = data[consts.SCP_DATA_LENGTH:]
+            data = data[controller_rw_mock._scp_data_length:]
             address += len(segments[-1])
 
         controller_rw_mock._write.assert_has_calls(
@@ -432,9 +451,9 @@ class TestMachineController(object):
         lens = []
         while n_bytes > 0:
             offsets += [offset]
-            lens += [min((consts.SCP_DATA_LENGTH, n_bytes))]
+            lens += [min((controller_rw_mock._scp_data_length, n_bytes))]
             offset += lens[-1]
-            n_bytes -= consts.SCP_DATA_LENGTH
+            n_bytes -= controller_rw_mock._scp_data_length
 
         assert len(lens) == len(offsets) == n_packets, "Test is broken"
 
@@ -699,12 +718,11 @@ class TestMachineController(object):
         [(31, False, [1, 2, 3]), (12, True, [5])]
     )
     @pytest.mark.parametrize("present_map", [False, True])
-    def test_flood_fill_aplx_single_aplx(self, aplx_file, app_id, wait, cores,
-                                         present_map):
+    def test_flood_fill_aplx_single_aplx(self, cn, aplx_file, app_id, wait,
+                                         cores, present_map):
         """Test loading a single APLX to a set of cores."""
         BASE_ADDRESS = 0x68900000
         # Create the mock controller
-        cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
         cn.read_struct_field = mock.Mock()
         cn.read_struct_field.return_value = BASE_ADDRESS
@@ -731,8 +749,8 @@ class TestMachineController(object):
         with open(aplx_file, "rb") as f:
             aplx_data = f.read()
 
-        n_blocks = ((len(aplx_data) + consts.SCP_DATA_LENGTH - 1) //
-                    consts.SCP_DATA_LENGTH)
+        n_blocks = ((len(aplx_data) + cn._scp_data_length - 1) //
+                    cn._scp_data_length)
 
         # Assert that the transmitted packets were sensible, do this by
         # decoding each call to send_scp.
@@ -756,8 +774,8 @@ class TestMachineController(object):
         address = BASE_ADDRESS
         for n in range(0, n_blocks):
             # Get the next block of data
-            (block_data, aplx_data) = (aplx_data[:consts.SCP_DATA_LENGTH],
-                                       aplx_data[consts.SCP_DATA_LENGTH:])
+            (block_data, aplx_data) = (aplx_data[:cn._scp_data_length],
+                                       aplx_data[cn._scp_data_length:])
 
             # Check the sent SCP packet
             (x_, y_, p_, cmd, arg1, arg2, arg3, data) = \
