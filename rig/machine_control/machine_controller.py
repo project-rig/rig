@@ -541,7 +541,9 @@ class MachineController(ContextMixin):
                 self._send_ffs(pid, region, n_blocks, fr)
 
                 # Send the data
-                self._send_ffd(pid, aplx_data, consts.SARK_DATA_BASE)
+                base_address = self.read_struct_field(
+                    b"sv", b"sdram_sys", 0, 0)
+                self._send_ffd(pid, aplx_data, base_address)
 
                 # Send the flood-fill END packet
                 self._send_ffe(pid, app_id, flags, cores, fr)

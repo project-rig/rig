@@ -11,9 +11,6 @@ SpiNNaker SDP implementation can produce (256+8 bytes).
 SCP_DATA_LENGTH = 256
 """Length of data that can be inserted into an SCP packet."""
 
-SARK_DATA_BASE = 0x67800000
-"""Base of buffer in SARK memory map."""
-
 
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""

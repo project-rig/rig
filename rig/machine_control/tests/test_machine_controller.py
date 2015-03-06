@@ -702,9 +702,12 @@ class TestMachineController(object):
     def test_flood_fill_aplx_single_aplx(self, aplx_file, app_id, wait, cores,
                                          present_map):
         """Test loading a single APLX to a set of cores."""
+        BASE_ADDRESS = 0x68900000
         # Create the mock controller
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.return_value = BASE_ADDRESS
 
         # Target cores for APLX
         targets = {(0, 1): set(cores)}
@@ -715,6 +718,9 @@ class TestMachineController(object):
                 cn.flood_fill_aplx({aplx_file: targets})
             else:
                 cn.flood_fill_aplx(aplx_file, targets)
+
+        # Check the base address was retrieved
+        cn.read_struct_field.assert_called_once_with(b"sv", b"sdram_sys", 0, 0)
 
         # Determine the expected core mask
         coremask = 0x00000000
@@ -747,7 +753,7 @@ class TestMachineController(object):
         assert arg3 & 0x000000ff == NNConstants.retry
 
         # Flood fill data
-        address = consts.SARK_DATA_BASE
+        address = BASE_ADDRESS
         for n in range(0, n_blocks):
             # Get the next block of data
             (block_data, aplx_data) = (aplx_data[:consts.SCP_DATA_LENGTH],
