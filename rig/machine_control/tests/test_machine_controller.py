@@ -14,6 +14,8 @@ from ..machine_controller import (
 from ..packets import SCPPacket
 from .. import regions, consts, struct_file
 
+from rig.machine import Cores, SDRAM, SRAM, Links, Machine
+
 from rig.routing_table import RoutingTableEntry, Routes
 
 
@@ -1037,6 +1039,143 @@ class TestMachineController(object):
             cn.load_routing_table_entries([None] * 100, 0, 4, 32)
         assert "100" in str(excinfo.value)
         assert "(0, 4)" in str(excinfo.value)
+
+    def test_get_p2p_routing_table(self):
+        cn = MachineController("localhost")
+
+        # Return one of each kind of table entry per word
+        p2p_table_len = ((256*256)//8*4)
+        cn.read = mock.Mock()
+        cn.read.return_value = (
+            struct.pack("<I", sum(i << 3 * i for i in range(8))) *
+            (p2p_table_len//4)
+        )
+
+        p2p_table = cn.get_p2p_routing_table(x=0, y=0)
+
+        assert cn.read.called_once_with(
+            consts.SPINNAKER_RTR_P2P,
+            p2p_table_len,
+            0, 0, 0
+        )
+
+        # Check that the table is complete
+        assert set(p2p_table) == \
+            set((x, y) for x in range(256) for y in range(256))
+
+        # Check that every entry is correct.
+        for (x, y), entry in iteritems(p2p_table):
+            word_offset = y % 8
+            desired_entry = consts.P2PTableEntry(word_offset)
+            assert entry == desired_entry
+
+    @pytest.mark.parametrize("links", [set(),
+                                       set([Links.north, Links.south]),
+                                       set(Links)])
+    def test_get_working_links(self, links):
+        cn = MachineController("localhost")
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.return_value = sum(1 << l for l in links)
+
+        assert cn.get_working_links(x=0, y=0) == links
+
+        assert cn.read_struct_field.called_once_with("sv", "link_up", 0, 0, 0)
+
+    @pytest.mark.parametrize("num_cpus", [1, 18])
+    def test_get_working_cores(self, num_cpus):
+        cn = MachineController("localhost")
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.return_value = num_cpus
+
+        assert cn.get_working_cores(x=0, y=0) == num_cpus
+        assert cn.read_struct_field.called_once_with("sv", "num_cpus", 0, 0, 0)
+
+    def test_get_machine(self):
+        cn = MachineController("localhost")
+
+        # Return sensible values for heap sizes (taken from manual)
+        sdram_heap = 0x60640000
+        sdram_sys = 0x67800000
+        sysram_heap = 0xE5001100
+        vcpu_base = 0xE5007000
+
+        def read_struct_field(struct_name, field_name, x, y, p=0):
+            return {
+                ("sv", "sdram_heap"): sdram_heap,
+                ("sv", "sdram_sys"): sdram_sys,
+                ("sv", "sysram_heap"): sysram_heap,
+                ("sv", "vcpu_base"): vcpu_base,
+            }[(struct_name, field_name)]
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.side_effect = read_struct_field
+
+        # Return a set of p2p tables where an 8x8 set of chips is alive with
+        # all chips with (3,3) being dead.
+        cn.get_p2p_routing_table = mock.Mock()
+        cn.get_p2p_routing_table.return_value = {
+            (x, y): (consts.P2PTableEntry.north
+                     if x < 8 and y < 8 and (x, y) != (3, 3) else
+                     consts.P2PTableEntry.none)
+            for x in range(256)
+            for y in range(256)
+        }
+
+        # Return 18 working cores except for (2, 2) which will have only 3
+        # cores.
+
+        def get_working_cores(x, y):
+            return 18 if (x, y) != (2, 2) else 3
+        cn.get_working_cores = mock.Mock()
+        cn.get_working_cores.side_effect = get_working_cores
+
+        # Return all working links except for (4, 4) which will have no north
+        # link.
+
+        def get_working_links(x, y):
+            if (x, y) != (4, 4):
+                return set(Links)
+            else:
+                return set(Links) - set([Links.north])
+        cn.get_working_links = mock.Mock()
+        cn.get_working_links.side_effect = get_working_links
+
+        m = cn.get_machine()
+
+        # Check that the machine is correct
+        assert isinstance(m, Machine)
+        assert m.width == 8
+        assert m.height == 8
+        assert m.chip_resources == {
+            Cores: 18,
+            SDRAM: sdram_sys - sdram_heap,
+            SRAM: vcpu_base - sysram_heap,
+        }
+        assert m.chip_resource_exceptions == {
+            (2, 2): {
+                Cores: 3,
+                SDRAM: sdram_sys - sdram_heap,
+                SRAM: vcpu_base - sysram_heap,
+            },
+        }
+        assert m.dead_chips == set([(3, 3)])
+        assert m.dead_links == set([(4, 4, Links.north)])
+
+        # Check that only the expected calls were made to mocks
+        cn.read_struct_field.assert_has_calls([
+            mock.call("sv", "sdram_heap", 0, 0),
+            mock.call("sv", "sdram_sys", 0, 0),
+            mock.call("sv", "sysram_heap", 0, 0),
+            mock.call("sv", "vcpu_base", 0, 0),
+        ], any_order=True)
+        cn.get_p2p_routing_table.assert_called_once_with(0, 0)
+        cn.get_working_cores.assert_has_calls([
+            mock.call(x, y) for x in range(8) for y in range(8)
+            if (x, y) != (3, 3)
+        ], any_order=True)
+        cn.get_working_links.assert_has_calls([
+            mock.call(x, y) for x in range(8) for y in range(8)
+            if (x, y) != (3, 3)
+        ], any_order=True)
 
 
 class TestMemoryIO(object):

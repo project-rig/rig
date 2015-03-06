@@ -7,6 +7,9 @@ import time
 from .consts import SCPCommands, DataType, NNCommands, NNConstants, AppFlags
 from . import boot, consts, regions
 from .scp_connection import SCPConnection
+
+from rig.machine import Cores, SDRAM, SRAM, Links, Machine
+
 from rig.utils.contexts import ContextMixin, Required
 
 
@@ -704,6 +707,141 @@ class MachineController(ContextMixin):
             (count << 16) | (app_id << 8) | consts.RouterOperations.load,
             buf, rtr_base
         )
+
+    @ContextMixin.use_contextual_arguments
+    def get_p2p_routing_table(self, x=Required, y=Required):
+        """Dump the contents of a chip's P2P routing table.
+
+        This method can be indirectly used to get a list of available chips.
+
+        Returns
+        -------
+        {(x, y): :py:class:`~rig.machine_control.consts.P2PTableEntry`, ...}
+        """
+        table = {}
+
+        # There is one entry per chip in the maximally-sized 256x256 machine
+        # and eight entries are packed into a single 32-bit word.
+        table_size = ((256*256) // 8) * 4
+        raw_table = self.read(consts.SPINNAKER_RTR_P2P,
+                              table_size,
+                              x, y)
+
+        x = 0
+        y = 0
+        while raw_table:
+            raw_word, raw_table = raw_table[:4], raw_table[4:]
+            word, = struct.unpack("<I", raw_word)
+            for entry in range(8):
+                table[(x, y)] = \
+                    consts.P2PTableEntry((word >> (3*entry)) & 0b111)
+
+                y += 1
+                if y >= 256:
+                    y = 0
+                    x += 1
+
+        return table
+
+    @ContextMixin.use_contextual_arguments
+    def get_working_links(self, x=Required, y=Required):
+        """Return the set of links reported as working.
+
+        The returned set lists only links over-which nearest neighbour
+        peek/poke commands could be sent. This means that links connected to
+        peripherals may falsely be omitted.
+
+        Returns
+        -------
+        set([:py:class:`rig.machine.Links`, ...])
+        """
+        link_up = self.read_struct_field("sv", "link_up", x, y)
+        return set(link for link in Links if link_up & (1 << link))
+
+    @ContextMixin.use_contextual_arguments
+    def get_working_cores(self, x=Required, y=Required):
+        """Return the number of working cores, including the monitor."""
+        return self.read_struct_field("sv", "num_cpus", x, y)
+
+    def get_machine(self, default_num_cores=18):
+        """Probe the machine to discover which cores and links are working.
+
+        .. note::
+            Links are reported as dead when the device at the other end of the
+            link does not respond to SpiNNaker nearest neighbour packets. This
+            may thus mistakenly report links attached to peripherals as dead.
+
+        .. note::
+            The probing process does not report how much memory is free, nor
+            how many processors are idle but rather the total available.
+
+        .. note::
+            The size of the SDRAM and SysRAM heaps is assumed to be the same
+            for all chips and is only checked on chip (0, 0).
+
+        Parameters
+        ----------
+        default_num_cores : int
+            The number of cores generally available on a SpiNNaker chip
+            (including the monitor).
+
+        Returns
+        -------
+        :py:class:`~rig.machine.Machine`
+            This Machine will include all cores reported as working by the
+            system software with the following resources defined:
+
+            :py:data:`~rig.machine.Cores`
+                Number of cores working on each chip (including the monitor
+                core).
+            :py:data:`~rig.machine.SDRAM`
+                The size of the SDRAM heap.
+            :py:data:`~rig.machine.SRAM`
+                The size of the SysRAM heap.
+        """
+        p2p_tables = self.get_p2p_routing_table(0, 0)
+
+        # Calculate the extent of the system
+        max_x = max(x for (x, y), r in iteritems(p2p_tables)
+                    if r != consts.P2PTableEntry.none)
+        max_y = max(y for (x, y), r in iteritems(p2p_tables)
+                    if r != consts.P2PTableEntry.none)
+
+        # Discover the heap sizes available for memory allocation
+        sdram_start = self.read_struct_field("sv", "sdram_heap", 0, 0)
+        sdram_end = self.read_struct_field("sv", "sdram_sys", 0, 0)
+        sysram_start = self.read_struct_field("sv", "sysram_heap", 0, 0)
+        sysram_end = self.read_struct_field("sv", "vcpu_base", 0, 0)
+
+        chip_resources = {Cores: default_num_cores,
+                          SDRAM: sdram_end - sdram_start,
+                          SRAM: sysram_end - sysram_start}
+        dead_chips = set()
+        dead_links = set()
+        chip_resource_exceptions = {}
+
+        # Discover dead links and cores
+        for (x, y), p2p_route in iteritems(p2p_tables):
+            if x <= max_x and y <= max_y:
+                if p2p_route == consts.P2PTableEntry.none:
+                    dead_chips.add((x, y))
+                else:
+                    working_cores = self.get_working_cores(x, y)
+                    working_links = self.get_working_links(x, y)
+
+                    if working_cores < default_num_cores:
+                        resource_exception = chip_resources.copy()
+                        resource_exception[Cores] = min(default_num_cores,
+                                                        working_cores)
+                        chip_resource_exceptions[(x, y)] = resource_exception
+
+                    for link in set(Links) - working_links:
+                        dead_links.add((x, y, link))
+
+        return Machine(max_x + 1, max_y + 1,
+                       chip_resources,
+                       chip_resource_exceptions,
+                       dead_chips, dead_links)
 
 
 class CoreInfo(collections.namedtuple(

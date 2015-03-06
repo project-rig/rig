@@ -11,6 +11,12 @@ SpiNNaker SDP implementation can produce (256+8 bytes).
 SCP_DATA_LENGTH = 256
 """Length of data that can be inserted into an SCP packet."""
 
+SPINNAKER_RTR_BASE = 0xE1000000  # Unbuffered
+"""Base address of router hardware registers."""
+
+SPINNAKER_RTR_P2P = SPINNAKER_RTR_BASE + 0x10000
+"""Base address of P2P routing table."""
+
 
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""
@@ -174,3 +180,15 @@ signal_types = {
 """Mapping from an :py:class:`.AppSignal` to the :py:class:`.MessageType`
 used to transmit it.
 """
+
+
+class P2PTableEntry(enum.IntEnum):
+    """Routing table entry in the point-to-point SpiNNaker routing table."""
+    east = 0b000
+    north_east = 0b001
+    north = 0b010
+    west = 0b011
+    south_west = 0b100
+    south = 0b101
+    none = 0b110  # No known route to this location
+    monitor = 0b111  # Route to the monitor on this chip
