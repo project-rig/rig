@@ -109,24 +109,26 @@ class ContextMixin(object):
         return f_
 
     @staticmethod
-    def require_named_contextual_arguments(*names):
-        """Decorator which modifies a function such that it is guaranteed to
-        receive contextual arguments in its kwargs.
+    def use_named_contextual_arguments(**named_arguments):
+        """Decorator which modifies a function such that it is passed arguments
+        given by the call and named arguments from the call or from the
+        context.
 
         Parameters
         ----------
-        Arguments which are required by the method.
+        **named_arguments : {name: default, ...}
+            All named arguments are given along with their default value.
         """
         def decorator(f):
             def f_(self, *args, **kwargs):
                 # Construct the list of required arguments, update using the
                 # context arguments and the kwargs passed to the method.
-                new_kwargs = {name: Required for name in names}
+                new_kwargs = named_arguments.copy()
 
                 cargs = self.get_context_arguments()
                 for name, val in iteritems(cargs):
-                    if name in names:
-                        new_kwargs.update({name: val})
+                    if name in new_kwargs:
+                        new_kwargs[name] = val
 
                 new_kwargs.update(kwargs)
 

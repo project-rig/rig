@@ -3,7 +3,7 @@ from six import iteritems
 import socket
 import struct
 
-from .consts import SCPCommands, DataType, NNCommands, NNConstants
+from .consts import SCPCommands, DataType, NNCommands, NNConstants, AppFlags
 from . import boot, consts, regions
 from .scp_connection import SCPConnection
 from rig.utils.contexts import ContextMixin, Required
@@ -16,7 +16,7 @@ class MachineController(ContextMixin):
     ----------
     """
     def __init__(self, initial_host, n_tries=5, timeout=0.5,
-                 initial_context={"app_id": 30, "app_flags": {}}):
+                 initial_context={"app_id": 30}):
         """Create a new controller for a SpiNNaker machine.
 
         Parameters
@@ -57,7 +57,8 @@ class MachineController(ContextMixin):
         """
         return self.get_new_context(**context_args)
 
-    @ContextMixin.require_named_contextual_arguments("x", "y", "p")
+    @ContextMixin.use_named_contextual_arguments(
+        x=Required, y=Required, p=Required)
     def send_scp(self, *args, **kwargs):
         """Transmit an SCP Packet.
 
@@ -448,7 +449,7 @@ class MachineController(ContextMixin):
         self._send_scp(0, 0, 0, SCPCommands.nearest_neighbour_packet,
                        arg1, arg2, fr)
 
-    @ContextMixin.require_named_contextual_arguments("app_id", "app_flags")
+    @ContextMixin.use_named_contextual_arguments(app_id=Required, wait=True)
     def load_aplx(self, *args, **kwargs):
         """Load an APLX to a set of application cores.
 
@@ -486,9 +487,9 @@ class MachineController(ContextMixin):
         Parameters
         ----------
         app_id : int
-        app_flags : :py:class:`~rig.machine_control.consts.AppFlags`
-            The set of flags (ORred into an int) to use when booting. The
-            default is no flags.
+        wait : bool (Default: True)
+            Should the application await the AppSignal.start signal after it
+            has been loaded?
         """
         # Coerce the arguments into a single form.  If there are two arguments
         # then assume that we have filename and a map of chips and cores;
@@ -506,13 +507,12 @@ class MachineController(ContextMixin):
             )
 
         # Get the application ID, the context system will guarantee that this
-        # is available, likewise the application flags.
+        # is available
         app_id = kwargs.pop("app_id")
-        app_flags = kwargs.pop("app_flags", 0)
 
         flags = 0x0000
-        for flag in app_flags:
-            flags |= flag
+        if kwargs.pop("wait"):
+            flags |= AppFlags.wait
 
         # The forward and retry parameters
         fr = NNConstants.forward << 8 | NNConstants.retry

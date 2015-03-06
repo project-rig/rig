@@ -17,10 +17,12 @@ def object_to_test():
 
         # NOTE The following method can ONLY be called in a context or with
         # named arguments, i.e., "arg1" is NEVER a positional argument.
-        @contexts.ContextMixin.require_named_contextual_arguments("arg1")
+        @contexts.ContextMixin.use_named_contextual_arguments(
+            arg1=contexts.Required, arg2=None)
         def method_b(self, arg0, *args, **kwargs):
             arg1 = kwargs.pop("arg1")
-            return (arg0, arg1, args, kwargs)
+            arg2 = kwargs.pop("arg2")
+            return (arg0, arg1, arg2, args, kwargs)
 
     return ObjectWithContext
 
@@ -35,12 +37,15 @@ def test_contextmixin_required_passed_no_context(object_to_test, arg1):
     assert obj.method_a(1, arg1, 50) == (1, arg1, 50)
     assert obj.method_a(1, arg1=arg1, arg2=50) == (1, arg1, 50)
 
-    assert obj.method_b(1, 2, 3, arg1=0) == (1, 0, (2, 3), {})
-    assert obj.method_b(0, arg1=1, bob=3) == (0, 1, tuple(), {"bob": 3})
+    assert obj.method_b(1, 2, 3, arg1=0) == (1, 0, None, (2, 3), {})
+    assert obj.method_b(0, arg1=1, bob=3) == (0, 1, None, tuple(), {"bob": 3})
+    assert obj.method_b(0, arg1=1, arg2=4, bob=3) == \
+        (0, 1, 4, tuple(), {"bob": 3})
 
 
 @pytest.mark.parametrize("arg1", [1, None, 5])
-def test_contextmixin_required_passed(object_to_test, arg1):
+@pytest.mark.parametrize("arg2", [1, None, 5])
+def test_contextmixin_required_passed(object_to_test, arg1, arg2):
     # Create the object
     obj = object_to_test()
 
@@ -49,11 +54,13 @@ def test_contextmixin_required_passed(object_to_test, arg1):
         assert obj.method_a(1) == (1, arg1, 30)
         assert obj.method_a(1, arg2=50) == (1, arg1, 50)
 
+    with obj.get_new_context(arg1=arg1, arg2=arg2, bob=3):
         # The contextual argument "bob" isn't requested by this method, so it
         # shouldn't get it.
         assert (obj.method_b("World", "Hello") ==
-                ("World", arg1, ("Hello", ), {}))
-        assert obj.method_b(123, arg1="Hello") == (123, "Hello", tuple(), {})
+                ("World", arg1, arg2, ("Hello", ), {}))
+        assert obj.method_b(123, arg1="Hello", arg2=4) == \
+            (123, "Hello", 4, tuple(), {})
 
 
 @pytest.mark.parametrize("arg1", [1, None, 5])

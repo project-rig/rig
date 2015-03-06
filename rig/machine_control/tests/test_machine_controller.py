@@ -690,11 +690,11 @@ class TestMachineController(object):
         assert cn._get_next_nn_id() == 2
 
     @pytest.mark.parametrize(
-        "app_id, app_flags, cores",
-        [(31, {}, [1, 2, 3]), (12, {consts.AppFlags.wait}, [5])]
+        "app_id, wait, cores",
+        [(31, False, [1, 2, 3]), (12, True, [5])]
     )
     @pytest.mark.parametrize("present_map", [False, True])
-    def test_load_aplx_single_aplx(self, aplx_file, app_id, app_flags, cores,
+    def test_load_aplx_single_aplx(self, aplx_file, app_id, wait, cores,
                                    present_map):
         """Test loading a single APLX to a set of cores."""
         # Create the mock controller
@@ -705,7 +705,7 @@ class TestMachineController(object):
         targets = {(0, 1): set(cores)}
 
         # Attempt to load
-        with cn(app_id=app_id, app_flags=app_flags):
+        with cn(app_id=app_id, wait=wait):
             if present_map:
                 cn.load_aplx({aplx_file: targets})
             else:
@@ -778,8 +778,8 @@ class TestMachineController(object):
         assert arg2 & 0x0003ffff == coremask
 
         exp_flags = 0x00000000
-        for flag in app_flags:
-            exp_flags |= flag
+        if wait:
+            exp_flags |= consts.AppFlags.wait
         assert arg2 & 0x00fc0000 == exp_flags << 18
 
     def test_send_signal_fails(self):
