@@ -228,7 +228,8 @@ class MachineController(ContextMixin):
         address : int
             The address at which to start reading the data.
         length_bytes : int
-            The number of bytes to read from memory, must be <= SCP_DATA_LENGTH
+            The number of bytes to read from memory, must be <=
+            :py:attr:`.scp_data_length`
         data_type : DataType
             The size of the data to write into memory.
 
