@@ -8,15 +8,11 @@ SCP_RECEIVE_LENGTH = 512
 SpiNNaker SDP implementation can produce (256+8 bytes).
 """
 
-SCP_DATA_LENGTH = 256
-"""Length of data that can be inserted into an SCP packet."""
-
 SPINNAKER_RTR_BASE = 0xE1000000  # Unbuffered
 """Base address of router hardware registers."""
 
 SPINNAKER_RTR_P2P = SPINNAKER_RTR_BASE + 0x10000
 """Base address of P2P routing table."""
-
 
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""
