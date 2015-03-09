@@ -295,8 +295,9 @@ class MachineController(ContextMixin):
             return unpacked
 
     @ContextMixin.use_contextual_arguments
-    def read_vcpu_struct_field(self, field_name, x=Required, y=Required, p=0):
-        """Read a value out of the VCPU struct.
+    def read_vcpu_struct_field(self, field_name, x=Required, y=Required,
+                               p=Required):
+        """Read a value out of the VCPU struct for a specific core.
 
         Parameters
         ----------
