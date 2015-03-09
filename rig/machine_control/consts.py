@@ -107,6 +107,30 @@ class AppState(enum.IntEnum):
     sync1 = 9
 
 
+class RuntimeException(enum.IntEnum):
+    """Runtime exceptions as reported by SARK."""
+    none = 0  # No error
+    reset = 1  # Branch through zero
+    undefined_instruction = 2  # Undefined instruction
+    svc = 3  # Undefined SVC or no handler
+    prefetch_abort = 4  # Prefetch abort
+    data_abort = 5  # Data abort
+    unhandled_irq = 6  # Unhandled IRQ
+    unhandled_fiq = 7  # Unhandled FIQ
+    unconfigured_vic = 8  # Unconfigured VIC vector
+    abort = 9  # Generic user abort
+    malloc_failure = 10  # "malloc" failure
+    division_by_zero = 11  # Divide by zero
+    event_startup_failure = 12  # Event startup failure
+    software_error = 13  # Fatal SW error
+    iobuf_failure = 14  # Failed to allocate IO buffer
+    bad_enable = 15  # Bad event enable
+    null_pointer = 16  # Generic null pointer error
+    pkt_startup_failure = 17  # Pkt startup failure
+    timer_startup_failure = 18  # Timer startup failure
+    api_startup_failure = 19  # API startup failure
+
+
 class AppSignal(enum.IntEnum):
     """Signals that may be transmitted to applications."""
     # General purpose signals

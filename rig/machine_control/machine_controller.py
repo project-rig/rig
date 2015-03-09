@@ -331,6 +331,43 @@ class MachineController(ContextMixin):
             return unpacked
 
     @ContextMixin.use_contextual_arguments
+    def get_processor_status(self, p=Required, x=Required, y=Required):
+        """Get the status of a given processor.
+
+        Returns
+        -------
+        :py:class:`~ProcessorStatus`
+            Representation of the current state of the processor.
+        """
+        # Get the VCPU base
+        address = (self.read_struct_field("sv", "vcpu_base", x, y) +
+                   self.structs[b"vcpu"].size * p)
+
+        # Get the VCPU data
+        data = self.read(address, self.structs[b"vcpu"].size, x, y)
+
+        # Build the kwargs that describe the current state
+        state = {
+            name.decode('utf-8'): struct.unpack(
+                f.pack_chars,
+                data[f.offset:f.offset+struct.calcsize(f.pack_chars)]
+            )[0] for (name, f) in iteritems(self.structs[b"vcpu"].fields)
+        }
+        state["registers"] = [state.pop("r{}".format(i)) for i in range(8)]
+        state["user_vars"] = [state.pop("user{}".format(i)) for i in range(4)]
+        state["app_name"] = state["app_name"].strip(b'\x00').decode('utf-8')
+        state["cpu_state"] = consts.AppState(state["cpu_state"])
+        state["rt_code"] = consts.RuntimeException(state["rt_code"])
+
+        for newname, oldname in [("iobuf_address", "iobuf"),
+                                 ("program_state_register", "psr"),
+                                 ("stack_pointer", "sp"),
+                                 ("link_register", "lr"), ]:
+            state[newname] = state.pop(oldname)
+        state.pop("__PAD")
+        return ProcessorStatus(**state)
+
+    @ContextMixin.use_contextual_arguments
     def iptag_set(self, iptag, addr, port, x=Required, y=Required):
         """Set the value of an IPTag.
 
@@ -777,6 +814,55 @@ class CoreInfo(collections.namedtuple(
         Human readable, textual version information split in to two fields by a
         "/". In the first field is the kernal (e.g. SC&MP or SARK) and the
         second the hardware platform (e.g. SpiNNaker).
+    """
+
+
+class ProcessorStatus(collections.namedtuple(
+    "ProcessorStatus", "registers program_state_register stack_pointer "
+                       "link_register rt_code cpu_flags cpu_state "
+                       "mbox_ap_msg mbox_mp_msg mbox_ap_cmd mbox_mp_cmd "
+                       "sw_count sw_file sw_line time app_name iobuf_address "
+                       "app_id user_vars")):
+    """Information returned about the status of a processor.
+
+    Parameters
+    ----------
+    registers : list
+        Register values dumped during a runtime exception. (All zero by
+        default.)
+    program_status_register : int
+        Program status register (dumped during a runtime exception and zero by
+        default).
+    stack_pointer : int
+        Stack pointer (dumped during a runtime exception and zero by default).
+    link_register : int
+        Link register (dumped during a runtime exception and zero by default).
+    rt_code : `~rig.machine_controller.consts.RuntimeExceptions`
+        Code for any run-time exception which may have occurred.
+    cpu_flags : int
+    cpu_state : `~rig.machine_controller.consts.AppState`
+        Current state of the processor.
+    mbox_ap_msg : int
+    mbox_mp_msg : int
+    mbox_ap_cmd : int
+    mbox_mp_cmd : int
+    sw_count : int
+        Saturating count of software errors.  (Calls to `sw_err`).
+    sw_file : int
+        Pointer to a string containing the file name in which the last software
+        error occurred.
+    sw_line : int
+        Line number of the last software error.
+    time : int
+        Time application was loaded.
+    app_name : string
+        Name of the application loaded to the processor core.
+    iobuf_address : int
+        Address of the output buffer used by the processor.
+    app_id : int
+        ID of the application currently running on the processor.
+    user_vars : list
+        List of 4 integer values that may be set by the user.
     """
 
 

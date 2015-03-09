@@ -10,7 +10,7 @@ from .test_scp_connection import SendReceive, mock_conn  # noqa
 from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
     MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError,
-    SpiNNakerLoadingError, CoreInfo
+    SpiNNakerLoadingError, CoreInfo, ProcessorStatus
 )
 from ..packets import SCPPacket
 from .. import regions, consts, struct_file
@@ -200,6 +200,22 @@ class TestMachineControllerLive(object):
                     y = (data & 0x00ff0000) >> 16
                     p = (data & 0x0000ffff)
                     assert p == t_p and x == t_x and y == t_y
+
+    @pytest.mark.parametrize(
+        "targets",
+        [{(1, 1): {3, 4}, (1, 0): {5}},
+         {(0, 1): {2}}]
+    )
+    def test_get_processor_status(self, controller, targets):
+        for (x, y), cores in iteritems(targets):
+            with controller(x=x, y=y):
+                for p in cores:
+                    # Get the status and assert that the core is running, the
+                    # app_id is correct and the cpu_state is fine.
+                    status = controller.get_processor_status(p)
+                    assert status.app_name == "rig_test"
+                    assert status.cpu_state is consts.AppState.run
+                    assert status.rt_code is consts.RuntimeException.none
 
 
 class TestMachineController(object):
@@ -733,6 +749,70 @@ class TestMachineController(object):
         # Check that the VCPU base was used
         cn.read.assert_called_once_with(
             vcpu_base + vcpu_struct.size * p + field_.offset, len(data), x, y)
+
+    @pytest.mark.parametrize("x, y, p, vcpu_base", [(0, 1, 11, 0x67801234),
+                                                    (1, 4, 17, 0x33331110)])
+    def test_get_processor_status(self, x, y, p, vcpu_base):
+        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
+        structs = struct_file.read_struct_file(struct_data)
+        vcpu_struct = structs[b"vcpu"]
+
+        # Create a mock SV struct reader
+        def mock_read_struct_field(struct_name, field, x, y, p=0):
+            if six.b(struct_name) == b"sv" and six.b(field) == b"vcpu_base":
+                return vcpu_base
+            assert False, "Unexpected struct field read."
+
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.side_effect = mock_read_struct_field
+        cn.structs = structs
+        cn.read = mock.Mock()
+
+        # Create data to read for the processor status struct
+        vcpu_struct.update_default_values(
+            r0=0x00000000,
+            r1=0x00000001,
+            r2=0x00000002,
+            r3=0x00000003,
+            r4=0x00000004,
+            r5=0x00000005,
+            r6=0x00000006,
+            r7=0x00000007,
+            psr=0x00000008,
+            sp=0x00000009,
+            lr=0x0000000a,
+            rt_code=int(consts.RuntimeException.api_startup_failure),
+            cpu_flags=0x0000000c,
+            cpu_state=int(consts.AppState.sync0),
+            app_id=30,
+            app_name=b"Hello World!\x00\x00\x00\x00",
+        )
+        cn.read.return_value = vcpu_struct.pack()
+
+        # Get the processor status
+        with cn(x=x, y=y, p=p):
+            ps = cn.get_processor_status()
+
+        # Assert that we asked for the vcpu_base
+        cn.read_struct_field.assert_called_once_with("sv", "vcpu_base", x, y)
+
+        # And that the read was from the correct location
+        cn.read.assert_called_once_with(vcpu_base + vcpu_struct.size * p,
+                                        vcpu_struct.size, x, y)
+
+        # Finally, that the returned ProcessorStatus is sensible
+        assert isinstance(ps, ProcessorStatus)
+        assert ps.registers == [0, 1, 2, 3, 4, 5, 6, 7]
+        assert ps.program_state_register == 8
+        assert ps.stack_pointer == 9
+        assert ps.link_register == 0xa
+        assert ps.cpu_flags == 0xc
+        assert ps.cpu_state is consts.AppState.sync0
+        assert ps.app_id == 30
+        assert ps.app_name == "Hello World!"
+        assert ps.rt_code is consts.RuntimeException.api_startup_failure
 
     @pytest.mark.parametrize("n_args", [0, 3])
     def test_flood_fill_aplx_args_fails(self, n_args):
