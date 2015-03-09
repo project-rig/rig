@@ -14,6 +14,7 @@ SPINNAKER_RTR_BASE = 0xE1000000  # Unbuffered
 SPINNAKER_RTR_P2P = SPINNAKER_RTR_BASE + 0x10000
 """Base address of P2P routing table."""
 
+
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""
     sver = 0  # Get the software version

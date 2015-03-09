@@ -1222,12 +1222,12 @@ class TestMachineController(object):
         assert cn.read_struct_field.called_once_with("sv", "link_up", 0, 0, 0)
 
     @pytest.mark.parametrize("num_cpus", [1, 18])
-    def test_get_working_cores(self, num_cpus):
+    def test_get_num_working_cores(self, num_cpus):
         cn = MachineController("localhost")
         cn.read_struct_field = mock.Mock()
         cn.read_struct_field.return_value = num_cpus
 
-        assert cn.get_working_cores(x=0, y=0) == num_cpus
+        assert cn.get_num_working_cores(x=0, y=0) == num_cpus
         assert cn.read_struct_field.called_once_with("sv", "num_cpus", 0, 0, 0)
 
     def test_get_machine(self):
@@ -1263,10 +1263,10 @@ class TestMachineController(object):
         # Return 18 working cores except for (2, 2) which will have only 3
         # cores.
 
-        def get_working_cores(x, y):
+        def get_num_working_cores(x, y):
             return 18 if (x, y) != (2, 2) else 3
-        cn.get_working_cores = mock.Mock()
-        cn.get_working_cores.side_effect = get_working_cores
+        cn.get_num_working_cores = mock.Mock()
+        cn.get_num_working_cores.side_effect = get_num_working_cores
 
         # Return all working links except for (4, 4) which will have no north
         # link.
@@ -1308,7 +1308,7 @@ class TestMachineController(object):
             mock.call("sv", "vcpu_base", 0, 0),
         ], any_order=True)
         cn.get_p2p_routing_table.assert_called_once_with(0, 0)
-        cn.get_working_cores.assert_has_calls([
+        cn.get_num_working_cores.assert_has_calls([
             mock.call(x, y) for x in range(8) for y in range(8)
             if (x, y) != (3, 3)
         ], any_order=True)

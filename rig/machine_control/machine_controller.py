@@ -637,7 +637,8 @@ class MachineController(ContextMixin):
                 self._send_ffe(pid, app_id, flags, cores, fr)
 
     @ContextMixin.use_named_contextual_arguments(app_id=Required, n_tries=2,
-                                                 wait=False)
+                                                 wait=False,
+                                                 app_start_delay=0.1)
     def load_application(self, *args, **kwargs):
         """Load an application to a set of application cores.
 
@@ -658,11 +659,16 @@ class MachineController(ContextMixin):
             it.
         n_tries : int
             Number attempts to make to load the application.
+        app_start_delay : float
+            Time to pause (in seconds) after loading to ensure that the
+            application successfully reaches the wait state before checking for
+            success.
         """
         # Get keyword arguments
         app_id = kwargs.pop("app_id")
-        wait = kwargs.pop("wait", False)
-        n_tries = kwargs.pop("n_tries", 2)
+        wait = kwargs.pop("wait")
+        n_tries = kwargs.pop("n_tries")
+        app_start_delay = kwargs.pop("app_start_delay")
 
         # Coerce the arguments into a single form.  If there are two arguments
         # then assume that we have filename and a map of chips and cores;
@@ -688,9 +694,10 @@ class MachineController(ContextMixin):
         while unloaded != {} and tries <= n_tries:
             tries += 1
 
-            # Load all unloaded applications, then pause
+            # Load all unloaded applications, then pause to ensure they reach
+            # the wait state
             self.flood_fill_aplx(unloaded, app_id=app_id, wait=True)
-            time.sleep(0.1)
+            time.sleep(app_start_delay)
 
             # Query each target in turn to determine if it is loaded or
             # otherwise.  If it is loaded (in the wait state) then remove it
@@ -843,7 +850,7 @@ class MachineController(ContextMixin):
         return set(link for link in Links if link_up & (1 << link))
 
     @ContextMixin.use_contextual_arguments
-    def get_working_cores(self, x=Required, y=Required):
+    def get_num_working_cores(self, x=Required, y=Required):
         """Return the number of working cores, including the monitor."""
         return self.read_struct_field("sv", "num_cpus", x, y)
 
@@ -910,13 +917,13 @@ class MachineController(ContextMixin):
                 if p2p_route == consts.P2PTableEntry.none:
                     dead_chips.add((x, y))
                 else:
-                    working_cores = self.get_working_cores(x, y)
+                    num_working_cores = self.get_num_working_cores(x, y)
                     working_links = self.get_working_links(x, y)
 
-                    if working_cores < default_num_cores:
+                    if num_working_cores < default_num_cores:
                         resource_exception = chip_resources.copy()
                         resource_exception[Cores] = min(default_num_cores,
-                                                        working_cores)
+                                                        num_working_cores)
                         chip_resource_exceptions[(x, y)] = resource_exception
 
                     for link in set(Links) - working_links:
