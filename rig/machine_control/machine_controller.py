@@ -98,7 +98,7 @@ class MachineController(ContextMixin):
         # size that we are informed we should expect by SCAMP/SARK or else is
         # the default.
         if self._scp_data_length is None:
-            length = consts.SCP_RECEIVE_LENGTH_DEFAULT
+            length = consts.SCP_SVER_RECEIVE_LENGTH_MAX
         else:
             length = self._scp_data_length
 

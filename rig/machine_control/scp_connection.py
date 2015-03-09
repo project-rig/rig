@@ -82,12 +82,10 @@ class SCPConnection(object):
         # Determine how many bytes to listen to on the socket, this should be
         # the smallest power of two greater than the required size (for
         # efficiency reasons).
-        receive_length = buffer_size + consts.SDP_HEADER_LENGTH
-        exp = 0
-        while receive_length != 0:
-            receive_length >>= 1
-            exp += 1
-        receive_length = 1 << exp
+        max_length = buffer_size + consts.SDP_HEADER_LENGTH
+        receive_length = 1 << 8  # 256 bytes seems like a reasonable minimum
+        while receive_length < max_length:
+            receive_length <<= 1
 
         # Repeat until a reply is received or we run out of tries.
         n_tries = 0
