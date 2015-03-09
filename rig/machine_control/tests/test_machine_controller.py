@@ -343,35 +343,14 @@ class TestMachineController(object):
         arg3 : build data in seconds since the Unix epoch.
         data : String encoding of build information.
         """
-        # Build the response packet
-        def build_response_packet(last):
-            """Builds a packet indicating:
-
-            p2p_address : (1, 2)
-            pcpu : 3
-            vcpu : 4
-
-            version_number : 2.56
-            buffer_size : 256
-
-            build_date : 888999
-            version_string : "Hello, World!"
-            """
-            packet = SCPPacket.from_bytestring(last)
-            packet.cmd_rc = 0x80  # Respond OK
-            packet.arg1 = ((1 << 8 | 2) << 16) | (3 << 8) | 4
-            packet.arg2 = (256 << 16) | 256
-            packet.arg3 = 888999
-            packet.data = b"Hello, World!"
-            return packet.bytestring
-
-        sr = SendReceive(build_response_packet)
-        mock_conn.sock.send.side_effect = sr.send
-        mock_conn.sock.recv.side_effect = sr.recv
-
         # Create the machine controller
         cn = MachineController("localhost")
-        cn._send_scp = mock_conn.send_scp
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = mock.Mock(spec_set=SCPPacket)
+        cn._send_scp.return_value.arg1 = ((1 << 8 | 2) << 16) | (3 << 8) | 4
+        cn._send_scp.return_value.arg2 = (256 << 16) | 256
+        cn._send_scp.return_value.arg3 = 888999
+        cn._send_scp.return_value.data = b"Hello, World!"
 
         # Run the software version command
         sver = cn.get_software_version(0, 1, 2)

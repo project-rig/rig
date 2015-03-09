@@ -43,13 +43,16 @@ class SCPConnection(object):
             return err
         return err_
 
-    def send_scp(self, x, y, p, cmd, arg1=0, arg2=0, arg3=0, data=b'',
-                 expected_args=3):
+    def send_scp(self, buffer_size, x, y, p, cmd, arg1=0, arg2=0, arg3=0,
+                 data=b'', expected_args=3):
         """Transmit a packet to the SpiNNaker machine and block until an
         acknowledgement is received.
 
         Parameters
         ----------
+        buffer_size : int
+            Number of bytes held in an SCP buffer by SARK, determines how many
+            bytes will be expected in a socket.
         x : int
         y : int
         p : int
@@ -76,6 +79,16 @@ class SCPConnection(object):
             data=data
         )
 
+        # Determine how many bytes to listen to on the socket, this should be
+        # the smallest power of two greater than the required size (for
+        # efficiency reasons).
+        receive_length = buffer_size + consts.SDP_HEADER_LENGTH
+        exp = 0
+        while receive_length != 0:
+            receive_length >>= 1
+            exp += 1
+        receive_length = 1 << exp
+
         # Repeat until a reply is received or we run out of tries.
         n_tries = 0
         while n_tries < self.n_tries:
@@ -85,7 +98,7 @@ class SCPConnection(object):
 
             try:
                 # Try to receive the returned acknowledgement
-                ack = self.sock.recv(consts.SCP_RECEIVE_LENGTH)
+                ack = self.sock.recv(receive_length)
             except IOError:
                 # There was nothing to receive from the socket
                 continue

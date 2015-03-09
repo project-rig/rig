@@ -94,7 +94,15 @@ class MachineController(ContextMixin):
         :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
-        return self.connections[0].send_scp(x, y, p, *args, **kwargs)
+        # Determine the size of packet we expect in return, this is usually the
+        # size that we are informed we should expect by SCAMP/SARK or else is
+        # the default.
+        if self._scp_data_length is None:
+            length = consts.SCP_RECEIVE_LENGTH_DEFAULT
+        else:
+            length = self._scp_data_length
+
+        return self.connections[0].send_scp(length, x, y, p, *args, **kwargs)
 
     def boot(self, width, height, **boot_kwargs):
         """Boot a SpiNNaker machine of the given size.
