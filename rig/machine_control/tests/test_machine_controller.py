@@ -219,6 +219,70 @@ class TestMachineControllerLive(object):
                     assert status.cpu_state is consts.AppState.run
                     assert status.rt_code is consts.RuntimeException.none
 
+    def test_get_machine(self, controller, spinnaker_width, spinnaker_height):
+        # Just check that the output of get_machine is sane, doesn't verify
+        # that it is actually correct. This test will fail if the target
+        # machine is very dead...
+        m = controller.get_machine()
+
+        # This test will fail if the system has dead chips on its periphery
+        assert m.width == spinnaker_width
+        assert m.height == spinnaker_height
+
+        # Check that *most* chips aren't dead or have resource exceptions
+        assert len(m.chip_resource_exceptions) < (m.width * m.height) / 2
+        assert len(m.dead_chips) < (m.width * m.height) / 2
+        assert len(m.dead_links) < (m.width * m.height * 6) / 2
+
+        # Check that those chips which are reported as dead are within the
+        # bounds of the system
+        for (x, y) in m.chip_resource_exceptions:
+            assert 0 <= x < m.width
+            assert 0 <= y < m.height
+        for (x, y) in m.dead_chips:
+            assert 0 <= x < m.width
+            assert 0 <= y < m.height
+            assert (x, y) not in m.chip_resource_exceptions
+        for x, y, link in m.dead_links:
+            assert 0 <= x < m.width
+            assert 0 <= y < m.height
+            assert (x, y) not in m.chip_resource_exceptions
+            assert link in Links
+
+    def test_get_machine_spinn_5(self, controller, spinnaker_width,
+                                 spinnaker_height, is_spinn_5_board):
+        # Verify get_machine in the special case when the attached machine is a
+        # single SpiNN-5 or SpiNN-4 board. Verifies sanity of returned values.
+        m = controller.get_machine()
+        nominal_live_chips = set([  # noqa
+                                            (4, 7), (5, 7), (6, 7), (7, 7),
+                                    (3, 6), (4, 6), (5, 6), (6, 6), (7, 6),
+                            (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5),
+                    (1, 4), (2, 4), (3, 4), (4, 4), (5, 4), (6, 4), (7, 4),
+            (0, 3), (1, 3), (2, 3), (3, 3), (4, 3), (5, 3), (6, 3), (7, 3),
+            (0, 2), (1, 2), (2, 2), (3, 2), (4, 2), (5, 2), (6, 2),
+            (0, 1), (1, 1), (2, 1), (3, 1), (4, 1), (5, 1),
+            (0, 0), (1, 0), (2, 0), (3, 0), (4, 0),
+        ])
+        nominal_dead_chips = set((x, y)
+                                 for x in range(m.width)
+                                 for y in range(m.height)) - nominal_live_chips
+
+        # Check that all chips not part of a SpiNN-5 board are found to be dead
+        assert nominal_dead_chips.issubset(m.dead_chips)
+
+        # Check all links to chips out of the board are found to be dead
+        for link, (dx, dy) in ((Links.north, (+0, +1)),
+                               (Links.west, (-1, +0)),
+                               (Links.south_west, (-1, -1)),
+                               (Links.south, (+0, -1)),
+                               (Links.east, (+1, +0)),
+                               (Links.north_east, (+1, +1))):
+            for (x, y) in nominal_live_chips:
+                neighbour = ((x + dx), (y + dy))
+                if neighbour not in nominal_live_chips:
+                    assert (x, y, link) in m.dead_links
+
 
 class TestMachineController(object):
     """Test the machine controller against the ideal protocol.
