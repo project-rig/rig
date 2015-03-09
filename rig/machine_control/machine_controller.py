@@ -1,4 +1,5 @@
 import collections
+import six
 from six import iteritems
 import socket
 import struct
@@ -119,6 +120,7 @@ class MachineController(ContextMixin):
         """
         self.structs = boot.boot(self.initial_host, width=width, height=height,
                                  **boot_kwargs)
+        assert len(self.structs) > 0
 
     @ContextMixin.use_contextual_arguments
     def get_software_version(self, x=Required, y=Required, processor=0):
@@ -250,10 +252,10 @@ class MachineController(ContextMixin):
 
         Parameters
         ----------
-        struct_name : :py:class:`bytes`
-            Name of the struct to read from, e.g., `b"sv"`
-        field_name : :py:class:`bytes`
-            Name of the field to read, e.g., `b"eth_addr"`
+        struct_name : string
+            Name of the struct to read from, e.g., `"sv"`
+        field_name : string
+            Name of the field to read, e.g., `"eth_addr"`
 
         .. note::
             The value returned is unpacked given the struct specification.
@@ -273,15 +275,15 @@ class MachineController(ContextMixin):
             Currently arrays are returned as tuples, e.g.::
 
                 # Returns a 20-tuple.
-                cn.read_struct_field(b"sv", b"status_map")
+                cn.read_struct_field("sv", "status_map")
 
                 # Fails
-                cn.read_struct_field(b"sv", b"status_map[1]")
+                cn.read_struct_field("sv", "status_map[1]")
         """
         # Look up the struct and field
-        field = self.structs[struct_name][field_name]
+        field = self.structs[six.b(struct_name)][six.b(field_name)]
 
-        address = self.structs[struct_name].base + field.offset
+        address = self.structs[six.b(struct_name)].base + field.offset
         pack_chars = field.length * field.pack_chars  # NOTE Python 2 and 3 fix
         length = struct.calcsize(pack_chars)
 
@@ -295,6 +297,80 @@ class MachineController(ContextMixin):
             return unpacked[0]
         else:
             return unpacked
+
+    @ContextMixin.use_contextual_arguments
+    def read_vcpu_struct_field(self, field_name, x=Required, y=Required,
+                               p=Required):
+        """Read a value out of the VCPU struct for a specific core.
+
+        Parameters
+        ----------
+        field_name : string
+            Name of the field to read from the struct.
+
+        See the documentation for :py:meth:`.read_struct_field` for further
+        details.
+        """
+        # Get the base address of the VCPU struct for this chip, then advance
+        # to get the correct VCPU struct for the requested core.
+        vcpu_struct = self.structs[b"vcpu"]
+        field = vcpu_struct[six.b(field_name)]
+        address = (self.read_struct_field("sv", "vcpu_base", x, y) +
+                   vcpu_struct.size * p) + field.offset
+
+        # Perform the read
+        length = struct.calcsize(field.pack_chars)
+        data = self.read(address, length, x, y)
+
+        # Unpack and return
+        unpacked = struct.unpack(field.pack_chars, data)
+
+        if field.length == 1:
+            return unpacked[0]
+        else:
+            # If the field is a string then truncate it and return
+            if b"s" in field.pack_chars:
+                return unpacked[0].strip(b"\x00").decode("utf-8")
+
+            # Otherwise just return
+            return unpacked
+
+    @ContextMixin.use_contextual_arguments
+    def get_processor_status(self, p=Required, x=Required, y=Required):
+        """Get the status of a given processor.
+
+        Returns
+        -------
+        :py:class:`~ProcessorStatus`
+            Representation of the current state of the processor.
+        """
+        # Get the VCPU base
+        address = (self.read_struct_field("sv", "vcpu_base", x, y) +
+                   self.structs[b"vcpu"].size * p)
+
+        # Get the VCPU data
+        data = self.read(address, self.structs[b"vcpu"].size, x, y)
+
+        # Build the kwargs that describe the current state
+        state = {
+            name.decode('utf-8'): struct.unpack(
+                f.pack_chars,
+                data[f.offset:f.offset+struct.calcsize(f.pack_chars)]
+            )[0] for (name, f) in iteritems(self.structs[b"vcpu"].fields)
+        }
+        state["registers"] = [state.pop("r{}".format(i)) for i in range(8)]
+        state["user_vars"] = [state.pop("user{}".format(i)) for i in range(4)]
+        state["app_name"] = state["app_name"].strip(b'\x00').decode('utf-8')
+        state["cpu_state"] = consts.AppState(state["cpu_state"])
+        state["rt_code"] = consts.RuntimeException(state["rt_code"])
+
+        for newname, oldname in [("iobuf_address", "iobuf"),
+                                 ("program_state_register", "psr"),
+                                 ("stack_pointer", "sp"),
+                                 ("link_register", "lr"), ]:
+            state[newname] = state.pop(oldname)
+        state.pop("__PAD")
+        return ProcessorStatus(**state)
 
     @ContextMixin.use_contextual_arguments
     def iptag_set(self, iptag, addr, port, x=Required, y=Required):
@@ -554,7 +630,7 @@ class MachineController(ContextMixin):
 
                 # Send the data
                 base_address = self.read_struct_field(
-                    b"sv", b"sdram_sys", 0, 0)
+                    "sv", "sdram_sys", 0, 0)
                 self._send_ffd(pid, aplx_data, base_address)
 
                 # Send the flood-fill END packet
@@ -628,8 +704,7 @@ class MachineController(ContextMixin):
                         # Read the struct value vcpu->cpu_state, if it is
                         # anything BUT wait then we mark this core as unloaded.
                         state = consts.AppState(
-                            self.read_struct_field(b"vcpu", b"cpu_state",
-                                                   x, y, p)
+                            self.read_vcpu_struct_field("cpu_state", x, y, p)
                         )
                         if state is not consts.AppState.wait:
                             unloaded_cores.add(p)
@@ -697,7 +772,7 @@ class MachineController(ContextMixin):
             raise SpiNNakerRouterError(count, x, y)
 
         # Determine where to write into memory
-        buf = self.read_struct_field(b"sv", b"sdram_sys", x, y)
+        buf = self.read_struct_field("sv", "sdram_sys", x, y)
 
         # Build the data to write in, then perform the write
         data = b""
@@ -879,6 +954,55 @@ class CoreInfo(collections.namedtuple(
         Human readable, textual version information split in to two fields by a
         "/". In the first field is the kernal (e.g. SC&MP or SARK) and the
         second the hardware platform (e.g. SpiNNaker).
+    """
+
+
+class ProcessorStatus(collections.namedtuple(
+    "ProcessorStatus", "registers program_state_register stack_pointer "
+                       "link_register rt_code cpu_flags cpu_state "
+                       "mbox_ap_msg mbox_mp_msg mbox_ap_cmd mbox_mp_cmd "
+                       "sw_count sw_file sw_line time app_name iobuf_address "
+                       "app_id user_vars")):
+    """Information returned about the status of a processor.
+
+    Parameters
+    ----------
+    registers : list
+        Register values dumped during a runtime exception. (All zero by
+        default.)
+    program_status_register : int
+        Program status register (dumped during a runtime exception and zero by
+        default).
+    stack_pointer : int
+        Stack pointer (dumped during a runtime exception and zero by default).
+    link_register : int
+        Link register (dumped during a runtime exception and zero by default).
+    rt_code : `~rig.machine_controller.consts.RuntimeExceptions`
+        Code for any run-time exception which may have occurred.
+    cpu_flags : int
+    cpu_state : `~rig.machine_controller.consts.AppState`
+        Current state of the processor.
+    mbox_ap_msg : int
+    mbox_mp_msg : int
+    mbox_ap_cmd : int
+    mbox_mp_cmd : int
+    sw_count : int
+        Saturating count of software errors.  (Calls to `sw_err`).
+    sw_file : int
+        Pointer to a string containing the file name in which the last software
+        error occurred.
+    sw_line : int
+        Line number of the last software error.
+    time : int
+        Time application was loaded.
+    app_name : string
+        Name of the application loaded to the processor core.
+    iobuf_address : int
+        Address of the output buffer used by the processor.
+    app_id : int
+        ID of the application currently running on the processor.
+    user_vars : list
+        List of 4 integer values that may be set by the user.
     """
 
 
