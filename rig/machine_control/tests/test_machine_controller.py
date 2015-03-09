@@ -1,6 +1,7 @@
 import mock
 import pkg_resources
 import pytest
+import six
 from six import iteritems
 import struct
 import tempfile
@@ -170,13 +171,15 @@ class TestMachineControllerLive(object):
         [{(1, 1): {3, 4}, (1, 0): {5}},
          {(0, 1): {2}}]
     )
-    def test_flood_fill_aplx(self, controller, targets):
+    def test_load_application(self, controller, targets):
         """Test loading an APLX.  The given APLX writes (x << 24) | (y << 16) |
         p into sdram_base + p*4; so we can check everything works by looking at
         that memory address.
         """
         assert isinstance(controller, MachineController)
-        controller.flood_fill_aplx(
+        assert(len(controller.structs) > 0,
+               "Controller has no structs, check test fixture.")
+        controller.load_application(
             pkg_resources.resource_filename("rig", "binaries/rig_test.aplx"),
             targets
         )
@@ -185,7 +188,7 @@ class TestMachineControllerLive(object):
         for (t_x, t_y), cores in iteritems(targets):
             with controller(x=t_x, y=t_y):
                 print(t_x, t_y)
-                addr_base = controller.read_struct_field(b"sv", b"sdram_base")
+                addr_base = controller.read_struct_field("sv", "sdram_base")
 
                 for t_p in cores:
                     addr = addr_base + 4 * t_p
@@ -661,36 +664,75 @@ class TestMachineController(object):
     @pytest.mark.parametrize("x, y, p", [(0, 1, 2), (2, 5, 6)])
     @pytest.mark.parametrize(
         "which_struct, field, expected",
-        [(b"sv", b"dbg_addr", 0),
-         (b"sv", b"status_map", (0, )*20),
-         (b"vcpu", b"sw_count", 0),
+        [("sv", "dbg_addr", 0),
+         ("sv", "status_map", (0, )*20),
          ])
     def test_read_struct_field(self, x, y, p, which_struct, field, expected):
         # Open the struct file
         struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
         structs = struct_file.read_struct_file(struct_data)
-        assert (which_struct in structs and
-                field in structs[which_struct]), "Test is broken"
+        assert (six.b(which_struct) in structs and
+                six.b(field) in structs[six.b(which_struct)]), "Test is broken"
 
         # Create the mock controller
         cn = MachineController("localhost")
         cn.structs = structs
         cn.read = mock.Mock()
         cn.read.return_value = b"\x00" * struct.calcsize(
-            structs[which_struct][field].pack_chars) * \
-            structs[which_struct][field].length
+            structs[six.b(which_struct)][six.b(field)].pack_chars) * \
+            structs[six.b(which_struct)][six.b(field)].length
 
         # Perform the struct read
         with cn(x=x, y=y, p=p):
             returned = cn.read_struct_field(which_struct, field)
         assert returned == expected
 
+        which_struct = six.b(which_struct)
+        field = six.b(field)
         # Check that read was called appropriately
         assert cn.read.called_once_with(
             structs[which_struct].base + structs[which_struct][field].offset,
             struct.calcsize(structs[which_struct][field].pack_chars),
             x, y, p
         )
+
+    @pytest.mark.parametrize("x, y, p, vcpu_base",
+                             [(0, 0, 5, 0x67800000),
+                              (1, 0, 5, 0x00000000),
+                              (3, 2, 10, 0x00ff00ff)])
+    @pytest.mark.parametrize(
+        "field, data, converted",
+        [("app_name", b"rig_test\x00\x00\x00\x00\x00\x00\x00\x00", "rig_test"),
+         ("cpu_flags", b"\x08", 8)]
+     )
+    def test_read_vcpu_struct(self, x, y, p, vcpu_base, field, data,
+                              converted):
+        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
+        structs = struct_file.read_struct_file(struct_data)
+        vcpu_struct = structs[b"vcpu"]
+        assert six.b(field) in vcpu_struct, "Test is broken"
+        field_ = vcpu_struct[six.b(field)]
+
+        # Create a mock SV struct reader
+        def mock_read_struct_field(struct_name, field, x, y, p=0):
+            if six.b(struct_name) == b"sv" and six.b(field) == b"vcpu_base":
+                return vcpu_base
+            assert False, "Unexpected struct field read."
+
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.side_effect = mock_read_struct_field
+        cn.structs = structs
+        cn.read = mock.Mock()
+        cn.read.return_value = data
+
+        # Perform the struct field read
+        assert cn.read_vcpu_struct_field(field, x, y, p) == converted
+
+        # Check that the VCPU base was used
+        cn.read.assert_called_once_with(
+            vcpu_base + vcpu_struct.size * p + field_.offset, len(data), x, y)
 
     @pytest.mark.parametrize("n_args", [0, 3])
     def test_flood_fill_aplx_args_fails(self, n_args):
@@ -738,7 +780,7 @@ class TestMachineController(object):
                 cn.flood_fill_aplx(aplx_file, targets)
 
         # Check the base address was retrieved
-        cn.read_struct_field.assert_called_once_with(b"sv", b"sdram_sys", 0, 0)
+        cn.read_struct_field.assert_called_once_with("sv", "sdram_sys", 0, 0)
 
         # Determine the expected core mask
         coremask = 0x00000000
@@ -819,7 +861,7 @@ class TestMachineController(object):
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
         cn.flood_fill_aplx = mock.Mock()
-        cn.read_struct_field = mock.Mock()
+        cn.read_vcpu_struct_field = mock.Mock()
         cn.send_signal = mock.Mock()
 
         # Construct a list of targets and a list of failed targets
@@ -828,13 +870,13 @@ class TestMachineController(object):
         failed_targets = {(0, 1, 4)}
         faileds = {(0, 1): {4}}
 
-        def read_struct_field(sn, fn, x, y, p):
+        def read_struct_field(fn, x, y, p):
             if (x, y, p) in failed_targets:
                 failed_targets.remove((x, y, p))  # Succeeds next time
                 return consts.AppState.idle
             else:
                 return consts.AppState.wait
-        cn.read_struct_field.side_effect = read_struct_field
+        cn.read_vcpu_struct_field.side_effect = read_struct_field
 
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
@@ -848,11 +890,11 @@ class TestMachineController(object):
         ])
 
         # Reading struct values
-        cn.read_struct_field.assert_has_calls([
-            mock.call(b"vcpu", b"cpu_state", x, y, p)
+        cn.read_vcpu_struct_field.assert_has_calls([
+            mock.call("cpu_state", x, y, p)
             for (x, y), ps in iteritems(targets) for p in ps
         ] + [
-            mock.call(b"vcpu", b"cpu_state", x, y, p)
+            mock.call("cpu_state", x, y, p)
             for (x, y), ps in iteritems(faileds) for p in ps
         ])
 
@@ -867,7 +909,7 @@ class TestMachineController(object):
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
         cn.flood_fill_aplx = mock.Mock()
-        cn.read_struct_field = mock.Mock()
+        cn.read_vcpu_struct_field = mock.Mock()
         cn.send_signal = mock.Mock()
 
         # Construct a list of targets and a list of failed targets
@@ -876,13 +918,13 @@ class TestMachineController(object):
         failed_targets = {(0, 1, 4)}
         faileds = {(0, 1): {4}}
 
-        def read_struct_field(sn, fn, x, y, p):
+        def read_struct_field(fn, x, y, p):
             if (x, y, p) in failed_targets:
                 failed_targets.remove((x, y, p))  # Succeeds next time
                 return consts.AppState.idle
             else:
                 return consts.AppState.wait
-        cn.read_struct_field.side_effect = read_struct_field
+        cn.read_vcpu_struct_field.side_effect = read_struct_field
 
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
@@ -896,11 +938,11 @@ class TestMachineController(object):
         ])
 
         # Reading struct values
-        cn.read_struct_field.assert_has_calls([
-            mock.call(b"vcpu", b"cpu_state", x, y, p)
+        cn.read_vcpu_struct_field.assert_has_calls([
+            mock.call("cpu_state", x, y, p)
             for (x, y), ps in iteritems(targets) for p in ps
         ] + [
-            mock.call(b"vcpu", b"cpu_state", x, y, p)
+            mock.call("cpu_state", x, y, p)
             for (x, y), ps in iteritems(faileds) for p in ps
         ])
 
@@ -915,7 +957,7 @@ class TestMachineController(object):
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
         cn.flood_fill_aplx = mock.Mock()
-        cn.read_struct_field = mock.Mock()
+        cn.read_vcpu_struct_field = mock.Mock()
         cn.send_signal = mock.Mock()
 
         # Construct a list of targets and a list of failed targets
@@ -923,12 +965,12 @@ class TestMachineController(object):
         targets = {(0, 1): {2, 4}}
         failed_targets = {(0, 1, 4)}
 
-        def read_struct_field(sn, fn, x, y, p):
+        def read_struct_field(fn, x, y, p):
             if (x, y, p) in failed_targets:
                 return consts.AppState.idle
             else:
                 return consts.AppState.wait
-        cn.read_struct_field.side_effect = read_struct_field
+        cn.read_vcpu_struct_field.side_effect = read_struct_field
 
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
@@ -1012,8 +1054,8 @@ class TestMachineController(object):
             len(entries)
         )
 
-        # (2) Request for the b"sv" b"sdram_sys" value
-        cn.read_struct_field.assert_called_once_with(b"sv", b"sdram_sys", x, y)
+        # (2) Request for the "sv" "sdram_sys" value
+        cn.read_struct_field.assert_called_once_with("sv", "sdram_sys", x, y)
 
         # (3) A write to this address of the routing table entries
         temp_mem.seek(0)

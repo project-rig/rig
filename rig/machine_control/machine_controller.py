@@ -1,4 +1,5 @@
 import collections
+import six
 from six import iteritems
 import socket
 import struct
@@ -116,6 +117,7 @@ class MachineController(ContextMixin):
         """
         self.structs = boot.boot(self.initial_host, width=width, height=height,
                                  **boot_kwargs)
+        assert len(self.structs) > 0
 
     @ContextMixin.use_contextual_arguments
     def get_software_version(self, x=Required, y=Required, processor=0):
@@ -246,10 +248,10 @@ class MachineController(ContextMixin):
 
         Parameters
         ----------
-        struct_name : :py:class:`bytes`
-            Name of the struct to read from, e.g., `b"sv"`
-        field_name : :py:class:`bytes`
-            Name of the field to read, e.g., `b"eth_addr"`
+        struct_name : string
+            Name of the struct to read from, e.g., `"sv"`
+        field_name : string
+            Name of the field to read, e.g., `"eth_addr"`
 
         .. note::
             The value returned is unpacked given the struct specification.
@@ -269,15 +271,15 @@ class MachineController(ContextMixin):
             Currently arrays are returned as tuples, e.g.::
 
                 # Returns a 20-tuple.
-                cn.read_struct_field(b"sv", b"status_map")
+                cn.read_struct_field("sv", "status_map")
 
                 # Fails
-                cn.read_struct_field(b"sv", b"status_map[1]")
+                cn.read_struct_field("sv", "status_map[1]")
         """
         # Look up the struct and field
-        field = self.structs[struct_name][field_name]
+        field = self.structs[six.b(struct_name)][six.b(field_name)]
 
-        address = self.structs[struct_name].base + field.offset
+        address = self.structs[six.b(struct_name)].base + field.offset
         pack_chars = field.length * field.pack_chars  # NOTE Python 2 and 3 fix
         length = struct.calcsize(pack_chars)
 
@@ -290,6 +292,42 @@ class MachineController(ContextMixin):
         if field.length == 1:
             return unpacked[0]
         else:
+            return unpacked
+
+    @ContextMixin.use_contextual_arguments
+    def read_vcpu_struct_field(self, field_name, x=Required, y=Required, p=0):
+        """Read a value out of the VCPU struct.
+
+        Parameters
+        ----------
+        field_name : string
+            Name of the field to read from the struct.
+
+        See the documentation for :py:meth:`.read_struct_field` for further
+        details.
+        """
+        # Get the base address of the VCPU struct for this chip, then advance
+        # to get the correct VCPU struct for the requested core.
+        vcpu_struct = self.structs[b"vcpu"]
+        field = vcpu_struct[six.b(field_name)]
+        address = (self.read_struct_field("sv", "vcpu_base", x, y) +
+                   vcpu_struct.size * p) + field.offset
+
+        # Perform the read
+        length = struct.calcsize(field.pack_chars)
+        data = self.read(address, length, x, y)
+
+        # Unpack and return
+        unpacked = struct.unpack(field.pack_chars, data)
+
+        if field.length == 1:
+            return unpacked[0]
+        else:
+            # If the field is a string then truncate it and return
+            if b"s" in field.pack_chars:
+                return unpacked[0].strip(b"\x00").decode("utf-8")
+
+            # Otherwise just return
             return unpacked
 
     @ContextMixin.use_contextual_arguments
@@ -550,7 +588,7 @@ class MachineController(ContextMixin):
 
                 # Send the data
                 base_address = self.read_struct_field(
-                    b"sv", b"sdram_sys", 0, 0)
+                    "sv", "sdram_sys", 0, 0)
                 self._send_ffd(pid, aplx_data, base_address)
 
                 # Send the flood-fill END packet
@@ -624,8 +662,7 @@ class MachineController(ContextMixin):
                         # Read the struct value vcpu->cpu_state, if it is
                         # anything BUT wait then we mark this core as unloaded.
                         state = consts.AppState(
-                            self.read_struct_field(b"vcpu", b"cpu_state",
-                                                   x, y, p)
+                            self.read_vcpu_struct_field("cpu_state", x, y, p)
                         )
                         if state is not consts.AppState.wait:
                             unloaded_cores.add(p)
@@ -693,7 +730,7 @@ class MachineController(ContextMixin):
             raise SpiNNakerRouterError(count, x, y)
 
         # Determine where to write into memory
-        buf = self.read_struct_field(b"sv", b"sdram_sys", x, y)
+        buf = self.read_struct_field("sv", "sdram_sys", x, y)
 
         # Build the data to write in, then perform the write
         data = b""
