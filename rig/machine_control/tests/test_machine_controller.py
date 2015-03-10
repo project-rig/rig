@@ -277,6 +277,16 @@ class TestMachineControllerLive(object):
                 if neighbour not in nominal_live_chips:
                     assert (x, y, link) in m.dead_links
 
+    @pytest.mark.parametrize("data", [b"Hello, SpiNNaker",
+                                      b"Bonjour SpiNNaker"])
+    def test_sdram_alloc_as_io_read_write(self, controller, data):
+        # Allocate some memory, write to it and check that we can read back
+        with controller(x=1, y=0):
+            mem = controller.sdram_alloc_as_io(len(data))
+            assert mem.write(data) == len(data)
+            mem.seek(-len(data))
+            assert mem.read(len(data)) == data
+
 
 class TestMachineController(object):
     """Test the machine controller against the ideal protocol.
@@ -654,7 +664,7 @@ class TestMachineController(object):
 
         Outgoing:
             cmd_rc : 28
-            arg1 : op code (0) << 8 | app_id
+            arg1 : app_id << 8 | op code (0)
             arg2 : size (bytes)
             arg3 : tag
         """
@@ -672,7 +682,8 @@ class TestMachineController(object):
         assert address == addr
 
         # Check the packet was sent as expected
-        cn._send_scp.assert_called_once_with(1, 2, 0, 28, app_id, size, tag)
+        cn._send_scp.assert_called_once_with(1, 2, 0, 28, app_id << 8,
+                                             size, tag)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (5, 6)])
     @pytest.mark.parametrize("size", [8, 200])
@@ -1391,7 +1402,7 @@ class TestMemoryIO(object):
             sdram_file.read(n_bytes)
             assert sdram_file.tell() == offset + n_bytes
             assert sdram_file.address == start_address + offset + n_bytes
-            calls.append(mock.call(x, y, 0, start_address + offset, n_bytes))
+            calls.append(mock.call(start_address + offset, n_bytes, x, y, 0))
             offset = offset + n_bytes
 
         # Check the reads caused the appropriate calls to the machine
@@ -1402,7 +1413,7 @@ class TestMemoryIO(object):
         sdram_file = MemoryIO(mock_controller, 0, 0,
                               start_address=0, end_address=10)
         sdram_file.read(100)
-        mock_controller.read.assert_called_with(0, 0, 0, 0, 10)
+        mock_controller.read.assert_called_with(0, 10, 0, 0, 0)
 
         assert sdram_file.read(1) == b''
         assert mock_controller.read.call_count == 1
@@ -1423,8 +1434,8 @@ class TestMemoryIO(object):
             assert n_written == n_bytes
             assert sdram_file.tell() == offset + n_bytes
             assert sdram_file.address == start_address + offset + n_bytes
-            calls.append(mock.call(x, y, 0, start_address + offset,
-                                   chr(i % 256) * n_bytes))
+            calls.append(mock.call(start_address + offset,
+                                   chr(i % 256) * n_bytes, x, y, 0))
             offset = offset + n_bytes
 
         # Check the reads caused the appropriate calls to the machine
