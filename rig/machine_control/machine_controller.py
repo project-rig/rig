@@ -208,7 +208,7 @@ class MachineController(ContextMixin):
         buffer_size = (sver.arg2 & 0xffff)
 
         return CoreInfo(p2p_address, pcpu, vcpu, version, buffer_size,
-                        sver.arg3, sver.data)
+                        sver.arg3, sver.data.decode("utf-8"))
 
     @ContextMixin.use_contextual_arguments
     def write(self, address, data, x=Required, y=Required, p=0):

@@ -96,7 +96,7 @@ class TestMachineControllerLive(object):
             for y in range(2):
                 sver = controller.get_software_version(x=x, y=y, processor=0)
                 assert sver.virt_cpu == 0
-                assert b"SpiNNaker" in bytes(sver.version_string)
+                assert "SpiNNaker" in bytes(sver.version_string)
                 assert sver.version >= 1.3
                 assert sver.position == (x, y)
 
@@ -356,7 +356,7 @@ class TestMachineController(object):
         assert sver.version == 2.56
         assert sver.buffer_size == 256
         assert sver.build_date == 888999
-        assert sver.version_string == b"Hello, World!"
+        assert sver.version_string == "Hello, World!"
 
     @pytest.mark.parametrize("size", [128, 256])
     def test_scp_data_length(self, size):

@@ -8,6 +8,11 @@ def spinnaker_ip(request):
 
 
 @pytest.fixture(scope='session')
+def bmp_ip(request):
+    return request.config.getoption('bmp', skip=True)[0]
+
+
+@pytest.fixture(scope='session')
 def spinnaker_width(request):
     return int(request.config.getoption('spinnaker', skip=True)[1])
 
@@ -33,7 +38,7 @@ def is_spinn_5_board(request, spinnaker_width, spinnaker_height):
 def pytest_addoption(parser):
     # Add the option to run tests against a SpiNNaker machine
     parser.addoption("--no-boot", action="store_false",
-                     help="Skip booting the board during tests.")
+                     help="Skip booting/power-cycling the board during tests.")
     parser.addoption("--spinnaker", nargs=3,
                      help="Run tests on a SpiNNaker machine. "
                           "Specify the IP address or hostname "
@@ -42,6 +47,10 @@ def pytest_addoption(parser):
     parser.addoption("--spinn5", action="store_true", default=False,
                      help="The SpiNNaker machine is a single SpiNN-5 "
                           "or SpiNN-4 board.")
+    parser.addoption("--bmp", nargs=1,
+                     help="Run tests against a real SpiNNaker board's BMP. "
+                          "Specify the IP address or hostname of "
+                          "the BMP to use.")
 
 
 # From pytest.org
