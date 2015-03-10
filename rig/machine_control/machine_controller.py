@@ -199,6 +199,7 @@ class MachineController(ContextMixin):
         # Format the result
         # arg1 => p2p address, physical cpu, virtual cpu
         p2p = sver.arg1 >> 16
+        p2p_address = (p2p >> 8, p2p & 0x00ff)
         pcpu = (sver.arg1 >> 8) & 0xff
         vcpu = sver.arg1 & 0xff
 
@@ -206,8 +207,8 @@ class MachineController(ContextMixin):
         version = (sver.arg2 >> 16) / 100.
         buffer_size = (sver.arg2 & 0xffff)
 
-        return CoreInfo(p2p, pcpu, vcpu, version, buffer_size, sver.arg3,
-                        sver.data)
+        return CoreInfo(p2p_address, pcpu, vcpu, version, buffer_size,
+                        sver.arg3, sver.data)
 
     @ContextMixin.use_contextual_arguments
     def write(self, address, data, x=Required, y=Required, p=0):
@@ -816,15 +817,44 @@ class MachineController(ContextMixin):
         self._send_scp(0, 0, 0, SCPCommands.signal, arg1, arg2, arg3)
 
     @ContextMixin.use_contextual_arguments
+    def load_routing_tables(self, routing_tables, app_id=Required):
+        """Allocate space for an load multicast routing tables.
+
+        Parameters
+        ----------
+        routing_tables : {(x, y): [RoutingTableEntry(...), ...], ...}
+            Map of chip co-ordinates to routing table entries, as produced, for
+            example by
+            :py:func:`~rig.place_and_route.util.build_routing_tables`.
+
+        Raises
+        ------
+        SpiNNakerRouterError
+            If it is not possible to allocate sufficient routing table entries.
+        """
+        for (x, y), table in iteritems(routing_tables):
+            self.load_routing_table_entries(table, x=x, y=y, app_id=app_id)
+
+    @ContextMixin.use_contextual_arguments
     def load_routing_table_entries(self, entries, x=Required, y=Required,
                                    app_id=Required):
         """Allocate space for and load multicast routing table entries into the
         router of a SpiNNaker chip.
 
+        .. note::
+            This method only loads routing table entries for a single chip.
+            Most users should use `.load_routing_tables` which loads routing
+            tables to multiple chips.
+
         Parameters
         ----------
         entries : [RoutingTableEntry(...), ...]
             List of :py:class:`rig.routing_table.RoutingTableEntry`\ s.
+
+        Raises
+        ------
+        SpiNNakerRouterError
+            If it is not possible to allocate sufficient routing table entries.
         """
         count = len(entries)
 
@@ -996,13 +1026,13 @@ class MachineController(ContextMixin):
 
 
 class CoreInfo(collections.namedtuple(
-    'CoreInfo', "p2p_address physical_cpu virt_cpu version buffer_size "
+    'CoreInfo', "position physical_cpu virt_cpu version buffer_size "
                 "build_date version_string")):
     """Information returned about a core by sver.
 
     Parameters
     ----------
-    p2p_address : (x, y)
+    position : (x, y)
         Logical location of the chip in the system.
     physical_cpu : int
         The physical ID of the core. (Not useful to most users).

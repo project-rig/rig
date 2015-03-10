@@ -98,6 +98,7 @@ class TestMachineControllerLive(object):
                 assert sver.virt_cpu == 0
                 assert b"SpiNNaker" in bytes(sver.version_string)
                 assert sver.version >= 1.3
+                assert sver.position == (x, y)
 
     def test_write_and_read(self, controller):
         """Test write and read capabilities by writing a string to SDRAM and
@@ -349,7 +350,7 @@ class TestMachineController(object):
         sver = cn.get_software_version(0, 1, 2)
 
         # Assert that the response is correct
-        assert sver.p2p_address == (1 << 8) | 2
+        assert sver.position == (1, 2)
         assert sver.physical_cpu == 3
         assert sver.virt_cpu == 4
         assert sver.version == 2.56
@@ -1215,6 +1216,25 @@ class TestMachineController(object):
             cn.load_routing_table_entries([None] * 100, 0, 4, 32)
         assert "100" in str(excinfo.value)
         assert "(0, 4)" in str(excinfo.value)
+
+    @pytest.mark.parametrize(
+        "routing_tables",
+        [{(0, 1): [RoutingTableEntry({Routes.core_1}, 0x00ff0000, 0xffff0000)],
+          (1, 1): [RoutingTableEntry({Routes.east}, 0x00ff0000, 0xffff0000)],
+          }])
+    def test_loading_routing_tables(self, routing_tables):
+        cn = MachineController("localhost")
+        cn.load_routing_table_entries = mock.Mock()
+
+        # Load the set of routing table entries
+        with cn(app_id=69):
+            cn.load_routing_tables(routing_tables)
+
+        # Check all the calls were made
+        cn.load_routing_table_entries.assert_has_calls(
+            [mock.call(entries, x=x, y=y, app_id=69)
+             for (x, y), entries in iteritems(routing_tables)]
+        )
 
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")
