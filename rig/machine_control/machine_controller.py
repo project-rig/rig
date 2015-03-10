@@ -6,7 +6,9 @@ from six import iteritems
 import socket
 import struct
 import time
+import pkg_resources
 
+from . import struct_file
 from .consts import SCPCommands, DataType, NNCommands, NNConstants, AppFlags
 from . import boot, consts, regions
 from .scp_connection import SCPConnection
@@ -54,7 +56,7 @@ class MachineController(ContextMixin):
             core_one_status = cm.get_processor_status(1)
 
     """
-    def __init__(self, initial_host, n_tries=5, timeout=0.5,
+    def __init__(self, initial_host, n_tries=5, timeout=0.5, structs=None,
                  initial_context={"app_id": 66}):
         """Create a new controller for a SpiNNaker machine.
 
@@ -66,6 +68,10 @@ class MachineController(ContextMixin):
         n_tries : int
             Number of SDP packet retransmission attempts.
         timeout : float
+        structs : dict or None
+            A dictionary of struct data defining the memory locations of
+            important values in SARK. If None, the default struct file used for
+            booting will be used.
         initial_context : `{argument: value}`
             Dictionary of default arguments to pass to methods in this class.
         """
@@ -79,8 +85,12 @@ class MachineController(ContextMixin):
         self._nn_id = 0  # ID for nearest neighbour packets
         self._scp_data_length = None
 
-        # Empty structs until booted, or otherwise set
-        self.structs = {}
+        # Load default structs if none provided
+        self.structs = structs
+        if self.structs is None:
+            struct_data = pkg_resources.resource_string("rig",
+                                                        "boot/sark.struct")
+            self.structs = struct_file.read_struct_file(struct_data)
 
         # Create the initial connection
         self.connections = [
@@ -313,18 +323,6 @@ class MachineController(ContextMixin):
         .. note::
             The value returned is unpacked given the struct specification.
 
-        .. warning::
-            This feature is only available if this machine controller was used
-            to boot a board OR an appropriate struct definition has been
-            provided.  To do this use, e.g::
-
-                from rig.machine_controller.struct_file import read_struct_file
-
-                with open("/path/to/struct/spec", "rb") as f:
-                    data = f.read()
-
-                cn.structs = read_struct_file(data)
-
             Currently arrays are returned as tuples, e.g.::
 
                 # Returns a 20-tuple.
@@ -385,8 +383,9 @@ class MachineController(ContextMixin):
             if b"s" in field.pack_chars:
                 return unpacked[0].strip(b"\x00").decode("utf-8")
 
-            # Otherwise just return
-            return unpacked
+            # Otherwise just return. (Note: at the time of writing, no fields
+            # in the VCPU struct are of this form.)
+            return unpacked  # pragma: no cover
 
     @ContextMixin.use_contextual_arguments
     def get_processor_status(self, p=Required, x=Required, y=Required):

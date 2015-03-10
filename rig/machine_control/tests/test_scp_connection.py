@@ -112,8 +112,7 @@ def test_errors(mock_conn, rc, error):
 
     # Send an SCP command and check that the correct error is raised
     with pytest.raises(error):
-        x = mock_conn.send_scp(256, 0, 0, 0, 0)
-        assert x.cmd_rc == rc
+        mock_conn.send_scp(256, 0, 0, 0, 0)
 
     assert mock_conn.sock.send.call_count == 1
     assert mock_conn.sock.recv.call_count == 1

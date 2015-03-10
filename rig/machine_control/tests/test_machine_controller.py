@@ -5,6 +5,7 @@ import six
 from six import iteritems
 import struct
 import tempfile
+import os
 from .test_scp_connection import SendReceive, mock_conn  # noqa
 
 from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
@@ -62,22 +63,14 @@ def aplx_file(request):
     test_string = b"Must be word aligned"
     assert len(test_string) % 4 == 0
     aplx_file.write(test_string * 100)
+    aplx_file.close()
 
-    # Delete the file when done
     def teardown():
-        aplx_file.delete = True
         aplx_file.close()
+        os.unlink(aplx_file.name)
+    request.addfinalizer(teardown)
 
     return aplx_file.name
-
-
-def rc_ok(last):
-    """Returns an RC ok packet."""
-    packet = SCPPacket.from_bytestring(last)
-    packet.cmd_rc = 0x80
-    packet.arg1 = packet.arg2 = packet.arg3 = None
-    packet.data = b""
-    return packet.bytestring
 
 
 @pytest.mark.incremental
@@ -179,8 +172,8 @@ class TestMachineControllerLive(object):
         that memory address.
         """
         assert isinstance(controller, MachineController)
-        assert(len(controller.structs) > 0,
-               "Controller has no structs, check test fixture.")
+        assert len(controller.structs) > 0, \
+            "Controller has no structs, check test fixture."
         controller.load_application(
             pkg_resources.resource_filename("rig", "binaries/rig_test.aplx"),
             targets
@@ -778,7 +771,7 @@ class TestMachineController(object):
         def mock_read_struct_field(struct_name, field, x, y, p=0):
             if six.b(struct_name) == b"sv" and six.b(field) == b"vcpu_base":
                 return vcpu_base
-            assert False, "Unexpected struct field read."
+            assert False, "Unexpected struct field read."  # pragma: no cover
 
         # Create the mock controller
         cn = MachineController("localhost")
@@ -806,7 +799,7 @@ class TestMachineController(object):
         def mock_read_struct_field(struct_name, field, x, y, p=0):
             if six.b(struct_name) == b"sv" and six.b(field) == b"vcpu_base":
                 return vcpu_base
-            assert False, "Unexpected struct field read."
+            assert False, "Unexpected struct field read."  # pragma: no cover
 
         # Create the mock controller
         cn = MachineController("localhost")
