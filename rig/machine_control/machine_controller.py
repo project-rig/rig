@@ -1221,7 +1221,7 @@ class MemoryIO(object):
 
         # Perform the read and increment the offset
         data = self._machine_controller.read(
-            self._x, self._y, 0, self.address, n_bytes)
+            self.address, n_bytes, self._x, self._y, 0)
         self._offset += n_bytes
         return data
 
@@ -1251,7 +1251,7 @@ class MemoryIO(object):
 
         # Perform the write and increment the offset
         self._machine_controller.write(
-            self._x, self._y, 0, self.address, bytes)
+            self.address, bytes, self._x, self._y, 0)
         self._offset += len(bytes)
         return len(bytes)
 
