@@ -1216,6 +1216,25 @@ class TestMachineController(object):
         assert "100" in str(excinfo.value)
         assert "(0, 4)" in str(excinfo.value)
 
+    @pytest.mark.parametrize(
+        "routing_tables",
+        [{(0, 1): [RoutingTableEntry({Routes.core_1}, 0x00ff0000, 0xffff0000)],
+          (1, 1): [RoutingTableEntry({Routes.east}, 0x00ff0000, 0xffff0000)],
+          }])
+    def test_loading_routing_tables(self, routing_tables):
+        cn = MachineController("localhost")
+        cn.load_routing_table_entries = mock.Mock()
+
+        # Load the set of routing table entries
+        with cn(app_id=69):
+            cn.load_routing_tables(routing_tables)
+
+        # Check all the calls were made
+        cn.load_routing_table_entries.assert_has_calls(
+            [mock.call(entries, x=x, y=y, app_id=69)
+             for (x, y), entries in iteritems(routing_tables)]
+        )
+
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")
 

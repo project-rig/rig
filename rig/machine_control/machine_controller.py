@@ -816,15 +816,44 @@ class MachineController(ContextMixin):
         self._send_scp(0, 0, 0, SCPCommands.signal, arg1, arg2, arg3)
 
     @ContextMixin.use_contextual_arguments
+    def load_routing_tables(self, routing_tables, app_id=Required):
+        """Allocate space for an load multicast routing tables.
+
+        Parameters
+        ----------
+        routing_tables : {(x, y): [RoutingTableEntry(...), ...], ...}
+            Map of chip co-ordinates to routing table entries, as produced, for
+            example by
+            :py:func:`~rig.place_and_route.util.build_routing_tables`.
+
+        Raises
+        ------
+        SpiNNakerRouterError
+            If it is not possible to allocate sufficient routing table entries.
+        """
+        for (x, y), table in iteritems(routing_tables):
+            self.load_routing_table_entries(table, x=x, y=y, app_id=app_id)
+
+    @ContextMixin.use_contextual_arguments
     def load_routing_table_entries(self, entries, x=Required, y=Required,
                                    app_id=Required):
         """Allocate space for and load multicast routing table entries into the
         router of a SpiNNaker chip.
 
+        .. note::
+            This method only loads routing table entries for a single chip.
+            Most users should use `.load_routing_tables` which loads routing
+            tables to multiple chips.
+
         Parameters
         ----------
         entries : [RoutingTableEntry(...), ...]
             List of :py:class:`rig.routing_table.RoutingTableEntry`\ s.
+
+        Raises
+        ------
+        SpiNNakerRouterError
+            If it is not possible to allocate sufficient routing table entries.
         """
         count = len(entries)
 
