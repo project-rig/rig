@@ -36,7 +36,7 @@ class SCPCommands(enum.IntEnum):
 
     alloc_free = 28  # Allocate or free SDRAM and routing_table entries
     router = 29  # Router related commands
-    
+
     power = 57  # BMP main board power control
 
 
@@ -54,6 +54,16 @@ class LEDAction(enum.IntEnum):
     on = 3
     off = 2
     toggle = 1
+
+    @classmethod
+    def from_bool(cls, action):
+        """Maps from a bool or None to toggle."""
+        if action is None:
+            return cls.toggle
+        elif action:
+            return cls.on
+        else:
+            return cls.off
 
 
 class IPTagCommands(enum.IntEnum):

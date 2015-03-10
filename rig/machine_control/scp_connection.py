@@ -24,7 +24,7 @@ class SCPConnection(object):
             The timeout to use on the socket.
         """
         self.default_timeout = timeout
-        
+
         # Create a socket to communicate with the SpiNNaker machine
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(self.default_timeout)
@@ -88,11 +88,11 @@ class SCPConnection(object):
                 data=data
             )
 
-            # Determine how many bytes to listen to on the socket, this should be
-            # the smallest power of two greater than the required size (for
+            # Determine how many bytes to listen to on the socket, this should
+            # be the smallest power of two greater than the required size (for
             # efficiency reasons).
             max_length = buffer_size + consts.SDP_HEADER_LENGTH
-            receive_length = 1 << 8  # 256 bytes seems like a reasonable minimum
+            receive_length = 1 << 8  # 256 bytes is a reasonable minimum
             while receive_length < max_length:
                 receive_length <<= 1
 
@@ -110,24 +110,24 @@ class SCPConnection(object):
                     # There was nothing to receive from the socket
                     continue
 
-                # Convert the possible returned packet into a SDPPacket and hence
-                # to an SCPPacket.  If the seq field matches the expected seq then
-                # the acknowledgement has been returned.
+                # Convert the possible returned packet into a SDPPacket and
+                # hence to an SCPPacket.  If the seq field matches the expected
+                # seq then the acknowledgement has been returned.
                 scp = packets.SCPPacket.from_bytestring(ack[2:],
                                                         n_args=expected_args)
 
                 # Check that the CMD_RC isn't an error
                 if scp.cmd_rc in self.error_codes:
                     raise self.error_codes[scp.cmd_rc](
-                        "Packet with arguments: cmd={}, arg1={}, arg2={}, arg3={};"
-                        " sent to core ({},{},{}) was bad.".format(
+                        "Packet with arguments: cmd={}, arg1={}, arg2={}, "
+                        "arg3={}; sent to core ({},{},{}) was bad.".format(
                             cmd, arg1, arg2, arg3, x, y, p
                         )
                     )
 
                 if scp.seq == self._seq:
-                    # The packet is the acknowledgement.  Increment the sequence
-                    # indicator and return the packet.
+                    # The packet is the acknowledgement.  Increment the
+                    # sequence indicator and return the packet.
                     self._seq ^= 1
                     return scp
 
@@ -139,6 +139,7 @@ class SCPConnection(object):
         finally:
             if timeout is not None:
                 self.sock.settimeout(self.default_timeout)
+
 
 class SCPError(IOError):
     """Base Error for SCP return codes."""

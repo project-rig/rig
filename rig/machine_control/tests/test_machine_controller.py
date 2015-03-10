@@ -149,18 +149,18 @@ class TestMachineControllerLive(object):
     def test_led_on(self, controller):
         for x in range(2):
             for y in range(2):
-                controller.set_led(1, x=x, y=y, action=LEDAction.on)
+                controller.set_led(1, x=x, y=y, action=True)
 
     def test_led_off(self, controller):
         for x in range(2):
             for y in range(2):
-                controller.set_led(1, x=x, y=y, action=LEDAction.off)
+                controller.set_led(1, x=x, y=y, action=False)
 
     def test_led_toggle(self, controller):
         for _ in range(2):  # Toggle On -> Toggle Off
             for x in range(2):
                 for y in range(2):
-                    controller.set_led(1, x=x, y=y, action=LEDAction.toggle)
+                    controller.set_led(1, x=x, y=y, action=None)
 
     @pytest.mark.parametrize(
         "targets",
@@ -630,12 +630,15 @@ class TestMachineController(object):
         call = cn._send_scp.call_args[0]
         assert call == (1, 2, 0, SCPCommands.iptag, 0x00030000 | iptag)
 
-    @pytest.mark.parametrize("action", [LEDAction.on, LEDAction.off,
-                                        LEDAction.toggle, LEDAction.toggle])
+    @pytest.mark.parametrize("action,led_action",
+                             [(True, LEDAction.on), (False, LEDAction.off),
+                              (None, LEDAction.toggle),
+                              (None, LEDAction.toggle)])
     @pytest.mark.parametrize("x", [0, 1])
     @pytest.mark.parametrize("y", [0, 1])
-    @pytest.mark.parametrize("led", [0, 1])
-    def test_led_controls(self, action, x, y, led):
+    @pytest.mark.parametrize("led,leds", [(0, [0]), (1, [1]), ([2], [2]),
+                                          ([0, 1, 2], [0, 1, 2])])
+    def test_led_controls(self, action, led_action, x, y, led, leds):
         """Check setting/clearing/toggling an LED.
 
         Outgoing:
@@ -653,7 +656,7 @@ class TestMachineController(object):
         assert cn._send_scp.call_count == 1
         call, kwargs = cn._send_scp.call_args
         assert call == (x, y, 0, SCPCommands.led)
-        assert kwargs["arg1"] == action << (led * 2)
+        assert kwargs["arg1"] == sum(led_action << (led * 2) for led in leds)
 
     @pytest.mark.parametrize("app_id", [30, 33])
     @pytest.mark.parametrize("size", [8, 200])

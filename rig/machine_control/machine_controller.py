@@ -9,7 +9,8 @@ import time
 import pkg_resources
 
 from . import struct_file
-from .consts import SCPCommands, DataType, NNCommands, NNConstants, AppFlags
+from .consts import SCPCommands, DataType, NNCommands, NNConstants, \
+    AppFlags, LEDAction
 from . import boot, consts, regions
 from .scp_connection import SCPConnection
 
@@ -477,18 +478,22 @@ class MachineController(ContextMixin):
                        int(consts.IPTagCommands.clear) << 16 | iptag)
 
     @ContextMixin.use_contextual_arguments
-    def set_led(self, led, action=consts.LEDAction.toggle,
-                x=Required, y=Required):
-        """Toggle the state of an LED.
+    def set_led(self, led, action=None, x=Required, y=Required):
+        """Set or toggle the state of an LED.
 
         Parameters
         ----------
-        led : int
-            Number of the LED to set the state of (0-3)
-        action : :py:class:`rig.machine_control.consts.LEDAction`
-            Action to perform on the LED (on, off or toggle [default])
+        led : int or iterable
+            Number of the LED or an iterable of LEDs to set the state of (0-3)
+        action : bool or None
+            State to set the LED to. True for on, False for off, None to
+            toggle (default).
         """
-        arg1 = int(action) << (led * 2)
+        if isinstance(led, int):
+            leds = [led]
+        else:
+            leds = led
+        arg1 = sum(LEDAction.from_bool(action) << (led * 2) for led in leds)
         self._send_scp(x, y, 0, SCPCommands.led, arg1=arg1, expected_args=0)
 
     @ContextMixin.use_contextual_arguments
