@@ -199,6 +199,7 @@ class MachineController(ContextMixin):
         # Format the result
         # arg1 => p2p address, physical cpu, virtual cpu
         p2p = sver.arg1 >> 16
+        p2p_address = (p2p >> 8, p2p & 0x00ff)
         pcpu = (sver.arg1 >> 8) & 0xff
         vcpu = sver.arg1 & 0xff
 
@@ -206,8 +207,8 @@ class MachineController(ContextMixin):
         version = (sver.arg2 >> 16) / 100.
         buffer_size = (sver.arg2 & 0xffff)
 
-        return CoreInfo(p2p, pcpu, vcpu, version, buffer_size, sver.arg3,
-                        sver.data)
+        return CoreInfo(p2p_address, pcpu, vcpu, version, buffer_size,
+                        sver.arg3, sver.data)
 
     @ContextMixin.use_contextual_arguments
     def write(self, address, data, x=Required, y=Required, p=0):
@@ -1025,13 +1026,13 @@ class MachineController(ContextMixin):
 
 
 class CoreInfo(collections.namedtuple(
-    'CoreInfo', "p2p_address physical_cpu virt_cpu version buffer_size "
+    'CoreInfo', "position physical_cpu virt_cpu version buffer_size "
                 "build_date version_string")):
     """Information returned about a core by sver.
 
     Parameters
     ----------
-    p2p_address : (x, y)
+    position : (x, y)
         Logical location of the chip in the system.
     physical_cpu : int
         The physical ID of the core. (Not useful to most users).

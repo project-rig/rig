@@ -98,6 +98,7 @@ class TestMachineControllerLive(object):
                 assert sver.virt_cpu == 0
                 assert b"SpiNNaker" in bytes(sver.version_string)
                 assert sver.version >= 1.3
+                assert sver.position == (x, y)
 
     def test_write_and_read(self, controller):
         """Test write and read capabilities by writing a string to SDRAM and
@@ -349,7 +350,7 @@ class TestMachineController(object):
         sver = cn.get_software_version(0, 1, 2)
 
         # Assert that the response is correct
-        assert sver.p2p_address == (1 << 8) | 2
+        assert sver.position == (1, 2)
         assert sver.physical_cpu == 3
         assert sver.virt_cpu == 4
         assert sver.version == 2.56
