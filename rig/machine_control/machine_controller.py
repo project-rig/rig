@@ -517,8 +517,8 @@ class MachineController(ContextMixin):
         """
         assert 0 <= tag < 256
 
-        # Construct arg1 (op_code << 8) | app_id
-        arg1 = consts.AllocOperations.alloc_sdram << 8 | app_id
+        # Construct arg1 (app_id << 8) | op code
+        arg1 = app_id << 8 | consts.AllocOperations.alloc_sdram
 
         # Send the packet and retrieve the address
         rv = self._send_scp(x, y, 0, SCPCommands.alloc_free, arg1, size, tag)
@@ -1221,7 +1221,7 @@ class MemoryIO(object):
 
         # Perform the read and increment the offset
         data = self._machine_controller.read(
-            self._x, self._y, 0, self.address, n_bytes)
+            self.address, n_bytes, self._x, self._y, 0)
         self._offset += n_bytes
         return data
 
@@ -1251,7 +1251,7 @@ class MemoryIO(object):
 
         # Perform the write and increment the offset
         self._machine_controller.write(
-            self._x, self._y, 0, self.address, bytes)
+            self.address, bytes, self._x, self._y, 0)
         self._offset += len(bytes)
         return len(bytes)
 
