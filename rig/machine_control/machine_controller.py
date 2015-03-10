@@ -517,8 +517,8 @@ class MachineController(ContextMixin):
         """
         assert 0 <= tag < 256
 
-        # Construct arg1 (op_code << 8) | app_id
-        arg1 = consts.AllocOperations.alloc_sdram << 8 | app_id
+        # Construct arg1 (app_id << 8) | op code
+        arg1 = app_id << 8 | consts.AllocOperations.alloc_sdram
 
         # Send the packet and retrieve the address
         rv = self._send_scp(x, y, 0, SCPCommands.alloc_free, arg1, size, tag)

@@ -654,7 +654,7 @@ class TestMachineController(object):
 
         Outgoing:
             cmd_rc : 28
-            arg1 : op code (0) << 8 | app_id
+            arg1 : app_id << 8 | op code (0)
             arg2 : size (bytes)
             arg3 : tag
         """
@@ -672,7 +672,8 @@ class TestMachineController(object):
         assert address == addr
 
         # Check the packet was sent as expected
-        cn._send_scp.assert_called_once_with(1, 2, 0, 28, app_id, size, tag)
+        cn._send_scp.assert_called_once_with(1, 2, 0, 28, app_id << 8,
+                                             size, tag)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (5, 6)])
     @pytest.mark.parametrize("size", [8, 200])
