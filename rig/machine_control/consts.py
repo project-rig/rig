@@ -3,9 +3,12 @@
 import enum
 
 SCP_PORT = 17893  # TODO Reference spec
-SCP_RECEIVE_LENGTH = 512
-"""The smallest power of two large enough to handle the largest packet the
-SpiNNaker SDP implementation can produce (256+8 bytes).
+SDP_HEADER_LENGTH = 8  # TODO Reference spec.
+"""The number of bytes making up the header of an SDP packet."""
+
+SCP_SVER_RECEIVE_LENGTH_MAX = 512
+"""The smallest power of two large enough to handle that SVER will
+produce (256 + 8 bytes).
 """
 
 SPINNAKER_RTR_BASE = 0xE1000000  # Unbuffered

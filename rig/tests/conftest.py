@@ -1,4 +1,5 @@
 import pytest
+import _pytest
 
 
 @pytest.fixture(scope='session')
@@ -19,14 +20,14 @@ def spinnaker_height(request):
 @pytest.fixture(scope='session')
 def is_spinn_5_board(request, spinnaker_width, spinnaker_height):
     spinn_5 = bool(request.config.getoption('spinn5'))
-    if not spinn_5:
+    if not spinn_5:  # pragma: no cover
         pytest.skip()
+    else:  # pragma: no cover
+        # SpiNN-4 and 5 boards are always 8x8
+        assert spinnaker_width == 8
+        assert spinnaker_height == 8
 
-    # SpiNN-4 and 5 boards are always 8x8
-    assert spinnaker_width == 8
-    assert spinnaker_height == 8
-
-    return spinn_5
+        return spinn_5
 
 
 def pytest_addoption(parser):
@@ -44,14 +45,20 @@ def pytest_addoption(parser):
 
 
 # From pytest.org
-def pytest_runtest_makereport(item, call):
+def pytest_runtest_makereport(item, call):  # pragma: no cover
     if "incremental" in item.keywords:
         if call.excinfo is not None:
-            parent = item.parent
-            parent._previousfailed = item
+            # Don't skip following tests if something was simply
+            # skipped/xfailed.
+            # XXX: The pytest API for testing for skip/xfail is "lightly"
+            # defined. This will hopefully be cleaner in future versions.
+            if call.excinfo.type is not _pytest.runner.Skipped and \
+               call.excinfo.type is not _pytest.skipping.XFailed:
+                parent = item.parent
+                parent._previousfailed = item
 
 
-def pytest_runtest_setup(item):
+def pytest_runtest_setup(item):  # pragma: no cover
     if "incremental" in item.keywords:
         previousfailed = getattr(item.parent, "_previousfailed", None)
         if previousfailed is not None:

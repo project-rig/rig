@@ -1,4 +1,5 @@
 import mock
+from mock import call
 import pytest
 
 from ..packets import SCPPacket
@@ -30,7 +31,9 @@ def mock_conn():
     return conn
 
 
-def test_success(mock_conn):
+@pytest.mark.parametrize("bufsize, recv_size", [(232, 256), (256, 512),
+                                                (248, 256)])
+def test_success(mock_conn, bufsize, recv_size):
     """Test successfully transmitting and receiving, where the seq of the first
     returned packet is wrong.
     """
@@ -57,13 +60,15 @@ def test_success(mock_conn):
     mock_conn.sock.recv.side_effect = sr.recv
 
     # Send and receive
-    recvd = mock_conn.send_scp(1, 2, 3, 4, 5, 6, 7, b'\x08')
+    recvd = mock_conn.send_scp(bufsize, 1, 2, 3, 4, 5, 6, 7, b'\x08')
     assert isinstance(recvd, SCPPacket)
 
     # Check that the transmitted packet was sane, and that only two packets
     # were transmitted (because the first was acknowledged with an incorrect
-    # sequence number).
+    # sequence number).  Also assert that there were only 2 calls to recv and
+    # that they were of the correct size.
     assert mock_conn.sock.send.call_count == 2
+    mock_conn.sock.recv.assert_has_calls([call(recv_size)] * 2)
     transmitted = SCPPacket.from_bytestring(sr.last_seen)
     assert transmitted.dest_x == recvd.dest_x == 1
     assert transmitted.dest_y == recvd.dest_y == 2
@@ -82,7 +87,7 @@ def test_retries(mock_conn, n_tries):
 
     # Send an SCP command and check that an error is raised
     with pytest.raises(scp_connection.TimeoutError):
-        mock_conn.send_scp(0, 0, 0, 0)
+        mock_conn.send_scp(256, 0, 0, 0, 0)
 
     # Check that n attempts were made
     assert mock_conn.sock.send.call_count == n_tries
@@ -107,8 +112,7 @@ def test_errors(mock_conn, rc, error):
 
     # Send an SCP command and check that the correct error is raised
     with pytest.raises(error):
-        x = mock_conn.send_scp(0, 0, 0, 0)
-        assert x.cmd_rc == rc
+        mock_conn.send_scp(256, 0, 0, 0, 0)
 
     assert mock_conn.sock.send.call_count == 1
     assert mock_conn.sock.recv.call_count == 1

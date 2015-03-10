@@ -1,10 +1,14 @@
+"""A high level interface for controlling a SpiNNaker system."""
+
 import collections
 import six
 from six import iteritems
 import socket
 import struct
 import time
+import pkg_resources
 
+from . import struct_file
 from .consts import SCPCommands, DataType, NNCommands, NNConstants, AppFlags
 from . import boot, consts, regions
 from .scp_connection import SCPConnection
@@ -15,13 +19,45 @@ from rig.utils.contexts import ContextMixin, Required
 
 
 class MachineController(ContextMixin):
-    """TODO
+    """A high-level interface for controlling a SpiNNaker system.
 
-    Attributes
-    ----------
+    This class is essentially a wrapper around key functions provided by the
+    SCP protocol which aims to straight-forwardly handle many of the difficult
+    details and corner cases to ensure easy, efficient and reliable
+    communication with a machine.
+
+    Key features at a glance:
+
+    * Machine booting
+    * Probing for available resources
+    * (Efficient & reliable) loading of applications
+    * Application monitoring and control
+    * Allocation and loading of routing tables
+    * Allocation and loading of memory
+    * An optional file-like interface to memory blocks
+    * Setting up IPTags
+    * Easy-to-use blocking API
+
+    Coming soon:
+
+    * (Additional) 'advanced' non-blocking, parallel I/O interface
+    * (Automagically) handling multiple connections simultaneously
+
+    This class features a context system which allows commonly required
+    arguments to be specified for a whole block of code using a 'with'
+    statement, for example::
+
+        cm = MachineController("spinnaker")
+
+        # Commands should refer to chip (2, 3)
+        with cm(x=2, y=3):
+            three_kb_of_joy = cm.sdram_alloc(3*1024)
+            cm.write(three_kb_of_joy, b"joy" * 1024)
+            core_one_status = cm.get_processor_status(1)
+
     """
-    def __init__(self, initial_host, n_tries=5, timeout=0.5,
-                 initial_context={"app_id": 30}):
+    def __init__(self, initial_host, n_tries=5, timeout=0.5, structs=None,
+                 initial_context={"app_id": 66}):
         """Create a new controller for a SpiNNaker machine.
 
         Parameters
@@ -32,6 +68,10 @@ class MachineController(ContextMixin):
         n_tries : int
             Number of SDP packet retransmission attempts.
         timeout : float
+        structs : dict or None
+            A dictionary of struct data defining the memory locations of
+            important values in SARK. If None, the default struct file used for
+            booting will be used.
         initial_context : `{argument: value}`
             Dictionary of default arguments to pass to methods in this class.
         """
@@ -45,8 +85,12 @@ class MachineController(ContextMixin):
         self._nn_id = 0  # ID for nearest neighbour packets
         self._scp_data_length = None
 
-        # Empty structs until booted, or otherwise set
-        self.structs = {}
+        # Load default structs if none provided
+        self.structs = structs
+        if self.structs is None:
+            struct_data = pkg_resources.resource_string("rig",
+                                                        "boot/sark.struct")
+            self.structs = struct_file.read_struct_file(struct_data)
 
         # Create the initial connection
         self.connections = [
@@ -55,6 +99,8 @@ class MachineController(ContextMixin):
 
     @property
     def scp_data_length(self):
+        """The maximum SCP data field length supported by the machine."""
+        # If not known, query the machine
         if self._scp_data_length is None:
             data = self.get_software_version(0, 0)
             self._scp_data_length = data.buffer_size
@@ -94,10 +140,30 @@ class MachineController(ContextMixin):
         :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
-        return self.connections[0].send_scp(x, y, p, *args, **kwargs)
+        # Determine the size of packet we expect in return, this is usually the
+        # size that we are informed we should expect by SCAMP/SARK or else is
+        # the default.
+        if self._scp_data_length is None:
+            length = consts.SCP_SVER_RECEIVE_LENGTH_MAX
+        else:
+            length = self._scp_data_length
+
+        return self.connections[0].send_scp(length, x, y, p, *args, **kwargs)
 
     def boot(self, width, height, **boot_kwargs):
         """Boot a SpiNNaker machine of the given size.
+
+        The system will be booted from the chip whose hostname was given as the
+        argument to the MachineController.
+
+        This method is simply a very thin wrapper around
+        :py:func:`~rig.machine_control.boot.boot`.
+
+        .. warning::
+            This function does not check that the system has been booted
+            successfully. Further, if the system has already been booted, this
+            command will not cause the system to 'reboot' using the supplied
+            firmware.
 
         Parameters
         ----------
@@ -105,9 +171,6 @@ class MachineController(ContextMixin):
             Width of the machine (0 < w < 256)
         height : int
             Height of the machine (0 < h < 256)
-
-        For further boot arguments see
-        :py:func:`~rig.machine_control.boot.boot`.
 
         Notes
         -----
@@ -260,18 +323,6 @@ class MachineController(ContextMixin):
         .. note::
             The value returned is unpacked given the struct specification.
 
-        .. warning::
-            This feature is only available if this machine controller was used
-            to boot a board OR an appropriate struct definition has been
-            provided.  To do this use, e.g::
-
-                from rig.machine_controller.struct_file import read_struct_file
-
-                with open("/path/to/struct/spec", "rb") as f:
-                    data = f.read()
-
-                cn.structs = read_struct_file(data)
-
             Currently arrays are returned as tuples, e.g.::
 
                 # Returns a 20-tuple.
@@ -332,8 +383,9 @@ class MachineController(ContextMixin):
             if b"s" in field.pack_chars:
                 return unpacked[0].strip(b"\x00").decode("utf-8")
 
-            # Otherwise just return
-            return unpacked
+            # Otherwise just return. (Note: at the time of writing, no fields
+            # in the VCPU struct are of this form.)
+            return unpacked  # pragma: no cover
 
     @ContextMixin.use_contextual_arguments
     def get_processor_status(self, p=Required, x=Required, y=Required):
@@ -540,7 +592,11 @@ class MachineController(ContextMixin):
 
     @ContextMixin.use_named_contextual_arguments(app_id=Required, wait=True)
     def flood_fill_aplx(self, *args, **kwargs):
-        """Load an APLX to a set of application cores.
+        """Unreliably flood-fill APLX to a set of application cores.
+
+        .. note::
+            Most users should use the :py:meth:`.load_application` wrapper
+            around this method which guarantees successful loading.
 
         This method can be called in either of the following ways::
 
@@ -641,6 +697,9 @@ class MachineController(ContextMixin):
                                                  app_start_delay=0.1)
     def load_application(self, *args, **kwargs):
         """Load an application to a set of application cores.
+
+        This method guarantees that once it returns, all required cores will
+        have been loaded. If this is not possible, an exception will be raised.
 
         This method can be called in either of the following ways::
 
@@ -759,7 +818,8 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments
     def load_routing_table_entries(self, entries, x=Required, y=Required,
                                    app_id=Required):
-        """Load routing table entries into the router of a SpiNNaker chip.
+        """Allocate space for and load multicast routing table entries into the
+        router of a SpiNNaker chip.
 
         Parameters
         ----------
@@ -803,7 +863,7 @@ class MachineController(ContextMixin):
     def get_p2p_routing_table(self, x=Required, y=Required):
         """Dump the contents of a chip's P2P routing table.
 
-        This method can be indirectly used to get a list of available chips.
+        This method can be indirectly used to get a list of functioning chips.
 
         Returns
         -------
