@@ -1,4 +1,4 @@
-class Region(object):
+class Region(object):  # pragma : no cover
     """Represents a region of data in the memory of a SpiNNaker core (SDRAM or
     DTCM).
     """

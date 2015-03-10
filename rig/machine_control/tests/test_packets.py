@@ -71,7 +71,7 @@ class TestSDPPacket(object):
         #     src_x: 0x0F
         #     src_y: 0xF0
         #     data: 0xDEADBEEF
-        packet = b'\x87\xf0\xef\xee\xa5\x5a\x0f\xf0\xDE\xAD\xBE\xEF'
+        packet = b'\x87\xf0\xef\xee\x5a\xa5\xf0\x0f\xDE\xAD\xBE\xEF'
         sdp_packet = SDPPacket.from_bytestring(packet)
 
         assert isinstance(sdp_packet, SDPPacket)
@@ -203,7 +203,7 @@ class TestSCPPacket(object):
         #     src_y: 0xF0
         #     cmd_rc: 0xDEAD
         #     seq: 0xBEEF
-        packet = b'\x87\xf0\xef\xee\xa5\x5a\x0f\xf0\xAD\xDE\xEF\xBE'
+        packet = b'\x87\xf0\xef\xee\x5a\xa5\xf0\x0f\xAD\xDE\xEF\xBE'
         scp_packet = SCPPacket.from_bytestring(packet)
 
         assert isinstance(scp_packet, SCPPacket)
@@ -247,7 +247,7 @@ class TestSCPPacket(object):
         #     arg2: 0xCAFECAFE
         #     arg3: 0x5A5A7B7B
         #     data: 0xFEEDDEAF01
-        packet = b'\x87\xf0\xef\xee\xa5\x5a\x0f\xf0\xAD\xDE\xEF\xBE' + \
+        packet = b'\x87\xf0\xef\xee\x5a\xa5\xf0\x0f\xAD\xDE\xEF\xBE' + \
                  b'\xB7\xB7\xA5\xA5\xFE\xCA\xFE\xCA\x7B\x7B\x5A\x5A' + \
                  b'\xFE\xED\xDE\xAF\x01'
         scp_packet = SCPPacket.from_bytestring(packet)

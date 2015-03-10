@@ -114,8 +114,13 @@ class SDPPacket(object):
         data = bytestring[8:]  # Everything else
 
         # Unpack the header
-        (flags, tag, dest_cpu_port, src_cpu_port, dest_x, dest_y,
-         src_x, src_y) = struct.unpack('<8B', header)
+        (flags, tag, dest_cpu_port, src_cpu_port, dest_p2p,
+         src_p2p) = struct.unpack('<4B2H', header)
+
+        dest_x = (dest_p2p & 0xff00) >> 8
+        dest_y = (dest_p2p & 0x00ff)
+        src_x = (src_p2p & 0xff00) >> 8
+        src_y = (src_p2p & 0x00ff)
 
         # Neaten up the combined VCPU and port fields
         dest_cpu, dest_port = cls.unpack_dest_cpu_port(dest_cpu_port)
@@ -162,11 +167,15 @@ class SDPPacket(object):
     @property
     def bytestring(self):
         """Convert the packet into a bytestring."""
+        # Convert x and y to p2p addresses
+        dest_p2p = (self.dest_x << 8) | self.dest_y
+        src_p2p = (self.src_x << 8) | self.src_y
+
         # Construct the header
         header = struct.pack(
-            '<8B', FLAG_REPLY if self.reply_expected else FLAG_NO_REPLY,
+            '<4B2H', FLAG_REPLY if self.reply_expected else FLAG_NO_REPLY,
             self.tag, self.packed_dest_cpu_port, self.packed_src_cpu_port,
-            self.dest_x, self.dest_y, self.src_x, self.src_y
+            dest_p2p, src_p2p
         )
 
         # Return the header and the packed data

@@ -107,6 +107,11 @@ Some tests require a connected, non-booted, SpiNNaker system.  To run these use:
 
     py.test --spinnaker HOSTNAME WIDTH HEIGHT
 
+If you are running tests against a single SpiNN-5 or SpiNN-4 board, add the
+`--spinn5` argument to enable some additional tests.
+
+    py.test --spinnaker HOSTNAME 8 8 --spinn5
+
 To get a test coverage report run one of the following:
 
     # Summary (for rig module)
