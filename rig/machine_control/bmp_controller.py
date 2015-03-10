@@ -48,6 +48,10 @@ class BMPController(ContextMixin):
     Communication with BMPs is facilitated either directly via Ethernet or
     indirectly via the Ethernet connection of another BMP and the CAN bus in
     the backplane of each frame.
+    
+    This class aims not to be a complete BMP communication solution (users are
+    referred instead to the general-purpose `bmpc` utility), but rather to
+    cover common uses of the BMP in normal application usage.
     """
     
     def __init__(self, hosts, n_tries=5, timeout=0.5,
@@ -177,6 +181,39 @@ class BMPController(ContextMixin):
 
         return BMPInfo(code_block, frame_id, can_id, board_id, version,
                        buffer_size, sver.arg3, sver.data.decode("utf-8"))
+    
+    
+    @ContextMixin.use_contextual_arguments
+    def set_power(self, state, cabinet=Required, frame=Required,
+                  board=Required, delay=0.0):
+        """Control power to the SpiNNaker chips and FPGAs on a board.
+
+        Returns
+        -------
+        state : bool
+            True for power on, False for power off.
+        board : int or iterable
+            Specifies the board to control the power of. This may also be an
+            iterable of multiple boards (in the same frame). The command will
+            actually be sent to the first board in the iterable.
+        delay : float
+            Number of seconds delay between power state changes of different
+            boards.
+        """
+        if isinstance(board, int):
+            boards = [board]
+        else:
+            boards = list(board)
+            board = boards[0]
+        
+        arg1 = int(delay * 1000) << 16 | int(state)
+        arg2 = sum(1<<b for b in boards)
+        
+        # Allow additional time for response when powering on (since FPGAs must
+        # be loaded)
+        self._send_scp(cabinet, frame, board, SCPCommands.power,
+                       arg1=arg1, arg2=arg2,
+                       timeout=consts.BMP_POWER_ON_TIMEOUT if state else None)
 
 
 class BMPInfo(collections.namedtuple(

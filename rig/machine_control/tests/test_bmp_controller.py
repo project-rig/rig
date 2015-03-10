@@ -5,6 +5,8 @@ from mock import Mock
 from rig.machine_control import BMPController
 from rig.machine_control.bmp_controller import BMPInfo
 from rig.machine_control.packets import SCPPacket
+from rig.machine_control.consts import SCPCommands
+from rig.machine_control import consts
 
 @pytest.fixture(scope="module")
 def live_controller(bmp_ip):
@@ -56,6 +58,12 @@ class TestBMPControllerLive(object):
         sver = live_controller.get_software_version(0, 0, 0)
         assert sver.version >= 1.3
         assert "BMP" in sver.version_string
+    
+    @pytest.mark.no_boot  # Don't run if booting is disabled
+    def test_power_cycle(self, live_controller):
+        # Power-cycle a board, also checks both types of board listings
+        live_controller.set_power(False, board=0)
+        live_controller.set_power(True, board=[0])
 
 
 class TestBMPController(object):
@@ -113,3 +121,24 @@ class TestBMPController(object):
     def test_scp_data_length(self, bc_mock_sver, sver_response):
         # Test the data length can be ascertained
         assert bc_mock_sver.scp_data_length == sver_response.buffer_size
+    
+    def test_set_power(self):
+        # Check power control of both one device and several to ensure that the
+        # correct encoding is used.
+        bc = BMPController("localhost")
+        bc._send_scp = Mock()
+        
+        # Check single device and power down
+        bc.set_power(False, 0, 0, 2)
+        arg1 = 0 << 16 | 0
+        arg2 = 1 << 2
+        bc._send_scp.assert_called_once_with(0, 0, 2, SCPCommands.power,
+            arg1=arg1, arg2=arg2, timeout=None)
+        bc._send_scp.reset_mock()
+        
+        # Check multiple device, power on and a delay
+        bc.set_power(True, 0, 0, [1, 2, 4, 8], delay=0.1)
+        arg1 = 100 << 16 | 1
+        arg2 = (1 << 1) | (1 << 2) | (1 << 4) | (1 << 8)
+        bc._send_scp.assert_called_once_with(0, 0, 1, SCPCommands.power,
+            arg1=arg1, arg2=arg2, timeout=consts.BMP_POWER_ON_TIMEOUT)

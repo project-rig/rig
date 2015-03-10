@@ -17,6 +17,9 @@ SPINNAKER_RTR_BASE = 0xE1000000  # Unbuffered
 SPINNAKER_RTR_P2P = SPINNAKER_RTR_BASE + 0x10000
 """Base address of P2P routing table."""
 
+BMP_POWER_ON_TIMEOUT = 5.0
+"""Additional timeout for BMP power-on commands to reply."""
+
 
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""
@@ -33,6 +36,8 @@ class SCPCommands(enum.IntEnum):
 
     alloc_free = 28  # Allocate or free SDRAM and routing_table entries
     router = 29  # Router related commands
+    
+    power = 57  # BMP main board power control
 
 
 class DataType(enum.IntEnum):
