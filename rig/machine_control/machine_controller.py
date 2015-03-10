@@ -1,3 +1,5 @@
+"""A high level interface for controlling a SpiNNaker system."""
+
 import collections
 import six
 from six import iteritems
@@ -15,13 +17,45 @@ from rig.utils.contexts import ContextMixin, Required
 
 
 class MachineController(ContextMixin):
-    """TODO
+    """A high-level interface for controlling a SpiNNaker system.
 
-    Attributes
-    ----------
+    This class is essentially a wrapper around key functions provided by the
+    SCP protocol which aims to straight-forwardly handle many of the difficult
+    details and corner cases to ensure easy, efficient and reliable
+    communication with a machine.
+
+    Key features at a glance:
+
+    * Machine booting
+    * Probing for available resources
+    * (Efficient & reliable) loading of applications
+    * Application monitoring and control
+    * Allocation and loading of routing tables
+    * Allocation and loading of memory
+    * An optional file-like interface to memory blocks
+    * Setting up IPTags
+    * Easy-to-use blocking API
+
+    Coming soon:
+
+    * (Additional) 'advanced' non-blocking, parallel I/O interface
+    * (Automagically) handling multiple connections simultaneously
+
+    This class features a context system which allows commonly required
+    arguments to be specified for a whole block of code using a 'with'
+    statement, for example::
+
+        cm = MachineController("spinnaker")
+
+        # Commands should refer to chip (2, 3)
+        with cm(x=2, y=3):
+            three_kb_of_joy = cm.sdram_alloc(3*1024)
+            cm.write(three_kb_of_joy, b"joy" * 1024)
+            core_one_status = cm.get_processor_status(1)
+
     """
     def __init__(self, initial_host, n_tries=5, timeout=0.5,
-                 initial_context={"app_id": 30}):
+                 initial_context={"app_id": 66}):
         """Create a new controller for a SpiNNaker machine.
 
         Parameters
@@ -55,6 +89,8 @@ class MachineController(ContextMixin):
 
     @property
     def scp_data_length(self):
+        """The maximum SCP data field length supported by the machine."""
+        # If not known, query the machine
         if self._scp_data_length is None:
             data = self.get_software_version(0, 0)
             self._scp_data_length = data.buffer_size
@@ -107,15 +143,24 @@ class MachineController(ContextMixin):
     def boot(self, width, height, **boot_kwargs):
         """Boot a SpiNNaker machine of the given size.
 
+        The system will be booted from the chip whose hostname was given as the
+        argument to the MachineController.
+
+        This method is simply a very thin wrapper around
+        :py:func:`~rig.machine_control.boot.boot`.
+
+        .. warning::
+            This function does not check that the system has been booted
+            successfully. Further, if the system has already been booted, this
+            command will not cause the system to 'reboot' using the supplied
+            firmware.
+
         Parameters
         ----------
         width : int
             Width of the machine (0 < w < 256)
         height : int
             Height of the machine (0 < h < 256)
-
-        For further boot arguments see
-        :py:func:`~rig.machine_control.boot.boot`.
 
         Notes
         -----
@@ -548,7 +593,11 @@ class MachineController(ContextMixin):
 
     @ContextMixin.use_named_contextual_arguments(app_id=Required, wait=True)
     def flood_fill_aplx(self, *args, **kwargs):
-        """Load an APLX to a set of application cores.
+        """Unreliably flood-fill APLX to a set of application cores.
+
+        .. note::
+            Most users should use the :py:meth:`.load_application` wrapper
+            around this method which guarantees successful loading.
 
         This method can be called in either of the following ways::
 
@@ -649,6 +698,9 @@ class MachineController(ContextMixin):
                                                  app_start_delay=0.1)
     def load_application(self, *args, **kwargs):
         """Load an application to a set of application cores.
+
+        This method guarantees that once it returns, all required cores will
+        have been loaded. If this is not possible, an exception will be raised.
 
         This method can be called in either of the following ways::
 
@@ -767,7 +819,8 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments
     def load_routing_table_entries(self, entries, x=Required, y=Required,
                                    app_id=Required):
-        """Load routing table entries into the router of a SpiNNaker chip.
+        """Allocate space for and load multicast routing table entries into the
+        router of a SpiNNaker chip.
 
         Parameters
         ----------
@@ -811,7 +864,7 @@ class MachineController(ContextMixin):
     def get_p2p_routing_table(self, x=Required, y=Required):
         """Dump the contents of a chip's P2P routing table.
 
-        This method can be indirectly used to get a list of available chips.
+        This method can be indirectly used to get a list of functioning chips.
 
         Returns
         -------
