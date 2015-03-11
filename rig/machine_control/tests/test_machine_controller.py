@@ -73,20 +73,25 @@ def aplx_file(request):
     return aplx_file.name
 
 
+@pytest.mark.order_id("spinnaker_boot", "spinnaker_hw_test")
+@pytest.mark.order_after("bmp_power_cycle")
+@pytest.mark.no_boot  # Don't run if booting is disabled
+def test_boot(controller, spinnaker_width, spinnaker_height):
+    """Test that the board can be booted."""
+    # Assuming a 4-node board! Change this as required.
+    # Boot the board
+    controller.boot(width=spinnaker_width, height=spinnaker_height)
+
+    # Assert that the board is booted, messy!
+    sver = controller.get_software_version(0, 0, 0)
+    assert sver.version >= 1.3
+
+
+@pytest.mark.order_id("spinnaker_hw_test")
+@pytest.mark.order_after("spinnaker_boot")
 @pytest.mark.incremental
 class TestMachineControllerLive(object):
     """Test the machine controller against a running SpiNNaker machine."""
-    @pytest.mark.no_boot  # Don't run if booting is disabled
-    def test_boot(self, controller, spinnaker_width, spinnaker_height):
-        """Test that the board can be booted."""
-        # Assuming a 4-node board! Change this as required.
-        # Boot the board
-        controller.boot(width=spinnaker_width, height=spinnaker_height)
-
-        # Assert that the board is booted, messy!
-        sver = controller.get_software_version(0, 0, 0)
-        assert sver.version >= 1.3
-
     def test_get_software_version(self, controller, spinnaker_width,
                                   spinnaker_height):
         """Test getting the software version data."""

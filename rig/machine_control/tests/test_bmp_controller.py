@@ -54,6 +54,7 @@ def bc_mock_sver(request, sver_response):
     return bc
 
 
+@pytest.mark.order_id("bmp_hw_test")
 @pytest.mark.incremental
 class TestBMPControllerLive(object):
     """Test the BMP controller against real hardware."""
@@ -67,6 +68,7 @@ class TestBMPControllerLive(object):
         assert sver.version >= 1.3
         assert "BMP" in sver.version_string
 
+    @pytest.mark.order_id("bmp_power_cycle")
     @pytest.mark.no_boot  # Don't run if booting is disabled
     def test_power_cycle(self, live_controller):
         # Power-cycle a board, also checks both types of board listings
@@ -82,6 +84,7 @@ class TestBMPControllerLive(object):
         live_controller.set_led(7, True)
         live_controller.set_led(7, False)
 
+    @pytest.mark.order_after("bmp_power_cycle")
     def test_read_write_fpga_reg(self, live_controller):
         # The address of a read/writeable register in the FPGAs. This register
         # controls which packets are routed to external devices by the FPGA.
@@ -100,6 +103,7 @@ class TestBMPControllerLive(object):
             assert live_controller.read_fpga_reg(fpga_num, PKEY_ADDR) == \
                 0xBEEF0000 | fpga_num
 
+    @pytest.mark.order_after("bmp_power_cycle")
     def test_read_adc(self, live_controller):
         # Read the ADC values and simply check they're within realistic ranges
         adc = live_controller.read_adc()
@@ -115,6 +119,17 @@ class TestBMPControllerLive(object):
         assert adc.temp_ext_1 is None or 5.0 < adc.temp_ext_1 < 100.0
         assert adc.fan_0 is None or 0.0 < adc.fan_0 < 10000.0
         assert adc.fan_1 is None or 0.0 < adc.fan_1 < 10000.0
+
+
+@pytest.mark.order_after("spinnaker_hw_test", "bmp_hw_test")
+@pytest.mark.no_boot  # Don't run if booting is disabled
+def test_power_down_on_finished(live_controller):
+    """Power down the system after testing is complete.
+
+    The "order" marking on this test ensures that this test unit will run after
+    all SpiNNaker hardware tests are complete.
+    """
+    live_controller.set_power(False, board=0)
 
 
 class TestBMPController(object):
@@ -198,7 +213,8 @@ class TestBMPController(object):
         bc._send_scp.reset_mock()
 
         # Check multiple device, power on and a delay
-        bc.set_power(True, 0, 0, [1, 2, 4, 8], delay=0.1, post_power_on_delay=0.0)
+        bc.set_power(True, 0, 0, [1, 2, 4, 8], delay=0.1,
+                     post_power_on_delay=0.0)
         arg1 = 100 << 16 | 1
         arg2 = (1 << 1) | (1 << 2) | (1 << 4) | (1 << 8)
         bc._send_scp.assert_called_once_with(

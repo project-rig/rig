@@ -13,5 +13,5 @@ setup(
 
     # Requirements
     install_requires=["numpy>1.6", "six", "enum34", "sentinel"],
-    tests_require=["pytest>=2.6", "pytest-cov", "mock"],
+    tests_require=["pytest>=2.6", "pytest-cov", "mock", "toposort"],
 )
