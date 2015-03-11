@@ -1,5 +1,7 @@
 import pytest
 
+import struct
+
 from mock import Mock
 
 from rig.machine_control import BMPController
@@ -76,6 +78,24 @@ class TestBMPControllerLive(object):
         # Control a single LED, explicitly
         live_controller.set_led(7, True)
         live_controller.set_led(7, False)
+
+    def test_read_write_fpga_reg(self, live_controller):
+        # The address of a read/writeable register in the FPGAs. This register
+        # controls which packets are routed to external devices by the FPGA.
+        # Since the mask defaults to 0s, setting this field to anything but a
+        # zero value is safe. See the SpiNNaker FPGA design in the SpI/O
+        # project for register definitions:
+        # https://github.com/SpiNNakerManchester/spio
+        PKEY_ADDR = 0x00040008
+
+        # Write a value into the writeable peripheral multicast packet key
+        # field of the FPGA and read it back
+        for fpga_num in range(3):
+            live_controller.write_fpga_reg(fpga_num, PKEY_ADDR,
+                                           0xBEEF0000 | fpga_num)
+        for fpga_num in range(3):
+            assert live_controller.read_fpga_reg(fpga_num, PKEY_ADDR) == \
+                0xBEEF0000 | fpga_num
 
 
 class TestBMPController(object):
@@ -196,3 +216,41 @@ class TestBMPController(object):
         assert call == (0, 0, boards[0], SCPCommands.led)
         assert kwargs["arg1"] == sum(led_action << (led * 2) for led in leds)
         assert kwargs["arg2"] == sum(1 << b for b in boards)
+
+    @pytest.mark.parametrize("addr,real_addr", [(0, 0), (1, 0), (4, 4)])
+    @pytest.mark.parametrize("fpga_num", [0, 1, 2])
+    def test_read_fpga_reg(self, addr, real_addr, fpga_num):
+        # Check that register read commands are encoded validly and that
+        # addresses are rounded appropriately
+        bc = BMPController("localhost")
+        bc._send_scp = Mock()
+        bc._send_scp.return_value = Mock()
+        bc._send_scp.return_value.data = struct.pack("<I", 0xDEADBEEF)
+
+        assert bc.read_fpga_reg(fpga_num, addr) == 0xDEADBEEF
+        arg1 = real_addr
+        arg2 = 4
+        arg3 = fpga_num
+        bc._send_scp.assert_called_once_with(
+            0, 0, 0, SCPCommands.link_read,
+            arg1=arg1, arg2=arg2, arg3=arg3, expected_args=0
+        )
+
+    @pytest.mark.parametrize("addr,real_addr", [(0, 0), (1, 0), (4, 4)])
+    @pytest.mark.parametrize("fpga_num", [0, 1, 2])
+    def test_write_fpga_reg(self, addr, real_addr, fpga_num):
+        # Check that register write commands are encoded validly and that
+        # addresses are rounded appropriately
+        bc = BMPController("localhost")
+        bc._send_scp = Mock()
+
+        bc.write_fpga_reg(fpga_num, addr, 0xDEADBEEF)
+        arg1 = real_addr
+        arg2 = 4
+        arg3 = fpga_num
+        bc._send_scp.assert_called_once_with(
+            0, 0, 0, SCPCommands.link_write,
+            arg1=arg1, arg2=arg2, arg3=arg3,
+            data=struct.pack("<I", 0xDEADBEEF),
+            expected_args=0
+        )

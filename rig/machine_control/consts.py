@@ -27,6 +27,9 @@ class SCPCommands(enum.IntEnum):
     read = 2  # Read data
     write = 3  # Write data
 
+    link_read = 17  # Send a NN (or FPGA reg) read command
+    link_write = 18  # Send a NN (or FPGA reg) write command
+
     nearest_neighbour_packet = 20  # Send a nearest neighbour packet
     signal = 22  # Transmit a signal to applications
     flood_fill_data = 23  # Transmit flood-fill data

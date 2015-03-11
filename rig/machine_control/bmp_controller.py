@@ -1,5 +1,6 @@
 from six import iteritems
 
+import struct
 import collections
 
 from .scp_connection import SCPConnection
@@ -12,8 +13,8 @@ from rig.utils.contexts import ContextMixin, Required
 
 
 class BMPController(ContextMixin):
-    """Control the BMPs (Board Management Processors) onboard SpiNN-4 and
-    SpiNN-5 boards in a SpiNNaker machine.
+    """Control the BMPs (Board Management Processors) onboard SpiNN-5 boards in
+    a SpiNNaker machine.
 
     BMPs (and thus boards) are addressed as follows::
 
@@ -247,6 +248,62 @@ class BMPController(ContextMixin):
 
         self._send_scp(cabinet, frame, board, SCPCommands.led, arg1=arg1,
                        arg2=arg2, expected_args=0)
+
+    @ContextMixin.use_contextual_arguments
+    def read_fpga_reg(self, fpga_num, addr, cabinet=Required, frame=Required,
+                      board=Required):
+        """Read the value of an FPGA (SPI) register.
+
+        See the SpI/O project's spinnaker_fpga design's README for a listing of
+        FPGA registers. The SpI/O project can be found on GitHub at:
+        https://github.com/SpiNNakerManchester/spio/
+
+        Parameters
+        ----------
+        fpga_num : int
+            FPGA number (0, 1 or 2) to communicate with.
+        addr : int
+            Register address to read to (will be rounded down to the nearest
+            32-bit word boundary).
+
+        Returns
+        -------
+        int
+            The 32-bit value at that address.
+        """
+        arg1 = addr & (~0x3)
+        arg2 = 4  # Read a 32-bit value
+        arg3 = fpga_num
+        response = self._send_scp(cabinet, frame, board, SCPCommands.link_read,
+                                  arg1=arg1, arg2=arg2, arg3=arg3,
+                                  expected_args=0)
+        return struct.unpack("<I", response.data)[0]
+
+    @ContextMixin.use_contextual_arguments
+    def write_fpga_reg(self, fpga_num, addr, value, cabinet=Required,
+                       frame=Required, board=Required):
+        """Write the value of an FPGA (SPI) register.
+
+        See the SpI/O project's spinnaker_fpga design's README for a listing of
+        FPGA registers. The SpI/O project can be found on GitHub at:
+        https://github.com/SpiNNakerManchester/spio/
+
+        Parameters
+        ----------
+        fpga_num : int
+            FPGA number (0, 1 or 2) to communicate with.
+        addr : int
+            Register address to read or write to (will be rounded down to the
+            nearest 32-bit word boundary).
+        value : int
+            A 32-bit int value to write to the register
+        """
+        arg1 = addr & (~0x3)
+        arg2 = 4  # Write a 32-bit value
+        arg3 = fpga_num
+        self._send_scp(cabinet, frame, board, SCPCommands.link_write,
+                       arg1=arg1, arg2=arg2, arg3=arg3,
+                       data=struct.pack("<I", value), expected_args=0)
 
 
 class BMPInfo(collections.namedtuple(

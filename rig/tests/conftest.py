@@ -28,7 +28,7 @@ def is_spinn_5_board(request, spinnaker_width, spinnaker_height):
     if not spinn_5:  # pragma: no cover
         pytest.skip()
     else:  # pragma: no cover
-        # SpiNN-4 and 5 boards are always 8x8
+        # SpiNN-5 boards are always 8x8
         assert spinnaker_width == 8
         assert spinnaker_height == 8
 
@@ -46,7 +46,7 @@ def pytest_addoption(parser):
                           "the height of the machine.")
     parser.addoption("--spinn5", action="store_true", default=False,
                      help="The SpiNNaker machine is a single SpiNN-5 "
-                          "or SpiNN-4 board.")
+                          "board.")
     parser.addoption("--bmp", nargs=1,
                      help="Run tests against a real SpiNNaker board's BMP. "
                           "Specify the IP address or hostname of "
