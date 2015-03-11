@@ -103,12 +103,25 @@ The tests can now be run using:
 
     py.test
 
-Some tests require a connected, non-booted, SpiNNaker system.  To run these use:
+Some tests require a connected, (ideally non-booted) SpiNNaker system. To
+run these use:
 
     py.test --spinnaker HOSTNAME WIDTH HEIGHT
 
-If you are running tests against a single SpiNN-5 or SpiNN-4 board, add the
-`--spinn5` argument to enable some additional tests.
+Other tests require a connected BMP (Board Management Processor, part of
+SpiNN-5 boards). To run these use:
+
+    py.test --bmp HOSTNAME
+
+When a BMP is connected, the test suite will attempt to power-cycle the
+attached board. When a SpiNNaker system is connected, the test suite will
+attempt to boot the system. To skip the power-cycling or booting tests simply
+add the `--no-boot` argument.
+
+The test suite ideally should be run against a single SpiNN-5 board
+however a large subset of tests will happily run against any larger or smaller
+system.  If you are running tests against a single SpiNN-5 or board,
+add the `--spinn5` argument to enable some additional tests.
 
     py.test --spinnaker HOSTNAME 8 8 --spinn5
 

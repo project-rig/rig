@@ -73,20 +73,25 @@ def aplx_file(request):
     return aplx_file.name
 
 
+@pytest.mark.order_id("spinnaker_boot", "spinnaker_hw_test")
+@pytest.mark.order_after("bmp_power_cycle")
+@pytest.mark.no_boot  # Don't run if booting is disabled
+def test_boot(controller, spinnaker_width, spinnaker_height):
+    """Test that the board can be booted."""
+    # Assuming a 4-node board! Change this as required.
+    # Boot the board
+    controller.boot(width=spinnaker_width, height=spinnaker_height)
+
+    # Assert that the board is booted, messy!
+    sver = controller.get_software_version(0, 0, 0)
+    assert sver.version >= 1.3
+
+
+@pytest.mark.order_id("spinnaker_hw_test")
+@pytest.mark.order_after("spinnaker_boot")
 @pytest.mark.incremental
 class TestMachineControllerLive(object):
     """Test the machine controller against a running SpiNNaker machine."""
-    @pytest.mark.no_boot  # Don't run if booting is disabled
-    def test_boot(self, controller, spinnaker_width, spinnaker_height):
-        """Test that the board can be booted."""
-        # Assuming a 4-node board! Change this as required.
-        # Boot the board
-        controller.boot(width=spinnaker_width, height=spinnaker_height)
-
-        # Assert that the board is booted, messy!
-        sver = controller.get_software_version(0, 0, 0)
-        assert sver.version >= 1.3
-
     def test_get_software_version(self, controller, spinnaker_width,
                                   spinnaker_height):
         """Test getting the software version data."""
@@ -96,7 +101,7 @@ class TestMachineControllerLive(object):
             for y in range(2):
                 sver = controller.get_software_version(x=x, y=y, processor=0)
                 assert sver.virt_cpu == 0
-                assert b"SpiNNaker" in bytes(sver.version_string)
+                assert "SpiNNaker" in sver.version_string
                 assert sver.version >= 1.3
                 assert sver.position == (x, y)
 
@@ -149,18 +154,18 @@ class TestMachineControllerLive(object):
     def test_led_on(self, controller):
         for x in range(2):
             for y in range(2):
-                controller.set_led(1, x=x, y=y, action=LEDAction.on)
+                controller.set_led(1, x=x, y=y, action=True)
 
     def test_led_off(self, controller):
         for x in range(2):
             for y in range(2):
-                controller.set_led(1, x=x, y=y, action=LEDAction.off)
+                controller.set_led(1, x=x, y=y, action=False)
 
     def test_led_toggle(self, controller):
         for _ in range(2):  # Toggle On -> Toggle Off
             for x in range(2):
                 for y in range(2):
-                    controller.set_led(1, x=x, y=y, action=LEDAction.toggle)
+                    controller.set_led(1, x=x, y=y, action=None)
 
     @pytest.mark.parametrize(
         "targets",
@@ -366,7 +371,7 @@ class TestMachineController(object):
         assert sver.version == 2.56
         assert sver.buffer_size == 256
         assert sver.build_date == 888999
-        assert sver.version_string == b"Hello, World!"
+        assert sver.version_string == "Hello, World!"
 
     @pytest.mark.parametrize("size", [128, 256])
     def test_scp_data_length(self, size):
@@ -630,12 +635,15 @@ class TestMachineController(object):
         call = cn._send_scp.call_args[0]
         assert call == (1, 2, 0, SCPCommands.iptag, 0x00030000 | iptag)
 
-    @pytest.mark.parametrize("action", [LEDAction.on, LEDAction.off,
-                                        LEDAction.toggle, LEDAction.toggle])
+    @pytest.mark.parametrize("action,led_action",
+                             [(True, LEDAction.on), (False, LEDAction.off),
+                              (None, LEDAction.toggle),
+                              (None, LEDAction.toggle)])
     @pytest.mark.parametrize("x", [0, 1])
     @pytest.mark.parametrize("y", [0, 1])
-    @pytest.mark.parametrize("led", [0, 1])
-    def test_led_controls(self, action, x, y, led):
+    @pytest.mark.parametrize("led,leds", [(0, [0]), (1, [1]), ([2], [2]),
+                                          ([0, 1, 2], [0, 1, 2])])
+    def test_led_controls(self, action, led_action, x, y, led, leds):
         """Check setting/clearing/toggling an LED.
 
         Outgoing:
@@ -653,7 +661,7 @@ class TestMachineController(object):
         assert cn._send_scp.call_count == 1
         call, kwargs = cn._send_scp.call_args
         assert call == (x, y, 0, SCPCommands.led)
-        assert kwargs["arg1"] == action << (led * 2)
+        assert kwargs["arg1"] == sum(led_action << (led * 2) for led in leds)
 
     @pytest.mark.parametrize("app_id", [30, 33])
     @pytest.mark.parametrize("size", [8, 200])

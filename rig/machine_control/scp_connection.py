@@ -23,9 +23,11 @@ class SCPConnection(object):
         timeout : float
             The timeout to use on the socket.
         """
+        self.default_timeout = timeout
+
         # Create a socket to communicate with the SpiNNaker machine
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(timeout)
+        self.sock.settimeout(self.default_timeout)
         self.sock.connect((spinnaker_host, consts.SCP_PORT))
 
         # Store the number of tries that will be allowed
@@ -44,7 +46,7 @@ class SCPConnection(object):
         return err_
 
     def send_scp(self, buffer_size, x, y, p, cmd, arg1=0, arg2=0, arg3=0,
-                 data=b'', expected_args=3):
+                 data=b'', expected_args=3, timeout=0.0):
         """Transmit a packet to the SpiNNaker machine and block until an
         acknowledgement is received.
 
@@ -64,6 +66,9 @@ class SCPConnection(object):
         expected_args : int
             The number of arguments (0-3) that are expected in the returned
             packet.
+        timeout : float
+            Additional timeout in seconds to wait for a reply on top of the
+            default specified upon instantiation.
 
         Returns
         -------
@@ -71,6 +76,8 @@ class SCPConnection(object):
             The packet that was received in acknowledgement of the transmitted
             packet.
         """
+        self.sock.settimeout(self.default_timeout + timeout)
+        
         # Construct the packet that will be sent
         packet = packets.SCPPacket(
             reply_expected=True, tag=0xff, dest_port=0, dest_cpu=p,
@@ -79,11 +86,11 @@ class SCPConnection(object):
             data=data
         )
 
-        # Determine how many bytes to listen to on the socket, this should be
-        # the smallest power of two greater than the required size (for
+        # Determine how many bytes to listen to on the socket, this should
+        # be the smallest power of two greater than the required size (for
         # efficiency reasons).
         max_length = buffer_size + consts.SDP_HEADER_LENGTH
-        receive_length = 1 << 8  # 256 bytes seems like a reasonable minimum
+        receive_length = 1 << 9  # 512 bytes is a reasonable minimum
         while receive_length < max_length:
             receive_length <<= 1
 
@@ -101,24 +108,24 @@ class SCPConnection(object):
                 # There was nothing to receive from the socket
                 continue
 
-            # Convert the possible returned packet into a SDPPacket and hence
-            # to an SCPPacket.  If the seq field matches the expected seq then
-            # the acknowledgement has been returned.
+            # Convert the possible returned packet into an SCP packet. If
+            # the sequence number matches the expected sequence number then
+            # the acknowledgement has been received.
             scp = packets.SCPPacket.from_bytestring(ack[2:],
                                                     n_args=expected_args)
 
             # Check that the CMD_RC isn't an error
             if scp.cmd_rc in self.error_codes:
                 raise self.error_codes[scp.cmd_rc](
-                    "Packet with arguments: cmd={}, arg1={}, arg2={}, arg3={};"
-                    " sent to core ({},{},{}) was bad.".format(
+                    "Packet with arguments: cmd={}, arg1={}, arg2={}, "
+                    "arg3={}; sent to core ({},{},{}) was bad.".format(
                         cmd, arg1, arg2, arg3, x, y, p
                     )
                 )
 
             if scp.seq == self._seq:
-                # The packet is the acknowledgement.  Increment the sequence
-                # indicator and return the packet.
+                # The packet is the acknowledgement.  Increment the
+                # sequence indicator and return the packet.
                 self._seq ^= 1
                 return scp
 

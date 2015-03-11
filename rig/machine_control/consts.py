@@ -17,12 +17,40 @@ SPINNAKER_RTR_BASE = 0xE1000000  # Unbuffered
 SPINNAKER_RTR_P2P = SPINNAKER_RTR_BASE + 0x10000
 """Base address of P2P routing table."""
 
+BMP_POWER_ON_TIMEOUT = 5.0
+"""Additional timeout for BMP power-on commands to reply."""
+
+# The following values are taken from BMPC.
+
+BMP_ADC_MAX = 1 << 12
+"""The range of values the BMP's 12-bit ADCs can measure."""
+
+BMP_V_SCALE_2_5 = 2.5 / BMP_ADC_MAX
+"""Multiplier to convert from ADC value to volts for lines less than 2.5 V."""
+
+BMP_V_SCALE_3_3 = 3.75 / BMP_ADC_MAX
+"""Multiplier to convert from ADC value to volts for 3.3 V lines."""
+BMP_V_SCALE_12 = 15.0 / BMP_ADC_MAX
+"""Multiplier to convert from ADC value to volts for 12 V lines."""
+
+BMP_TEMP_SCALE = 1.0 / 256.0
+"""Multiplier to convert from temperature probe values to degrees Celsius."""
+
+BMP_MISSING_TEMP = -0x8000
+"""Temperature value returned when a probe is not connected."""
+
+BMP_MISSING_FAN = -1
+"""Fan speed value returned when a fan is absent."""
+
 
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""
     sver = 0  # Get the software version
     read = 2  # Read data
     write = 3  # Write data
+
+    link_read = 17  # Send a NN (or FPGA reg) read command
+    link_write = 18  # Send a NN (or FPGA reg) write command
 
     nearest_neighbour_packet = 20  # Send a nearest neighbour packet
     signal = 22  # Transmit a signal to applications
@@ -33,6 +61,10 @@ class SCPCommands(enum.IntEnum):
 
     alloc_free = 28  # Allocate or free SDRAM and routing_table entries
     router = 29  # Router related commands
+
+    bmp_info = 48  # Request various info structs from a BMP
+
+    power = 57  # BMP main board power control
 
 
 class DataType(enum.IntEnum):
@@ -49,6 +81,16 @@ class LEDAction(enum.IntEnum):
     on = 3
     off = 2
     toggle = 1
+
+    @classmethod
+    def from_bool(cls, action):
+        """Maps from a bool or None to toggle."""
+        if action is None:
+            return cls.toggle
+        elif action:
+            return cls.on
+        else:
+            return cls.off
 
 
 class IPTagCommands(enum.IntEnum):
@@ -216,3 +258,11 @@ class P2PTableEntry(enum.IntEnum):
     south = 0b101
     none = 0b110  # No known route to this location
     monitor = 0b111  # Route to the monitor on this chip
+
+
+class BMPInfoType(enum.IntEnum):
+    """Type of information to return from a bmp_info SCP command."""
+    serial = 0  # Board serial number
+    can_status = 2  # Status of all CAN devices on the bus
+    adc = 3  # ADC (e.g. voltage + temperature)
+    ip_addr = 4  # IP Address

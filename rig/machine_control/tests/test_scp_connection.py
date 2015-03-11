@@ -31,8 +31,9 @@ def mock_conn():
     return conn
 
 
-@pytest.mark.parametrize("bufsize, recv_size", [(232, 256), (256, 512),
-                                                (248, 256)])
+@pytest.mark.parametrize("bufsize, recv_size", [(232, 512), (256, 512),
+                                                (248, 512), (504, 512),
+                                                (514, 1024)])
 def test_success(mock_conn, bufsize, recv_size):
     """Test successfully transmitting and receiving, where the seq of the first
     returned packet is wrong.

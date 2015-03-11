@@ -34,3 +34,4 @@ A blocking implementation of SCP is provided by
 """
 from .packets import SCPPacket, SDPPacket
 from .machine_controller import MachineController
+from .bmp_controller import BMPController
