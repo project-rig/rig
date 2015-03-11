@@ -92,7 +92,7 @@ class SCPConnection(object):
             # be the smallest power of two greater than the required size (for
             # efficiency reasons).
             max_length = buffer_size + consts.SDP_HEADER_LENGTH
-            receive_length = 1 << 8  # 256 bytes is a reasonable minimum
+            receive_length = 1 << 9  # 512 bytes is a reasonable minimum
             while receive_length < max_length:
                 receive_length <<= 1
 
@@ -110,9 +110,9 @@ class SCPConnection(object):
                     # There was nothing to receive from the socket
                     continue
 
-                # Convert the possible returned packet into a SDPPacket and
-                # hence to an SCPPacket.  If the seq field matches the expected
-                # seq then the acknowledgement has been returned.
+                # Convert the possible returned packet into an SCP packet. If
+                # the sequence number matches the expected sequence number then
+                # the acknowledgement has been received.
                 scp = packets.SCPPacket.from_bytestring(ack[2:],
                                                         n_args=expected_args)
 
