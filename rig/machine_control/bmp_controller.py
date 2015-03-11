@@ -218,7 +218,7 @@ class BMPController(ContextMixin):
         # be loaded)
         self._send_scp(cabinet, frame, board, SCPCommands.power,
                        arg1=arg1, arg2=arg2,
-                       timeout=consts.BMP_POWER_ON_TIMEOUT if state else None,
+                       timeout=consts.BMP_POWER_ON_TIMEOUT if state else 0.0,
                        expected_args=0)
         if state:
             time.sleep(post_power_on_delay)
@@ -325,22 +325,22 @@ class BMPController(ContextMixin):
         """
         response = self._send_scp(cabinet, frame, board, SCPCommands.bmp_info,
                                   arg1=BMPInfoType.adc, expected_args=0)
-        data = struct.unpack("<"  # Little-endian
-                             "HHHHHHHH"  # uint16_t adc[8]
-                             "hhhh"      # int16_t t_int[4]
-                             "hhhh"      # int16_t t_ext[4]
-                             "hhhh"      # int16_t fan[4]
-                             "I"         # uint32_t warning
-                             "I",        # uint32_t shutdown
+        data = struct.unpack("<"   # Little-endian
+                             "8H"  # uint16_t adc[8]
+                             "4h"  # int16_t t_int[4]
+                             "4h"  # int16_t t_ext[4]
+                             "4h"  # int16_t fan[4]
+                             "I"   # uint32_t warning
+                             "I",  # uint32_t shutdown
                              response.data)
 
         return ADCInfo(
-            v1_2c=data[1] * BMP_V_SCALE_2_5,
-            v1_2b=data[2] * BMP_V_SCALE_2_5,
-            v1_2a=data[3] * BMP_V_SCALE_2_5,
-            v1_8=data[4] * BMP_V_SCALE_2_5,
-            v3_3=data[6] * BMP_V_SCALE_3_3,
-            vpwr=data[7] * BMP_V_SCALE_12,
+            voltage_1_2c=data[1] * BMP_V_SCALE_2_5,
+            voltage_1_2b=data[2] * BMP_V_SCALE_2_5,
+            voltage_1_2a=data[3] * BMP_V_SCALE_2_5,
+            voltage_1_8=data[4] * BMP_V_SCALE_2_5,
+            voltage_3_3=data[6] * BMP_V_SCALE_3_3,
+            voltage_supply=data[7] * BMP_V_SCALE_12,
             temp_top=float(data[8]) * BMP_TEMP_SCALE,
             temp_btm=float(data[9]) * BMP_TEMP_SCALE,
             temp_ext_0=((float(data[12]) * BMP_TEMP_SCALE)
@@ -387,23 +387,24 @@ class BMPInfo(collections.namedtuple(
 
 
 class ADCInfo(collections.namedtuple(
-    'ADCInfo', "v1_2c v1_2b v1_2a v1_8 v3_3 vpwr "
+    'ADCInfo', "voltage_1_2c voltage_1_2b voltage_1_2a voltage_1_8 "
+               "voltage_3_3 voltage_supply "
                "temp_top temp_btm temp_ext_0 temp_ext_1 fan_0 fan_1")):
     """ADC data returned by a BMP including voltages and temperature.
 
     Parameters
     ----------
-    v1_2a : float
+    voltage_1_2a : float
         Measured voltage on the 1.2 V rail A.
-    v1_2b : float
+    voltage_1_2b : float
         Measured voltage on the 1.2 V rail B.
-    v1_2c : float
+    voltage_1_2c : float
         Measured voltage on the 1.2 V rail C.
-    v1_8 : float
+    voltage_1_8 : float
         Measured voltage on the 1.8 V rail.
-    v3_3 : float
+    voltage_3_3 : float
         Measured voltage on the 3.3 V rail.
-    vpwr : float
+    voltage_supply : float
         Measured voltage of the (12 V) power supply input.
     temp_top : float
         Temperature near the top of the board (degrees Celsius)

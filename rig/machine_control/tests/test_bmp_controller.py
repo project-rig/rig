@@ -107,12 +107,12 @@ class TestBMPControllerLive(object):
     def test_read_adc(self, live_controller):
         # Read the ADC values and simply check they're within realistic ranges
         adc = live_controller.read_adc()
-        assert 1.1 < adc.v1_2a < 1.3 or -0.1 < adc.v1_2a < 0.1
-        assert 1.1 < adc.v1_2b < 1.3 or -0.1 < adc.v1_2b < 0.1
-        assert 1.1 < adc.v1_2c < 1.3 or -0.1 < adc.v1_2c < 0.1
-        assert 1.7 < adc.v1_8 < 1.9 or -0.1 < adc.v1_8 < 0.1
-        assert 3.2 < adc.v3_3 < 3.4 or -0.1 < adc.v3_3 < 0.1
-        assert 10.0 < adc.vpwr < 14.0
+        assert 1.1 < adc.voltage_1_2a < 1.3 or -0.1 < adc.voltage_1_2a < 0.1
+        assert 1.1 < adc.voltage_1_2b < 1.3 or -0.1 < adc.voltage_1_2b < 0.1
+        assert 1.1 < adc.voltage_1_2c < 1.3 or -0.1 < adc.voltage_1_2c < 0.1
+        assert 1.7 < adc.voltage_1_8 < 1.9 or -0.1 < adc.voltage_1_8 < 0.1
+        assert 3.2 < adc.voltage_3_3 < 3.4 or -0.1 < adc.voltage_3_3 < 0.1
+        assert 10.0 < adc.voltage_supply < 14.0
         assert 5.0 < adc.temp_top < 100.0
         assert 5.0 < adc.temp_btm < 100.0
         assert adc.temp_ext_0 is None or 5.0 < adc.temp_ext_0 < 100.0
@@ -208,7 +208,7 @@ class TestBMPController(object):
         arg2 = 1 << 2
         bc._send_scp.assert_called_once_with(
             0, 0, 2, SCPCommands.power,
-            arg1=arg1, arg2=arg2, timeout=None, expected_args=0
+            arg1=arg1, arg2=arg2, timeout=0.0, expected_args=0
         )
         bc._send_scp.reset_mock()
 
@@ -309,13 +309,13 @@ class TestBMPController(object):
         bc._send_scp = Mock()
         bc._send_scp.return_value = Mock(spec_set=SCPPacket)
         bc._send_scp.return_value.data = \
-            struct.pack("<"  # Little-endian
-                        "HHHHHHHH"  # uint16_t adc[8]
-                        "hhhh"      # int16_t t_int[4]
-                        "hhhh"      # int16_t t_ext[4]
-                        "hhhh"      # int16_t fan[4]
-                        "I"         # uint32_t warning
-                        "I",        # uint32_t shutdown
+            struct.pack("<"   # Little-endian
+                        "8H"  # uint16_t adc[8]
+                        "4h"  # int16_t t_int[4]
+                        "4h"  # int16_t t_ext[4]
+                        "4h"  # int16_t fan[4]
+                        "I"   # uint32_t warning
+                        "I",  # uint32_t shutdown
                         0,                           # adc[0] Unused
                         int(1.1 / BMP_V_SCALE_2_5),  # adc[1] 1.2 V (C)
                         int(1.2 / BMP_V_SCALE_2_5),  # adc[2] 1.2 V (B)
@@ -347,12 +347,12 @@ class TestBMPController(object):
         )
 
         # Fuzzy float test
-        assert abs(adc.v1_2a - 1.3) < 0.01
-        assert abs(adc.v1_2b - 1.2) < 0.01
-        assert abs(adc.v1_2c - 1.1) < 0.01
-        assert abs(adc.v1_8 - 1.8) < 0.01
-        assert abs(adc.v3_3 - 3.3) < 0.01
-        assert abs(adc.vpwr - 12.0) < 0.01
+        assert abs(adc.voltage_1_2a - 1.3) < 0.01
+        assert abs(adc.voltage_1_2b - 1.2) < 0.01
+        assert abs(adc.voltage_1_2c - 1.1) < 0.01
+        assert abs(adc.voltage_1_8 - 1.8) < 0.01
+        assert abs(adc.voltage_3_3 - 3.3) < 0.01
+        assert abs(adc.voltage_supply - 12.0) < 0.01
         assert abs(adc.temp_top - 40.0) < 0.01
         assert abs(adc.temp_btm - 30.0) < 0.01
 

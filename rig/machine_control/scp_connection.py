@@ -46,7 +46,7 @@ class SCPConnection(object):
         return err_
 
     def send_scp(self, buffer_size, x, y, p, cmd, arg1=0, arg2=0, arg3=0,
-                 data=b'', expected_args=3, timeout=None):
+                 data=b'', expected_args=3, timeout=0.0):
         """Transmit a packet to the SpiNNaker machine and block until an
         acknowledgement is received.
 
@@ -68,8 +68,7 @@ class SCPConnection(object):
             packet.
         timeout : float
             Additional timeout in seconds to wait for a reply on top of the
-            default specified upon instantiation. (If None, the default is
-            used).
+            default specified upon instantiation.
 
         Returns
         -------
@@ -77,68 +76,64 @@ class SCPConnection(object):
             The packet that was received in acknowledgement of the transmitted
             packet.
         """
-        if timeout is not None:
-            self.sock.settimeout(self.default_timeout + timeout)
-        try:
-            # Construct the packet that will be sent
-            packet = packets.SCPPacket(
-                reply_expected=True, tag=0xff, dest_port=0, dest_cpu=p,
-                src_port=7, src_cpu=31, dest_x=x, dest_y=y, src_x=0, src_y=0,
-                cmd_rc=cmd, seq=self._seq, arg1=arg1, arg2=arg2, arg3=arg3,
-                data=data
-            )
+        self.sock.settimeout(self.default_timeout + timeout)
+        
+        # Construct the packet that will be sent
+        packet = packets.SCPPacket(
+            reply_expected=True, tag=0xff, dest_port=0, dest_cpu=p,
+            src_port=7, src_cpu=31, dest_x=x, dest_y=y, src_x=0, src_y=0,
+            cmd_rc=cmd, seq=self._seq, arg1=arg1, arg2=arg2, arg3=arg3,
+            data=data
+        )
 
-            # Determine how many bytes to listen to on the socket, this should
-            # be the smallest power of two greater than the required size (for
-            # efficiency reasons).
-            max_length = buffer_size + consts.SDP_HEADER_LENGTH
-            receive_length = 1 << 9  # 512 bytes is a reasonable minimum
-            while receive_length < max_length:
-                receive_length <<= 1
+        # Determine how many bytes to listen to on the socket, this should
+        # be the smallest power of two greater than the required size (for
+        # efficiency reasons).
+        max_length = buffer_size + consts.SDP_HEADER_LENGTH
+        receive_length = 1 << 9  # 512 bytes is a reasonable minimum
+        while receive_length < max_length:
+            receive_length <<= 1
 
-            # Repeat until a reply is received or we run out of tries.
-            n_tries = 0
-            while n_tries < self.n_tries:
-                # Transit the packet
-                self.sock.send(b'\x00\x00' + packet.bytestring)
-                n_tries += 1
+        # Repeat until a reply is received or we run out of tries.
+        n_tries = 0
+        while n_tries < self.n_tries:
+            # Transit the packet
+            self.sock.send(b'\x00\x00' + packet.bytestring)
+            n_tries += 1
 
-                try:
-                    # Try to receive the returned acknowledgement
-                    ack = self.sock.recv(receive_length)
-                except IOError:
-                    # There was nothing to receive from the socket
-                    continue
+            try:
+                # Try to receive the returned acknowledgement
+                ack = self.sock.recv(receive_length)
+            except IOError:
+                # There was nothing to receive from the socket
+                continue
 
-                # Convert the possible returned packet into an SCP packet. If
-                # the sequence number matches the expected sequence number then
-                # the acknowledgement has been received.
-                scp = packets.SCPPacket.from_bytestring(ack[2:],
-                                                        n_args=expected_args)
+            # Convert the possible returned packet into an SCP packet. If
+            # the sequence number matches the expected sequence number then
+            # the acknowledgement has been received.
+            scp = packets.SCPPacket.from_bytestring(ack[2:],
+                                                    n_args=expected_args)
 
-                # Check that the CMD_RC isn't an error
-                if scp.cmd_rc in self.error_codes:
-                    raise self.error_codes[scp.cmd_rc](
-                        "Packet with arguments: cmd={}, arg1={}, arg2={}, "
-                        "arg3={}; sent to core ({},{},{}) was bad.".format(
-                            cmd, arg1, arg2, arg3, x, y, p
-                        )
+            # Check that the CMD_RC isn't an error
+            if scp.cmd_rc in self.error_codes:
+                raise self.error_codes[scp.cmd_rc](
+                    "Packet with arguments: cmd={}, arg1={}, arg2={}, "
+                    "arg3={}; sent to core ({},{},{}) was bad.".format(
+                        cmd, arg1, arg2, arg3, x, y, p
                     )
+                )
 
-                if scp.seq == self._seq:
-                    # The packet is the acknowledgement.  Increment the
-                    # sequence indicator and return the packet.
-                    self._seq ^= 1
-                    return scp
+            if scp.seq == self._seq:
+                # The packet is the acknowledgement.  Increment the
+                # sequence indicator and return the packet.
+                self._seq ^= 1
+                return scp
 
-            # The packet we transmitted wasn't acknowledged.
-            raise TimeoutError(
-                "Exceeded {} tries when trying to transmit packet.".format(
-                    self.n_tries)
-            )
-        finally:
-            if timeout is not None:
-                self.sock.settimeout(self.default_timeout)
+        # The packet we transmitted wasn't acknowledged.
+        raise TimeoutError(
+            "Exceeded {} tries when trying to transmit packet.".format(
+                self.n_tries)
+        )
 
 
 class SCPError(IOError):
