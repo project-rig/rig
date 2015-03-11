@@ -1,4 +1,4 @@
-from six import iteritems, next, itervalues
+from six import iteritems
 
 import collections
 
@@ -6,7 +6,7 @@ from .scp_connection import SCPConnection
 
 from . import consts
 
-from .consts import SCPCommands
+from .consts import SCPCommands, LEDAction
 
 from rig.utils.contexts import ContextMixin, Required
 
@@ -16,7 +16,7 @@ class BMPController(ContextMixin):
     SpiNN-5 boards in a SpiNNaker machine.
 
     BMPs (and thus boards) are addressed as follows::
-    
+
                   2             1                0
         Cabinet --+-------------+----------------+
                   |             |                |
@@ -40,20 +40,20 @@ class BMPController(ContextMixin):
                             | | | | |
                  Board -----+-+-+-+-+
                             4 3 2 1 0
-    
+
     Coordinates are conventionally written as 3-tuples of integers (cabinet,
     frame, board). This gives the upper-right-most board's coordinate (0, 0,
     0).
-    
+
     Communication with BMPs is facilitated either directly via Ethernet or
     indirectly via the Ethernet connection of another BMP and the CAN bus in
     the backplane of each frame.
-    
+
     This class aims not to be a complete BMP communication solution (users are
     referred instead to the general-purpose `bmpc` utility), but rather to
     cover common uses of the BMP in normal application usage.
     """
-    
+
     def __init__(self, hosts, n_tries=5, timeout=0.5,
                  initial_context={"cabinet": 0, "frame": 0, "board": 0}):
         """Create a new controller for BMPs in a SpiNNaker machine.
@@ -104,13 +104,11 @@ class BMPController(ContextMixin):
             data = self.get_software_version(*coord)
             self._scp_data_length = data.buffer_size
         return self._scp_data_length
-    
-    
+
     def __call__(self, **context_args):
         """Create a new context for use with `with`."""
         return self.get_new_context(**context_args)
-    
-    
+
     @ContextMixin.use_named_contextual_arguments(
         cabinet=Required, frame=Required, board=Required)
     def send_scp(self, *args, **kwargs):
@@ -144,7 +142,7 @@ class BMPController(ContextMixin):
             "No connection available to ({}, {}, {})".format(cabinet,
                                                              frame,
                                                              board)
-        
+
         # Determine the size of packet we expect in return, this is usually the
         # size that we are informed we should expect by SCAMP/SARK or else is
         # the default.
@@ -152,10 +150,9 @@ class BMPController(ContextMixin):
             length = consts.SCP_SVER_RECEIVE_LENGTH_MAX
         else:
             length = self._scp_data_length
-        
+
         return connection.send_scp(length, 0, 0, board, *args, **kwargs)
-    
-    
+
     @ContextMixin.use_contextual_arguments
     def get_software_version(self, cabinet=Required, frame=Required,
                              board=Required):
@@ -181,8 +178,7 @@ class BMPController(ContextMixin):
 
         return BMPInfo(code_block, frame_id, can_id, board_id, version,
                        buffer_size, sver.arg3, sver.data.decode("utf-8"))
-    
-    
+
     @ContextMixin.use_contextual_arguments
     def set_power(self, state, cabinet=Required, frame=Required,
                   board=Required, delay=0.0):
@@ -205,15 +201,52 @@ class BMPController(ContextMixin):
         else:
             boards = list(board)
             board = boards[0]
-        
-        arg1 = int(delay * 1000) << 16 | int(state)
-        arg2 = sum(1<<b for b in boards)
-        
+
+        arg1 = int(delay * 1000) << 16 | (1 if state else 0)
+        arg2 = sum(1 << b for b in boards)
+
         # Allow additional time for response when powering on (since FPGAs must
         # be loaded)
         self._send_scp(cabinet, frame, board, SCPCommands.power,
                        arg1=arg1, arg2=arg2,
-                       timeout=consts.BMP_POWER_ON_TIMEOUT if state else None)
+                       timeout=consts.BMP_POWER_ON_TIMEOUT if state else None,
+                       expected_args=0)
+
+    @ContextMixin.use_contextual_arguments
+    def set_led(self, led, action=None, cabinet=Required, frame=Required,
+                board=Required):
+        """Set or toggle the state of an LED.
+
+        Parameters
+        ----------
+        led : int or iterable
+            Number of the LED or an iterable of LEDs to set the state of (0-7)
+        action : bool or None
+            State to set the LED to. True for on, False for off, None to
+            toggle (default).
+        board : int or iterable
+            Specifies the board to control the LEDs of. This may also be an
+            iterable of multiple boards (in the same frame). The command will
+            actually be sent to the first board in the iterable.
+        """
+        if isinstance(led, int):
+            leds = [led]
+        else:
+            leds = led
+        if isinstance(board, int):
+            boards = [board]
+        else:
+            boards = list(board)
+            board = boards[0]
+
+        # LED setting actions
+        arg1 = sum(LEDAction.from_bool(action) << (led * 2) for led in leds)
+
+        # Bitmask of boards to control
+        arg2 = sum(1 << b for b in boards)
+
+        self._send_scp(cabinet, frame, board, SCPCommands.led, arg1=arg1,
+                       arg2=arg2, expected_args=0)
 
 
 class BMPInfo(collections.namedtuple(
