@@ -1,5 +1,6 @@
 from six import iteritems
 
+import time
 import struct
 import collections
 
@@ -7,7 +8,9 @@ from .scp_connection import SCPConnection
 
 from . import consts
 
-from .consts import SCPCommands, LEDAction
+from .consts import SCPCommands, LEDAction, BMPInfoType, BMP_V_SCALE_2_5, \
+    BMP_V_SCALE_3_3, BMP_V_SCALE_12, BMP_TEMP_SCALE, BMP_MISSING_TEMP, \
+    BMP_MISSING_FAN
 
 from rig.utils.contexts import ContextMixin, Required
 
@@ -182,7 +185,7 @@ class BMPController(ContextMixin):
 
     @ContextMixin.use_contextual_arguments
     def set_power(self, state, cabinet=Required, frame=Required,
-                  board=Required, delay=0.0):
+                  board=Required, delay=0.0, post_power_on_delay=5.0):
         """Control power to the SpiNNaker chips and FPGAs on a board.
 
         Returns
@@ -196,6 +199,11 @@ class BMPController(ContextMixin):
         delay : float
             Number of seconds delay between power state changes of different
             boards.
+        post_power_on_delay : float
+            Number of seconds for this command to block once the power on
+            command has been carried out. A short delay (default) is useful at
+            this point since power-supplies and SpiNNaker chips may still be
+            coming on line immediately after the power-on command is sent.
         """
         if isinstance(board, int):
             boards = [board]
@@ -212,6 +220,8 @@ class BMPController(ContextMixin):
                        arg1=arg1, arg2=arg2,
                        timeout=consts.BMP_POWER_ON_TIMEOUT if state else None,
                        expected_args=0)
+        if state:
+            time.sleep(post_power_on_delay)
 
     @ContextMixin.use_contextual_arguments
     def set_led(self, led, action=None, cabinet=Required, frame=Required,
@@ -305,6 +315,42 @@ class BMPController(ContextMixin):
                        arg1=arg1, arg2=arg2, arg3=arg3,
                        data=struct.pack("<I", value), expected_args=0)
 
+    @ContextMixin.use_contextual_arguments
+    def read_adc(self, cabinet=Required, frame=Required, board=Required):
+        """Read ADC data from the BMP including voltages and temperature.
+
+        Returns
+        -------
+        :py:class:`.ADCInfo`
+        """
+        response = self._send_scp(cabinet, frame, board, SCPCommands.bmp_info,
+                                  arg1=BMPInfoType.adc, expected_args=0)
+        data = struct.unpack("<"  # Little-endian
+                             "HHHHHHHH"  # uint16_t adc[8]
+                             "hhhh"      # int16_t t_int[4]
+                             "hhhh"      # int16_t t_ext[4]
+                             "hhhh"      # int16_t fan[4]
+                             "I"         # uint32_t warning
+                             "I",        # uint32_t shutdown
+                             response.data)
+
+        return ADCInfo(
+            v1_2c=data[1] * BMP_V_SCALE_2_5,
+            v1_2b=data[2] * BMP_V_SCALE_2_5,
+            v1_2a=data[3] * BMP_V_SCALE_2_5,
+            v1_8=data[4] * BMP_V_SCALE_2_5,
+            v3_3=data[6] * BMP_V_SCALE_3_3,
+            vpwr=data[7] * BMP_V_SCALE_12,
+            temp_top=float(data[8]) * BMP_TEMP_SCALE,
+            temp_btm=float(data[9]) * BMP_TEMP_SCALE,
+            temp_ext_0=((float(data[12]) * BMP_TEMP_SCALE)
+                        if data[12] != BMP_MISSING_TEMP else None),
+            temp_ext_1=((float(data[13]) * BMP_TEMP_SCALE)
+                        if data[13] != BMP_MISSING_TEMP else None),
+            fan_0=float(data[16]) if data[16] != BMP_MISSING_FAN else None,
+            fan_1=float(data[17]) if data[17] != BMP_MISSING_FAN else None,
+        )
+
 
 class BMPInfo(collections.namedtuple(
     'BMPInfo', "code_block frame_id can_id board_id version buffer_size "
@@ -337,4 +383,40 @@ class BMPInfo(collections.namedtuple(
         Human readable, textual version information split in to two fields by a
         "/". In the first field is the kernel (e.g. BC&MP) and the second the
         hardware platform (e.g. Spin5-BMP).
+    """
+
+
+class ADCInfo(collections.namedtuple(
+    'ADCInfo', "v1_2c v1_2b v1_2a v1_8 v3_3 vpwr "
+               "temp_top temp_btm temp_ext_0 temp_ext_1 fan_0 fan_1")):
+    """ADC data returned by a BMP including voltages and temperature.
+
+    Parameters
+    ----------
+    v1_2a : float
+        Measured voltage on the 1.2 V rail A.
+    v1_2b : float
+        Measured voltage on the 1.2 V rail B.
+    v1_2c : float
+        Measured voltage on the 1.2 V rail C.
+    v1_8 : float
+        Measured voltage on the 1.8 V rail.
+    v3_3 : float
+        Measured voltage on the 3.3 V rail.
+    vpwr : float
+        Measured voltage of the (12 V) power supply input.
+    temp_top : float
+        Temperature near the top of the board (degrees Celsius)
+    temp_btm : float
+        Temperature near the bottom of the board (degrees Celsius)
+    temp_ext_0 : float
+        Temperature read from external sensor 0 (degrees Celsius) or None if
+        not connected.
+    temp_ext_1 : float
+        Temperature read from external sensor 1 (degrees Celsius) or None if
+        not connected.
+    fan_0 : int
+        External fan speed (RPM) of fan 0 or None if not connected.
+    fan_1 : int
+        External fan speed (RPM) of fan 1 or None if not connected.
     """

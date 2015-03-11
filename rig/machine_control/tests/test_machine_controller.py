@@ -96,7 +96,7 @@ class TestMachineControllerLive(object):
             for y in range(2):
                 sver = controller.get_software_version(x=x, y=y, processor=0)
                 assert sver.virt_cpu == 0
-                assert "SpiNNaker" in bytes(sver.version_string)
+                assert "SpiNNaker" in sver.version_string
                 assert sver.version >= 1.3
                 assert sver.position == (x, y)
 
