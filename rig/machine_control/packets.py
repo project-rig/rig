@@ -1,4 +1,5 @@
 """Representations of SDP and SCP Packets."""
+import six
 import struct
 from weakref import WeakKeyDictionary
 
@@ -36,7 +37,7 @@ class RangedIntAttribute(object):
     def __set__(self, instance, value):
         if value is not None:
             # Check that min <= value < max
-            if not isinstance(value, int):
+            if not isinstance(value, six.integer_types):
                 raise TypeError("Value should be an integer: {!s}"
                                 .format(value))
             if not self.min <= value < self.max and value not in self.accept:
