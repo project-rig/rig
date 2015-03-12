@@ -57,8 +57,9 @@ class MachineController(ContextMixin):
             core_one_status = cm.get_processor_status(1)
 
     """
-    def __init__(self, initial_host, n_tries=5, timeout=0.5, structs=None,
-                 initial_context={"app_id": 66}):
+    def __init__(self, initial_host, scp_port=consts.SCP_PORT,
+                 boot_port=consts.BOOT_PORT, n_tries=5, timeout=0.5,
+                 structs=None, initial_context={"app_id": 66}):
         """Create a new controller for a SpiNNaker machine.
 
         Parameters
@@ -66,6 +67,10 @@ class MachineController(ContextMixin):
         initial_host : string
             Hostname or IP address of the SpiNNaker chip to connect to. If the
             board has not yet been booted, this will become chip (0, 0).
+        scp_port : int
+            Port number for SCP connections.
+        boot_port : int
+            Port number for booting the board.
         n_tries : int
             Number of SDP packet retransmission attempts.
         timeout : float
@@ -81,6 +86,8 @@ class MachineController(ContextMixin):
 
         # Store the initial parameters
         self.initial_host = initial_host
+        self.scp_port = scp_port
+        self.boot_port = boot_port
         self.n_tries = n_tries
         self.timeout = timeout
         self._nn_id = 0  # ID for nearest neighbour packets
@@ -95,7 +102,7 @@ class MachineController(ContextMixin):
 
         # Create the initial connection
         self.connections = [
-            SCPConnection(initial_host, n_tries, timeout)
+            SCPConnection(initial_host, scp_port, n_tries, timeout)
         ]
 
     @property
@@ -182,6 +189,7 @@ class MachineController(ContextMixin):
 
         Will boot the Spin5 board connected to by `controller`.
         """
+        boot_kwargs.setdefault("boot_port", self.boot_port)
         self.structs = boot.boot(self.initial_host, width=width, height=height,
                                  **boot_kwargs)
         assert len(self.structs) > 0

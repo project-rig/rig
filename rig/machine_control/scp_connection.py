@@ -9,7 +9,8 @@ class SCPConnection(object):
     """
     error_codes = {}
 
-    def __init__(self, spinnaker_host, n_tries=5, timeout=0.5):
+    def __init__(self, spinnaker_host, port=consts.SCP_PORT,
+                 n_tries=5, timeout=0.5):
         """Create a new communicator to handle control of the SpiNNaker chip
         with the supplied hostname.
 
@@ -17,6 +18,8 @@ class SCPConnection(object):
         ----------
         spinnaker_host : str
             A IP address or hostname of the SpiNNaker chip to control.
+        port : int
+            Port number to send to.
         n_tries : int
             The maximum number of tries to communicate with the chip before
             failing.
@@ -28,7 +31,7 @@ class SCPConnection(object):
         # Create a socket to communicate with the SpiNNaker machine
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(self.default_timeout)
-        self.sock.connect((spinnaker_host, consts.SCP_PORT))
+        self.sock.connect((spinnaker_host, port))
 
         # Store the number of tries that will be allowed
         self.n_tries = n_tries

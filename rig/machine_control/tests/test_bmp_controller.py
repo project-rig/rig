@@ -15,8 +15,8 @@ from rig.machine_control import consts
 
 
 @pytest.fixture(scope="module")
-def live_controller(bmp_ip):
-    return BMPController(bmp_ip)
+def live_controller(bmp_ip, bmp_scp_port):
+    return BMPController(bmp_ip, scp_port=bmp_scp_port)
 
 
 @pytest.fixture(scope="module")

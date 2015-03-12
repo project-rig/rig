@@ -103,27 +103,45 @@ The tests can now be run using:
 
     py.test
 
-Some tests require a connected, (ideally non-booted) SpiNNaker system. To
-run these use:
+This runs a subset of the full test suite which does not require any additional
+hardware.
 
-    py.test --spinnaker HOSTNAME WIDTH HEIGHT
+### Running tests against real hardware
+
+Some tests require a connected, SpiNNaker system. To run these use:
+
+    py.test --spinnaker SPINN_HOSTNAME WIDTH HEIGHT
+
+Though the vast majority of tests will run against any SpiNNaker system with at
+least 4x4 working chips, the complete test suite should run against a single
+SpiNN-5 board. To enable these additional tests, add the `--spinn5` argument:
+
+    py.test --spinnaker SPINN_HOSTNAME 8 8 --spinn5
 
 Other tests require a connected BMP (Board Management Processor, part of
 SpiNN-5 boards). To run these use:
 
-    py.test --bmp HOSTNAME
+    py.test --bmp BMP_HOSTNAME
 
 When a BMP is connected, the test suite will attempt to power-cycle the
 attached board. When a SpiNNaker system is connected, the test suite will
-attempt to boot the system. To skip the power-cycling or booting tests simply
-add the `--no-boot` argument.
+attempt to boot the system.
 
-The test suite ideally should be run against a single SpiNN-5 board
-however a large subset of tests will happily run against any larger or smaller
-system.  If you are running tests against a single SpiNN-5 or board,
-add the `--spinn5` argument to enable some additional tests.
+To skip the power-cycling and booting tests, simply add the `--no-boot`
+argument.
 
-    py.test --spinnaker HOSTNAME 8 8 --spinn5
+### Running tests against remote hardware
+
+Booting a SpiNNaker board requires the sending of packets to UDP port 54321
+which is frequently blocked by ISPs. As a result, a proxy
+server must be used to
+communicate with the board. The rig test suite accepts a `--proxy` option which
+will configure the test suite to run against the ports exposed by
+[`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy):
+
+    py.test --proxy --spinnaker PROXY_HOSTNAME WIDTH HEIGHT --bmp PROXY_HOSTNAME
+
+### Test coverage checking
 
 To get a test coverage report run one of the following:
 
@@ -135,6 +153,9 @@ To get a test coverage report run one of the following:
     
     # Generate HTML report (for rig module)
     py.test --cov rig --cov-report html
+
+
+### Code standards checking
 
 To test for coding standards problems run:
 

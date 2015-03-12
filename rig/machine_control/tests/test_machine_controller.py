@@ -22,8 +22,10 @@ from rig.routing_table import RoutingTableEntry, Routes
 
 
 @pytest.fixture(scope="module")
-def controller(spinnaker_ip):
-    return MachineController(spinnaker_ip)
+def controller(spinnaker_ip, spinnaker_scp_port, spinnaker_boot_port):
+    return MachineController(spinnaker_ip,
+                             scp_port=spinnaker_scp_port,
+                             boot_port=spinnaker_boot_port)
 
 
 @pytest.fixture

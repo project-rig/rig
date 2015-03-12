@@ -4,10 +4,36 @@ import _pytest
 from collections import defaultdict
 from toposort import toposort
 
+from rig.machine_control import consts
+
 
 @pytest.fixture(scope='session')
 def spinnaker_ip(request):
     return request.config.getoption('spinnaker', skip=True)[0]
+
+
+@pytest.fixture(scope='session')
+def spinnaker_scp_port(request):
+    if request.config.getoption('proxy'):
+        return consts.PROXY_SCP_PORT
+    else:
+        return consts.SCP_PORT
+
+
+@pytest.fixture(scope='session')
+def spinnaker_boot_port(request):
+    if request.config.getoption('proxy'):
+        return consts.PROXY_BOOT_PORT
+    else:
+        return consts.BOOT_PORT
+
+
+@pytest.fixture(scope='session')
+def bmp_scp_port(request):
+    if request.config.getoption('proxy'):
+        return consts.PROXY_BMP_SCP_PORT
+    else:
+        return consts.SCP_PORT
 
 
 @pytest.fixture(scope='session')
@@ -42,6 +68,10 @@ def pytest_addoption(parser):
     # Add the option to run tests against a SpiNNaker machine
     parser.addoption("--no-boot", action="store_false",
                      help="Skip booting/power-cycling the board during tests.")
+    parser.addoption("--proxy", action="store_true",
+                     help="Specify that the hosts given are proxies (and "
+                          "thus alternative ports for SCP and booting must "
+                          "be used).")
     parser.addoption("--spinnaker", nargs=3,
                      help="Run tests on a SpiNNaker machine. "
                           "Specify the IP address or hostname "
