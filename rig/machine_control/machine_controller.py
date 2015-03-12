@@ -14,6 +14,7 @@ from .consts import SCPCommands, DataType, NNCommands, NNConstants, \
 from . import boot, consts, regions
 from .scp_connection import SCPConnection
 
+from rig import routing_table
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 
 from rig.utils.contexts import ContextMixin, Required
@@ -882,9 +883,10 @@ class MachineController(ContextMixin):
             # Build the route as a 32-bit value
             route = 0x00000000
             for r in entry.route:
-                route |= r
+                route |= 1 << r
 
-            data += struct.pack("<2H 3I", i, 0, r, entry.key, entry.mask)
+            data += struct.pack(
+                consts.RTE_PACK_STRING, i, 0, route, entry.key, entry.mask)
         self.write(buf, data, x, y)
 
         # Perform the load of the data into the router
@@ -893,6 +895,28 @@ class MachineController(ContextMixin):
             (count << 16) | (app_id << 8) | consts.RouterOperations.load,
             buf, rtr_base
         )
+
+    @ContextMixin.use_contextual_arguments
+    def get_routing_table_entries(self, x=Required, y=Required):
+        """Get the routing table entries for a given chip.
+
+        Returns
+        -------
+        [(:py:class:`~RoutingTableEntry`, app_id, core) or None, ...]
+            Ordered list of routing table entries with app_ids and
+            core numbers.
+        """
+        # Determine where to read from, perform the read
+        rtr_addr = self.read_struct_field("sv", "rtr_copy", x, y)
+        read_size = struct.calcsize(consts.RTE_PACK_STRING)
+        rtr_data = self.read(rtr_addr, consts.RTR_ENTRIES * read_size, x, y)
+
+        # Read each routing table entry in turn
+        table = list()
+        while len(rtr_data) > 0:
+            entry, rtr_data = rtr_data[:read_size], rtr_data[read_size:]
+            table.append(unpack_routing_table_entry(entry))
+        return table
 
     @ContextMixin.use_contextual_arguments
     def get_p2p_routing_table(self, x=Required, y=Required):
@@ -1302,3 +1326,37 @@ class MemoryIO(object):
                 "from_what: can only take values 0 (from start), "
                 "1 (from current) or 2 (from end) not {}".format(from_what)
             )
+
+
+def unpack_routing_table_entry(packed):
+    """Unpack a routing table entry read from a SpiNNaker machine.
+
+    Parameters
+    ----------
+    packet : :py:class:`bytes`
+        Bytes containing a packed routing table.
+
+    Returns
+    -------
+    (:py:class:`~rig.routing_table.RoutingTableEntry`, app_id, core) or None
+        Tuple containing the routing entry, the app_id associated with the
+        entry and the core number associated with the entry; or None if the
+        routing table entry is flagged as unused.
+    """
+    # Unpack the routing table entry
+    _, free, route, key, mask = struct.unpack(consts.RTE_PACK_STRING, packed)
+
+    # If the top 8 bits of the route are set then this entry is not in use, so
+    # return None.
+    if route & 0xff000000 == 0xff000000:
+        return None
+
+    # Convert the routing table entry
+    routes = {r for r in routing_table.Routes if (route >> r) & 0x1}
+    rte = routing_table.RoutingTableEntry(routes, key, mask)
+
+    # Convert the surrounding data
+    app_id = free & 0xff
+    core = (free >> 8) & 0x0f
+
+    return (rte, app_id, core)

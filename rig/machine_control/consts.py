@@ -42,6 +42,15 @@ BMP_MISSING_TEMP = -0x8000
 BMP_MISSING_FAN = -1
 """Fan speed value returned when a fan is absent."""
 
+RTR_ENTRIES = 1024
+"""Number of routing table entries in each routing table.
+"""
+
+RTE_PACK_STRING = "<2H 3I"
+"""Packing string used with routing table entries, values are (next, free,
+route, key, mask).
+"""
+
 
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""

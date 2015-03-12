@@ -11,7 +11,8 @@ from .test_scp_connection import SendReceive, mock_conn  # noqa
 from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
     MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError,
-    SpiNNakerLoadingError, CoreInfo, ProcessorStatus
+    SpiNNakerLoadingError, CoreInfo, ProcessorStatus,
+    unpack_routing_table_entry
 )
 from ..packets import SCPPacket
 from .. import regions, consts, struct_file
@@ -291,6 +292,26 @@ class TestMachineControllerLive(object):
             assert mem.write(data) == len(data)
             mem.seek(0)
             assert mem.read(len(data)) == data
+
+    @pytest.mark.parametrize(
+        "routes, app_id",
+        [([RoutingTableEntry({Routes.east}, 0x0000ffff, 0xffffffff),
+           RoutingTableEntry({Routes.west}, 0xffff0000, 0xffff0000)],
+          67),
+         ]
+    )
+    def test_load_and_retrieve_routing_tables(self, controller, routes,
+                                              app_id):
+        with controller(x=0, y=0, app_id=app_id):
+            # Load the routing table entries
+            controller.load_routing_table_entries(routes)
+
+            # Retrieve the routing table entries and check that the ones we
+            # loaded are present.
+            loaded = controller.get_routing_table_entries()
+
+        for route in routes:
+            assert (route, app_id, 0) in loaded
 
 
 class TestMachineController(object):
@@ -1157,7 +1178,8 @@ class TestMachineController(object):
     @pytest.mark.parametrize(
         "entries",
         [[RoutingTableEntry({Routes.east}, 0xffff0000, 0xffff0000),
-          RoutingTableEntry({Routes.west}, 0xfffc0000, 0xfffff000)],
+          RoutingTableEntry({Routes.west}, 0xfffc0000, 0xfffff000),
+          RoutingTableEntry({Routes.north_east}, 0xfffc0000, 0xfffff000)],
          ]
     )
     @pytest.mark.parametrize("base_addr, rtr_base", [(0x67800000, 3)])
@@ -1208,8 +1230,8 @@ class TestMachineController(object):
             assert key == entries[i].key and mask == entries[i].mask
 
             exp_route = 0x00000000
-            for route in entries[i].route:
-                exp_route |= route
+            for r in entries[i].route:
+                exp_route |= 1 << r
 
             assert exp_route == route
             i += 1
@@ -1254,6 +1276,42 @@ class TestMachineController(object):
             [mock.call(entries, x=x, y=y, app_id=69)
              for (x, y), entries in iteritems(routing_tables)]
         )
+
+    @pytest.mark.parametrize("x, y", [(0, 1), (50, 32)])
+    @pytest.mark.parametrize(
+        "addr, data, expected",
+        [(0x67090000,
+          b"\x00\x00\x42\x03\x01\x00\x00\x00\x55\x55\xff\xff\xff\xff\xff\xff" +
+          b"\xff" * 1023 * 16,
+          [(RoutingTableEntry({Routes.east}, 0xffff5555, 0xffffffff), 66, 3)] +
+          [None] * 1023
+          ),
+         (0x63090000,
+          b"\xff" * 16 +
+          b"\x00\x00\x42\x03\x01\x00\x00\x00\x55\x55\xff\xff\xff\xff\xff\xff" +
+          b"\xff" * 1022 * 16,
+          [None] +
+          [(RoutingTableEntry({Routes.east}, 0xffff5555, 0xffffffff), 66, 3)] +
+          [None] * 1022
+          ),
+         (0x67040000, b"\xff" * 1024 * 16, [None] * 1024),
+         ]
+    )
+    def test_get_routing_table_entries(self, x, y, addr, data, expected):
+        # Create the controller
+        cn = MachineController("localhost")
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.return_value = addr
+        cn.read = mock.Mock()
+        cn.read.return_value = data
+
+        # Read a routing table, assert that the return values are sane and that
+        # appropriate calls are made.
+        with cn(x=x, y=y):
+            assert cn.get_routing_table_entries() == expected
+
+        cn.read_struct_field.assert_called_once_with("sv", "rtr_copy", x, y)
+        cn.read.assert_called_once_with(addr, 1024*16, x, y)
 
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")
@@ -1495,3 +1553,18 @@ class TestMemoryIO(object):
         for seek in seeks:
             sdram_file.seek(seek, from_what=2)
             assert sdram_file.tell() == length - seek
+
+
+@pytest.mark.parametrize(
+    "entry, unpacked",
+    [(b"\x00\x00\x42\x03\x01\x00\x00\x00\x55\x55\xff\xff\xff\xff\xff\xff",
+      (RoutingTableEntry({Routes.east}, 0xffff5555, 0xffffffff), 66, 3)),
+     (b"\x00\x00\x02\x03\x03\x00\x00\x00\x50\x55\xff\xff\xf0\xff\xff\xff",
+      (RoutingTableEntry({Routes.east, Routes.north_east},
+                         0xffff5550, 0xfffffff0), 2, 3)),
+     (b"\x00\x00\x03\x02\x03\x00\x00\xff\x50\x55\xff\xff\xf0\xff\xff\xff",
+      None),
+     ]
+)
+def test_unpack_routing_table_entry(entry, unpacked):
+    assert unpack_routing_table_entry(entry) == unpacked
