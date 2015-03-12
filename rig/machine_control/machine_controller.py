@@ -1275,6 +1275,30 @@ class MemoryIO(object):
         """Get the current address (indexed from 0x00000000)."""
         return self._offset + self._start_address
 
-    def seek(self, n_bytes):
-        """Seek to a new position in the memory region."""
-        self._offset += n_bytes
+    def seek(self, n_bytes, from_what=0):
+        """Seek to a new position in the memory region.
+
+        Parameters
+        ----------
+        n_bytes : int
+            Number of bytes to seek.
+        from_what : int
+            As in the Python standard: `0` seeks from the start of the memory
+            region, `1` seeks from the current position and `2` seeks from the
+            end of the memory region. For example::
+
+                mem.seek(-1, 2)  # Goes to the last byte in the region
+                mem.seek(-5, 1)  # Goes 5 bytes before that point
+                mem.seek(0)      # Returns to the start of the region
+        """
+        if from_what == 0:
+            self._offset = n_bytes
+        elif from_what == 1:
+            self._offset += n_bytes
+        elif from_what == 2:
+            self._offset = (self._end_address - self._start_address) - n_bytes
+        else:
+            raise ValueError(
+                "from_what: can only take values 0 (from start), "
+                "1 (from current) or 2 (from end) not {}".format(from_what)
+            )

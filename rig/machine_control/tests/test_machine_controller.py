@@ -289,7 +289,7 @@ class TestMachineControllerLive(object):
         with controller(x=1, y=0):
             mem = controller.sdram_alloc_as_io(len(data))
             assert mem.write(data) == len(data)
-            mem.seek(-len(data))
+            mem.seek(0)
             assert mem.read(len(data)) == data
 
 
@@ -1461,13 +1461,37 @@ class TestMemoryIO(object):
 
     @pytest.mark.parametrize("start_address", [0x60000004, 0x61000003])
     @pytest.mark.parametrize("seeks", [(100, -3, 32, 5, -7)])
-    def test_seek(self, mock_controller, seeks, start_address):
+    def test_seek_from_start(self, mock_controller, seeks, start_address):
+        sdram_file = MemoryIO(mock_controller, 0, 0,
+                              start_address, start_address+200)
+        assert sdram_file.tell() == 0
+
+        for seek in seeks:
+            sdram_file.seek(seek)
+            assert sdram_file.tell() == seek
+
+    @pytest.mark.parametrize("start_address", [0x60000004, 0x61000003])
+    @pytest.mark.parametrize("seeks", [(100, -3, 32, 5, -7)])
+    def test_seek_from_current(self, mock_controller, seeks, start_address):
         sdram_file = MemoryIO(mock_controller, 0, 0,
                               start_address, start_address+200)
         assert sdram_file.tell() == 0
 
         cseek = 0
         for seek in seeks:
-            sdram_file.seek(seek)
+            sdram_file.seek(seek, from_what=1)
             assert sdram_file.tell() == cseek + seek
             cseek += seek
+
+    @pytest.mark.parametrize("start_address, length", [(0x60000004, 300),
+                                                       (0x61000003, 250)])
+    @pytest.mark.parametrize("seeks", [(100, -3, 32, 5, -7)])
+    def test_seek_from_end(self, mock_controller, seeks, start_address,
+                           length):
+        sdram_file = MemoryIO(mock_controller, 0, 0,
+                              start_address, start_address+length)
+        assert sdram_file.tell() == 0
+
+        for seek in seeks:
+            sdram_file.seek(seek, from_what=2)
+            assert sdram_file.tell() == length - seek
