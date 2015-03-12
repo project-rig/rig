@@ -108,7 +108,7 @@ hardware.
 
 ### Running tests against real hardware
 
-Some tests require a connected, SpiNNaker system. To run these use:
+Some tests require a connected SpiNNaker system. To run these use:
 
     py.test --spinnaker SPINN_HOSTNAME WIDTH HEIGHT
 
