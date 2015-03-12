@@ -9,7 +9,7 @@ install:
         - pip install -r requirements.txt
         - pip install -r requirements-test.txt
         - pip install python-coveralls
-script: py.test rig docs --no-boot --spinnaker spinn-4.cs.man.ac.uk 8 8 --bmp spinn-4c.cs.man.ac.uk --cov rig
+script: py.test rig docs --no-boot --spinn5 --spinnaker spinn-4.cs.man.ac.uk 8 8 --bmp spinn-4c.cs.man.ac.uk --cov rig
 after_success:
         - coveralls
 notifications:
