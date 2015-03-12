@@ -178,11 +178,6 @@ class TestSDPPacket(object):
             # src_y is 8 bits
             SDPPacket(False, 255, 7, 17, 7, 17, 255, 255, 255, -1, b'')
 
-        with pytest.raises(ValueError):
-            # Data can only be 272 bytes long
-            SDPPacket(False, 255, 7, 17, 7, 17, 255, 255, 255, 255,
-                      273*b'\x00')
-
 
 class TestSCPPacket(object):
     """Test packets conforming to the SCP protocol."""
@@ -435,8 +430,3 @@ class TestSCPPacket(object):
         with pytest.raises(ValueError):  # arg3 is 32 bits
             SCPPacket(False, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                       0xFFFF, 0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, -1, b'')
-
-        with pytest.raises(ValueError):  # data is max 256 bytes
-            SCPPacket(False, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                      0xFFFF, 0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
-                      257*b'\x00')

@@ -81,7 +81,7 @@ class SDPPacket(object):
     dest_y = RangedIntAttribute(0, 256)
     src_x = RangedIntAttribute(0, 256)
     src_y = RangedIntAttribute(0, 256)
-    data = ByteStringAttribute(max_length=272)
+    data = ByteStringAttribute()
 
     def __init__(self, reply_expected, tag, dest_port, dest_cpu, src_port,
                  src_cpu, dest_x, dest_y, src_x, src_y, data):
