@@ -141,6 +141,8 @@ will configure the test suite to run against the ports exposed by
 
     py.test --proxy --spinnaker PROXY_HOSTNAME WIDTH HEIGHT --bmp PROXY_HOSTNAME
 
+Note that the proxy must be used for both the SpiNNaker connection and the BMP.
+
 ### Test coverage checking
 
 To get a test coverage report run one of the following:
