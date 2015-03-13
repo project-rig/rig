@@ -80,7 +80,7 @@ class SCPConnection(object):
             packet.
         """
         self.sock.settimeout(self.default_timeout + timeout)
-        
+
         # Construct the packet that will be sent
         packet = packets.SCPPacket(
             reply_expected=True, tag=0xff, dest_port=0, dest_cpu=p,

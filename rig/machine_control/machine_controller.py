@@ -908,32 +908,41 @@ class MachineController(ContextMixin):
 
         This method can be indirectly used to get a list of functioning chips.
 
+        .. note::
+            This method only returns the entries for chips within the bounds of
+            the system. E.g. if booted with 8x8 only entries for these 8x8
+            chips will be returned.
+
         Returns
         -------
         {(x, y): :py:class:`~rig.machine_control.consts.P2PTableEntry`, ...}
         """
         table = {}
 
-        # There is one entry per chip in the maximally-sized 256x256 machine
-        # and eight entries are packed into a single 32-bit word.
-        table_size = ((256*256) // 8) * 4
-        raw_table = self.read(consts.SPINNAKER_RTR_P2P,
-                              table_size,
-                              x, y)
+        # Get the dimensions of the system
+        p2p_dims = self.read_struct_field("sv", "p2p_dims", x, y)
+        width = (p2p_dims >> 8) & 0xFF
+        height = (p2p_dims >> 0) & 0xFF
 
-        x = 0
-        y = 0
-        while raw_table:
-            raw_word, raw_table = raw_table[:4], raw_table[4:]
-            word, = struct.unpack("<I", raw_word)
-            for entry in range(8):
-                table[(x, y)] = \
-                    consts.P2PTableEntry((word >> (3*entry)) & 0b111)
+        # Read out the P2P table data, one column at a time (note that eight
+        # entries are packed into each 32-bit word)
+        col_words = (((height + 7) // 8) * 4)
+        for col in range(width):
+            # Read the entries for this row
+            raw_table_col = self.read(
+                consts.SPINNAKER_RTR_P2P + (((256 * col) // 8) * 4),
+                col_words,
+                x, y
+            )
 
-                y += 1
-                if y >= 256:
-                    y = 0
-                    x += 1
+            row = 0
+            while row < height:
+                raw_word, raw_table_col = raw_table_col[:4], raw_table_col[4:]
+                word, = struct.unpack("<I", raw_word)
+                for entry in range(min(8, height - row)):
+                    table[(col, row)] = \
+                        consts.P2PTableEntry((word >> (3*entry)) & 0b111)
+                    row += 1
 
         return table
 

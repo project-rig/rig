@@ -48,7 +48,8 @@ spin5_boot_options = {
 }
 
 
-def boot(hostname, width, height, boot_port=consts.BOOT_PORT, cpu_frequency=200, hardware_version=0,
+def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
+         cpu_frequency=200, hardware_version=0,
          led_config=0x00000001, boot_data=None, struct_data=None,
          boot_delay=0.05, post_boot_delay=5.0):
     """Boot a SpiNNaker machine of the given size.

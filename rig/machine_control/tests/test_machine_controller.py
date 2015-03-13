@@ -1258,25 +1258,43 @@ class TestMachineController(object):
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")
 
-        # Return one of each kind of table entry per word
+        # Pretend this is a 10x15 machine
+        w, h = 10, 15
+
+        def read_struct_field(struct, field, x, y):
+            assert struct == "sv"
+            assert field == "p2p_dims"
+            assert x == 0
+            assert y == 0
+            return (w << 8) | h
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.side_effect = read_struct_field
+
         p2p_table_len = ((256*256)//8*4)
+        reads = set()
+
+        def read(addr, length, x, y):
+            assert consts.SPINNAKER_RTR_P2P <= addr
+            assert addr < consts.SPINNAKER_RTR_P2P + p2p_table_len
+            assert length == (((h + 7) // 8) * 4)
+            assert x == 0
+            assert y == 0
+            reads.add(addr)
+            return (struct.pack("<I", sum(i << 3 * i for i in range(8))) *
+                    (length // 4))
+        # Return one of each kind of table entry per word for each read
         cn.read = mock.Mock()
-        cn.read.return_value = (
-            struct.pack("<I", sum(i << 3 * i for i in range(8))) *
-            (p2p_table_len//4)
-        )
+        cn.read.side_effect = read
 
         p2p_table = cn.get_p2p_routing_table(x=0, y=0)
 
-        assert cn.read.called_once_with(
-            consts.SPINNAKER_RTR_P2P,
-            p2p_table_len,
-            0, 0, 0
-        )
+        # Should have done one table read per column
+        assert set(consts.SPINNAKER_RTR_P2P + ((x * 256) // 8 * 4)
+                   for x in range(w)) == reads
 
         # Check that the table is complete
         assert set(p2p_table) == \
-            set((x, y) for x in range(256) for y in range(256))
+            set((x, y) for x in range(w) for y in range(h))
 
         # Check that every entry is correct.
         for (x, y), entry in iteritems(p2p_table):

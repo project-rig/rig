@@ -137,7 +137,7 @@ port 54321 which is frequently blocked by ISPs and is not reliable (since UDP
 gives no guarantees, especially on the open internet). As a result, a proxy
 server must be used to communicate with the board. A utility such as
 [`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy) can be used
-along side the test suite as follows:
+alongside the test suite as follows:
 
     # On the test machine
     spinnaker_proxy.py -ctq PROXY_SERVER_HOSTNAME &

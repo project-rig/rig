@@ -4,8 +4,6 @@ import _pytest
 from collections import defaultdict
 from toposort import toposort
 
-from rig.machine_control import consts
-
 
 @pytest.fixture(scope='session')
 def spinnaker_ip(request):
