@@ -9,8 +9,12 @@ install:
         - pip install -r requirements.txt
         - pip install -r requirements-test.txt
         - pip install python-coveralls
-script: py.test rig docs --proxy --spinn5 --spinnaker cspc276.cs.man.ac.uk 8 8 --bmp cspc276.cs.man.ac.uk --cov rig
+before_script:
+        - export MY_MAGIC="magic"
+script: py.test rig docs --cov rig
 after_success:
         - coveralls
+after_script:
+        - if [ -n "$MY_MAGIC" ]; then echo "Env survived!"; else echo "Env missing."; fi
 notifications:
         email: false
