@@ -9,12 +9,16 @@ install:
         - pip install -r requirements.txt
         - pip install -r requirements-test.txt
         - pip install python-coveralls
+        - pip install spinnaker_proxy
 before_script:
-        - export MY_MAGIC="magic"
-script: py.test rig docs --cov rig
+        - spinnaker_proxy.py -qct cspc276.cs.man.ac.uk &
+        - export SPINNAKER_PROXY_PID=$!
+script: py.test rig docs --spinn5 --spinnaker localhost 8 8 --bmp spinn-4c.cs.man.ac.uk --cov rig
 after_success:
         - coveralls
 after_script:
-        - if [ -n "$MY_MAGIC" ]; then echo "Env survived!"; else echo "Env missing."; fi
+        - kill $SPINNAKER_PROXY_PID
+        - sleep 0.5
+        - kill -9 $SPINNAKER_PROXY_PID
 notifications:
         email: false
