@@ -132,16 +132,24 @@ argument.
 
 ### Running tests against remote hardware
 
-Booting a SpiNNaker board requires the sending of packets to UDP port 54321
-which is frequently blocked by ISPs. As a result, a proxy
-server must be used to
-communicate with the board. The rig test suite accepts a `--proxy` option which
-will configure the test suite to run against the ports exposed by
-[`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy):
+Booting a SpiNNaker board requires the (reliable) sending of packets to UDP
+port 54321 which is frequently blocked by ISPs and is not reliable (since UDP
+gives no guarantees, especially on the open internet). As a result, a proxy
+server must be used to communicate with the board. A utility such as
+[`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy) can be used
+along side the test suite as follows:
 
-    py.test --proxy --spinnaker PROXY_HOSTNAME WIDTH HEIGHT --bmp PROXY_HOSTNAME
+    # On the test machine
+    spinnaker_proxy.py -ctq PROXY_SERVER_HOSTNAME &
+    PROXY_PID=$!
+    py.test --proxy --spinnaker localhost WIDTH HEIGHT --bmp BMP_HOSTNAME
+    kill $PROXY_PID
+    
+    # On a machine on the same LAN as the spinnaker machine
+    spinnaker_proxy.py -stq SPINN_HOSTNAME
 
-Note that the proxy must be used for both the SpiNNaker connection and the BMP.
+We use this configuration to enable remote Travis-CI test runs to drive
+SpiNNaker hardware in Manchester.
 
 ### Test coverage checking
 

@@ -8,15 +8,6 @@ BOOT_PORT = 54321  # TODO Reference spec
 SCP_PORT = 17893  # TODO Reference spec
 """Port used for SDP communication."""
 
-PROXY_BOOT_PORT = 17896
-"""Port used to boot a SpiNNaker machine via a proxy."""
-
-PROXY_SCP_PORT = 17894
-"""Port used for SDP communication with a SpiNNaker chip via a proxy."""
-
-PROXY_BMP_SCP_PORT = 17895  # TODO Reference spec
-"""Port used for SDP with a BMP communication via a proxy."""
-
 SDP_HEADER_LENGTH = 8  # TODO Reference spec.
 """The number of bytes making up the header of an SDP packet."""
 
