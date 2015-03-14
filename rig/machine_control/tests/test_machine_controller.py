@@ -27,6 +27,11 @@ def controller(spinnaker_ip):
     return MachineController(spinnaker_ip)
 
 
+@pytest.fixture(scope="module")
+def live_machine(controller):
+    return controller.get_machine()
+
+
 @pytest.fixture
 def cn():
     cn = MachineController("localhost")
@@ -219,11 +224,11 @@ class TestMachineControllerLive(object):
                     assert status.cpu_state is consts.AppState.run
                     assert status.rt_code is consts.RuntimeException.none
 
-    def test_get_machine(self, controller, spinnaker_width, spinnaker_height):
+    def test_get_machine(self, live_machine, spinnaker_width, spinnaker_height):
         # Just check that the output of get_machine is sane, doesn't verify
         # that it is actually correct. This test will fail if the target
         # machine is very dead...
-        m = controller.get_machine()
+        m = live_machine
 
         # This test will fail if the system has dead chips on its periphery
         assert m.width == spinnaker_width
@@ -249,11 +254,11 @@ class TestMachineControllerLive(object):
             assert (x, y) not in m.chip_resource_exceptions
             assert link in Links
 
-    def test_get_machine_spinn_5(self, controller, spinnaker_width,
+    def test_get_machine_spinn_5(self, live_machine, spinnaker_width,
                                  spinnaker_height, is_spinn_5_board):
         # Verify get_machine in the special case when the attached machine is a
         # single SpiNN-5 or SpiNN-4 board. Verifies sanity of returned values.
-        m = controller.get_machine()
+        m = live_machine
         nominal_live_chips = set([  # noqa
                                             (4, 7), (5, 7), (6, 7), (7, 7),
                                     (3, 6), (4, 6), (5, 6), (6, 6), (7, 6),
@@ -1316,25 +1321,43 @@ class TestMachineController(object):
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")
 
-        # Return one of each kind of table entry per word
+        # Pretend this is a 10x15 machine
+        w, h = 10, 15
+
+        def read_struct_field(struct, field, x, y):
+            assert struct == "sv"
+            assert field == "p2p_dims"
+            assert x == 0
+            assert y == 0
+            return (w << 8) | h
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.side_effect = read_struct_field
+
         p2p_table_len = ((256*256)//8*4)
+        reads = set()
+
+        def read(addr, length, x, y):
+            assert consts.SPINNAKER_RTR_P2P <= addr
+            assert addr < consts.SPINNAKER_RTR_P2P + p2p_table_len
+            assert length == (((h + 7) // 8) * 4)
+            assert x == 0
+            assert y == 0
+            reads.add(addr)
+            return (struct.pack("<I", sum(i << 3 * i for i in range(8))) *
+                    (length // 4))
+        # Return one of each kind of table entry per word for each read
         cn.read = mock.Mock()
-        cn.read.return_value = (
-            struct.pack("<I", sum(i << 3 * i for i in range(8))) *
-            (p2p_table_len//4)
-        )
+        cn.read.side_effect = read
 
         p2p_table = cn.get_p2p_routing_table(x=0, y=0)
 
-        assert cn.read.called_once_with(
-            consts.SPINNAKER_RTR_P2P,
-            p2p_table_len,
-            0, 0, 0
-        )
+        # Should have done one table read per column
+        assert set(consts.SPINNAKER_RTR_P2P + ((x * 256) // 8 * 4)
+                   for x in range(w)) == reads
 
         # Check that the table is complete
         assert set(p2p_table) == \
-            set((x, y) for x in range(256) for y in range(256))
+            set((x, y) for x in range(w) for y in range(h))
 
         # Check that every entry is correct.
         for (x, y), entry in iteritems(p2p_table):

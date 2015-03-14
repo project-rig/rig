@@ -4,7 +4,7 @@
     Implementation is reconstructed from a Perl implementation which forms a
     significant part of the documentation for this process.
 """
-from . import struct_file
+from . import struct_file, consts
 import enum
 import pkg_resources
 import socket
@@ -12,12 +12,11 @@ import struct
 import time
 
 # Specifies the size of packets that should be sent to SpiNNaker to boot the
-# board, and to which port.
+# board.
 DTCM_SIZE = 32 * 1024
 BOOT_BYTE_SIZE = 1024  # Block size for data in boot packets
 BOOT_WORD_SIZE = BOOT_BYTE_SIZE // 4
 BOOT_MAX_BLOCKS = DTCM_SIZE // BOOT_BYTE_SIZE
-PORT = 54321
 
 # Specifies where in the boot data the struct containing default values should
 # be written, and how many bytes of it should be written.
@@ -49,9 +48,10 @@ spin5_boot_options = {
 }
 
 
-def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
+def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
+         cpu_frequency=200, hardware_version=0,
          led_config=0x00000001, boot_data=None, struct_data=None,
-         boot_delay=0.01, post_boot_delay=5.0):
+         boot_delay=0.05, post_boot_delay=5.0):
     """Boot a SpiNNaker machine of the given size.
 
     Parameters
@@ -132,8 +132,8 @@ def boot(hostname, width, height, cpu_frequency=200, hardware_version=0,
     boot_data = bytes(buf)
 
     # Create a socket to communicate with the board
-    sock = socket.socket(type=socket.SOCK_DGRAM)
-    sock.connect((hostname, PORT))
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.connect((hostname, boot_port))
 
     # Transmit the boot data as a series of SDP packets.  First determine
     # how many blocks must be sent and transmit that, then transmit each

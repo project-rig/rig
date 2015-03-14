@@ -58,7 +58,7 @@ class BMPController(ContextMixin):
     cover common uses of the BMP in normal application usage.
     """
 
-    def __init__(self, hosts, n_tries=5, timeout=0.5,
+    def __init__(self, hosts, scp_port=consts.SCP_PORT, n_tries=5, timeout=0.5,
                  initial_context={"cabinet": 0, "frame": 0, "board": 0}):
         """Create a new controller for BMPs in a SpiNNaker machine.
 
@@ -72,6 +72,8 @@ class BMPController(ContextMixin):
             will be used to communicate with all boards in the specified frame
             except those listed explicitly. If only a single hostname is
             supplied it is assumed to be for all boards in cabinet 0, frame 0.
+        scp_port : int
+            Port number to use for all SCP connections
         n_tries : int
             Number of SDP packet retransmission attempts.
         timeout : float
@@ -85,6 +87,7 @@ class BMPController(ContextMixin):
         ContextMixin.__init__(self, initial_context)
 
         # Record paramters
+        self.scp_port = scp_port
         self.n_tries = n_tries
         self.timeout = timeout
         self._scp_data_length = None
@@ -93,7 +96,7 @@ class BMPController(ContextMixin):
         if isinstance(hosts, str):
             hosts = {(0, 0): hosts}
         self.connections = {
-            coord: SCPConnection(host, n_tries, timeout)
+            coord: SCPConnection(host, scp_port, n_tries, timeout)
             for coord, host in iteritems(hosts)
         }
 

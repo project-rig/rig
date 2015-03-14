@@ -2,7 +2,12 @@
 """
 import enum
 
+BOOT_PORT = 54321  # TODO Reference spec
+"""Port used to boot a SpiNNaker machine."""
+
 SCP_PORT = 17893  # TODO Reference spec
+"""Port used for SDP communication."""
+
 SDP_HEADER_LENGTH = 8  # TODO Reference spec.
 """The number of bytes making up the header of an SDP packet."""
 
