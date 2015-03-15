@@ -167,7 +167,7 @@ class TestNumpyFloatToFixConverter(object):
         # Check the values are correct
         ftf = float_to_fix(True, n_bits, n_frac)
         assert vals.dtype == dtype
-        assert (
+        assert (  # pragma: no branch
             bytes(vals.data) ==
             struct.pack("{}{}".format(len(values), c),
                         *[ftf(v) for v in values])
@@ -190,7 +190,7 @@ class TestNumpyFloatToFixConverter(object):
 
         # Check the values are correct
         ftf = float_to_fix(signed, n_bits, n_frac)
-        assert (
+        assert (  # pragma: no branch
             bytes(vals.data) ==
             struct.pack("{}{}".format(len(values), c),
                         *[ftf(v) for v in values])

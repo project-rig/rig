@@ -284,7 +284,7 @@ def test_shortest_torus_path():
             # them given a large number of tests. Note that the chances of this
             # test failing for a working implementation should be incredibly
             # low.
-            for _ in range(1000):
+            for _ in range(1000):  # pragma: no branch
                 path = shortest_torus_path(start, end, width, height)
                 assert path in minimiseds, \
                     (start, end, width, height, minimiseds)
@@ -297,7 +297,7 @@ def test_shortest_torus_path():
             assert unseen_minimiseds == set(), \
                 (start, end, width, height, minimiseds)
 
-            for _ in range(1000):
+            for _ in range(1000):  # pragma: no branch
                 path = shortest_torus_path(end, start, width, height)
                 assert path in neg_minimiseds, \
                     (end, start, width, height, neg_minimiseds)

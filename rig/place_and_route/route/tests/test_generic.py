@@ -72,8 +72,9 @@ def assert_equivilent(route, net, placements, allocation, constraints=[]):
     assert placements[net.source] == route.chip
 
     # Net should visit all locations where a net's sink exists
-    assert set(n.chip for n in route if isinstance(n, RoutingTree)).issuperset(
-        set(placements[v] for v in net.sinks))
+    assert (  # pragma: no branch
+        set(n.chip for n in route if isinstance(n, RoutingTree)).issuperset(
+            set(placements[v] for v in net.sinks)))
 
     # Enumerate the locations and types of all terminations of the tree.
     endpoints = set()
@@ -87,7 +88,8 @@ def assert_equivilent(route, net, placements, allocation, constraints=[]):
     # Enumerate all vertices which are constrained to a certain route
     endpoint_constraints = {}
     for constraint in constraints:
-        if isinstance(constraint, RouteEndpointConstraint):
+        if isinstance(constraint,  # pragma: no branch
+                      RouteEndpointConstraint):
             endpoint_constraints[constraint.vertex] = constraint.route
 
     # Ensure all vertices in the net have a corresponding endpoint

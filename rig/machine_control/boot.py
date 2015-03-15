@@ -50,7 +50,7 @@ spin5_boot_options = {
 
 def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
          cpu_frequency=200, hardware_version=0,
-         led_config=0x00000001, boot_data=None, struct_data=None,
+         led_config=0x00000001, boot_data=None, structs=None,
          boot_delay=0.05, post_boot_delay=5.0):
     """Boot a SpiNNaker machine of the given size.
 
@@ -78,9 +78,9 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
         thus the default value of 0x00000001 is safe.
     boot_data : bytes or None
         Data to boot the machine with
-    struct_data : bytes or None
-        Data to interpret as a representation of the memory layout of data
-        within the boot data.
+    structs : dict or None
+        The structs to use to supply boot parameters to the machine or None to
+        use the default struct.
     boot_delay : float
         Number of seconds to pause between sending boot data packets.
     post_boot_delay : float
@@ -103,17 +103,16 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
     {struct_name: :py:class:`~rig.machine_control.struct_file.Struct`}
         Layout of structs in memory.
     """
-    # Get the boot and struct data if not specified.
-    if struct_data is None:
-        struct_data = pkg_resources.resource_string("rig",
-                                                    "boot/sark.struct")
-
-    if boot_data is None:
+    # Get the boot data if not specified.
+    if boot_data is None:  # pragma: no branch
         boot_data = pkg_resources.resource_string("rig", "boot/scamp.boot")
 
     # Read the struct file and modify the "sv" struct to contain the
     # configuration values and write this into the boot data.
-    structs = struct_file.read_struct_file(struct_data)
+    if structs is None:  # pragma: no branch
+        struct_data = pkg_resources.resource_string("rig",
+                                                    "boot/sark.struct")
+        structs = struct_file.read_struct_file(struct_data)
     sv = structs[b"sv"]
     sv.update_default_values(p2p_dims=(width << 8) | height,
                              hw_ver=hardware_version,

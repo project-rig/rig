@@ -346,7 +346,8 @@ class MachineController(ContextMixin):
         field = self.structs[six.b(struct_name)][six.b(field_name)]
 
         address = self.structs[six.b(struct_name)].base + field.offset
-        pack_chars = field.length * field.pack_chars  # NOTE Python 2 and 3 fix
+        # NOTE Python 2 and 3 fix
+        pack_chars = b"<" + (field.length * field.pack_chars)
         length = struct.calcsize(pack_chars)
 
         # Perform the read
@@ -380,18 +381,20 @@ class MachineController(ContextMixin):
         address = (self.read_struct_field("sv", "vcpu_base", x, y) +
                    vcpu_struct.size * p) + field.offset
 
+        pack_chars = b"<" + field.pack_chars
+
         # Perform the read
-        length = struct.calcsize(field.pack_chars)
+        length = struct.calcsize(pack_chars)
         data = self.read(address, length, x, y)
 
         # Unpack and return
-        unpacked = struct.unpack(field.pack_chars, data)
+        unpacked = struct.unpack(pack_chars, data)
 
         if field.length == 1:
             return unpacked[0]
         else:
             # If the field is a string then truncate it and return
-            if b"s" in field.pack_chars:
+            if b"s" in pack_chars:
                 return unpacked[0].strip(b"\x00").decode("utf-8")
 
             # Otherwise just return. (Note: at the time of writing, no fields

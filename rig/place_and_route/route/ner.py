@@ -344,7 +344,7 @@ def avoid_dead_links(root, machine, wrap_around=False):
                 new_node = lookup[(x, y)]
 
                 # Disconnect node from parent
-                for node in lookup[child]:
+                for node in lookup[child]:  # pragma: no branch
                     if new_node in node.children:
                         node.children.remove(new_node)
                         break

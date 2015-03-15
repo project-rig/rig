@@ -224,7 +224,8 @@ class TestMachineControllerLive(object):
                     assert status.cpu_state is consts.AppState.run
                     assert status.rt_code is consts.RuntimeException.none
 
-    def test_get_machine(self, live_machine, spinnaker_width, spinnaker_height):
+    def test_get_machine(self, live_machine, spinnaker_width,
+                         spinnaker_height):
         # Just check that the output of get_machine is sane, doesn't verify
         # that it is actually correct. This test will fail if the target
         # machine is very dead...
@@ -325,6 +326,19 @@ class TestMachineController(object):
         - Check that transmitted packets are sensible.
         - Check that error codes / correct returns are dealt with correctly.
     """
+    def test_supplied_structs(self):
+        """Check that when struct data is supplied, it is used."""
+        structs = {
+            b"test_struct": struct_file.Struct("test_struct", base=0xDEAD0000)}
+        structs[b"test_struct"][b"test_field"] = \
+            struct_file.StructField(b"I", 0x0000BEEF, "%d", 1234, 1)
+
+        cn = MachineController("localhost", structs=structs)
+        cn.read = mock.Mock()
+        cn.read.return_value = b"\x01\x00\x00\x00"
+        assert cn.read_struct_field("test_struct", "test_field", 0, 0, 0) == 1
+        cn.read.assert_called_once_with(0xDEADBEEF, 4, 0, 0, 0)
+
     def test_send_scp(self):
         """Check that arbitrary SCP commands can be sent using the context
         system.
@@ -1356,8 +1370,8 @@ class TestMachineController(object):
                    for x in range(w)) == reads
 
         # Check that the table is complete
-        assert set(p2p_table) == \
-            set((x, y) for x in range(w) for y in range(h))
+        assert (set(p2p_table) ==  # pragma: no branch
+                set((x, y) for x in range(w) for y in range(h)))
 
         # Check that every entry is correct.
         for (x, y), entry in iteritems(p2p_table):
@@ -1576,6 +1590,14 @@ class TestMemoryIO(object):
         for seek in seeks:
             sdram_file.seek(seek, from_what=2)
             assert sdram_file.tell() == length - seek
+
+    def test_seek_from_invalid(self, mock_controller):
+        sdram_file = MemoryIO(mock_controller, 0, 0,
+                              0, 8)
+        assert sdram_file.tell() == 0
+
+        with pytest.raises(ValueError):
+            sdram_file.seek(1, from_what=3)
 
 
 @pytest.mark.parametrize(
