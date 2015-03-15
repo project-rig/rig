@@ -131,7 +131,7 @@ class MachineController(ContextMixin):
         """Transmit an SCP Packet.
 
         See the arguments for
-        :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
+        :py:meth:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
         # Retrieve contextual arguments from the keyword arguments.  The
@@ -146,7 +146,7 @@ class MachineController(ContextMixin):
         it to transmit.
 
         See the arguments for
-        :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
+        :py:meth:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
         # Determine the size of packet we expect in return, this is usually the
@@ -814,8 +814,8 @@ class MachineController(ContextMixin):
             (especially when the system's network is heavily utilised). Users
             should treat this mechanism with caution.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         signal : :py:class:`~rig.machine_control.consts.AppSignal`
             Signal to transmit.
         """

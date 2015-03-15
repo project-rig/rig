@@ -100,8 +100,8 @@ class RouteEndpointConstraint(object):
     nearest-neighbour PEEK/POKE requests used by the SpiNNaker software to
     detect link liveness.
 
-    Example Usage
-    -------------
+    **Example Usage**
+
     If a silicon retina is attached to the north link of chip (1,1) in a 2x2
     SpiNNaker machine, the following pair of constraints will ensure traffic
     destined for the device vertex is routed to the appropriate link::
