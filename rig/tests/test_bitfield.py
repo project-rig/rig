@@ -223,14 +223,16 @@ def test_bitfield_hierachy():
 
     # Add different fields dependent on the split-bit. This checks that
     # creating fields in different branches of the heirachy doesn't result in
-    # clashes.
+    # clashes.  Additionally creates multiple levels of heirarchy.
     ks_s0 = ks(split=0)
     ks_s0.add_field("s0_btm", length=3, start_at=0)
     ks_s0.add_field("s0_top", length=3, start_at=3)
 
     ks_s1 = ks(split=1)
-    ks_s1.add_field("s1_btm", length=3, start_at=0)
-    ks_s1.add_field("s1_top", length=3, start_at=3)
+    ks_s1.add_field("s1_btm", length=2, start_at=0)
+    ks_s1.add_field("s1_top", length=2, start_at=2)
+    ks_s1s = ks_s1(s1_btm=0, s1_top=0)
+    ks_s1s.add_field("split2", length=2, start_at=4)
 
     # Shouldn't be able to access child-fields of split before it is defined
     with pytest.raises(AttributeError):
@@ -241,6 +243,8 @@ def test_bitfield_hierachy():
         ks.s1_top
     with pytest.raises(AttributeError):
         ks.s1_btm
+    with pytest.raises(AttributeError):
+        ks.split2
 
     # Should be able to define a new key from scratch
     ks_s0_defined = ks(always=1, split=0, s0_btm=3, s0_top=5)
@@ -260,6 +264,8 @@ def test_bitfield_hierachy():
         ks_s0_defined.s1_btm
     with pytest.raises(AttributeError):
         ks_s0_defined.s1_top
+    with pytest.raises(AttributeError):
+        ks_s0_defined.split2
 
     # Shouldn't have to define all top-level fields in order to get at split
     # fields
@@ -274,6 +280,18 @@ def test_bitfield_hierachy():
         ks_s1_selected.s0_btm
     with pytest.raises(AttributeError):
         ks_s1_selected.s0_top
+
+    # Accessing fields in a split lower in the hierarchy should still fail
+    with pytest.raises(AttributeError):
+        ks_s1_selected.split2
+
+    # Should be able to access the second-level of split
+    ks_s1s_selected = ks(always=1, split=1, s1_btm=0, s1_top=0, split2=3)
+    assert ks_s1s_selected.always == 1
+    assert ks_s1s_selected.split == 1
+    assert ks_s1s_selected.s1_btm == 0
+    assert ks_s1s_selected.s1_top == 0
+    assert ks_s1s_selected.split2 == 3
 
     # Should not be able to set child fields before parent field is set
     with pytest.raises(AttributeError):

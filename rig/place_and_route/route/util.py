@@ -50,7 +50,7 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
                 x += sign
             elif dimension == 1:
                 y += sign
-            elif dimension == 2:
+            elif dimension == 2:  # pragma: no branch
                 x -= sign
                 y -= sign
 

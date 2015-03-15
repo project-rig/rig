@@ -55,6 +55,45 @@ class TestRangedIntAttribute(object):
         y.y = None
 
 
+class TestByteStringAttribute(object):
+    def test_unlimited_length(self):
+        class X(object):
+            y = packets.ByteStringAttribute(default=b"default")
+
+        x = X()
+
+        assert x.y == b"default"
+
+        x.y = b""
+        assert x.y == b""
+
+        x.y = b"hello"
+        assert x.y == b"hello"
+
+        x.y = b"01234567"
+        assert x.y == b"01234567"
+
+    def test_max_length(self):
+        class X(object):
+            y = packets.ByteStringAttribute(max_length=8)
+
+        x = X()
+
+        assert x.y == b""
+
+        x.y = b""
+        assert x.y == b""
+
+        x.y = b"hello"
+        assert x.y == b"hello"
+
+        x.y = b"01234567"
+        assert x.y == b"01234567"
+
+        with pytest.raises(ValueError):
+            x.y = b"012345678"
+
+
 class TestSDPPacket(object):
     """Test SDPPacket representations."""
     def test_from_bytestring_to_bytestring(self):

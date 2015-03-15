@@ -497,20 +497,11 @@ class BitField(object):
                    in field.conditions.items()):
                 yield (identifier, field)
 
-    def _potential_fields(self, field_values=None):
+    def _potential_fields(self):
         """Generator of (identifier, field) tuples iterating over every field
         which could potentially be defined given the currently specified field
         values.
-
-        Parameters
-        ----------
-        field_values : dict or None
-            Dictionary of field identifier to value mappings to use in the
-            test. If *None*, uses `self.field_values`.
         """
-        if field_values is None:
-            field_values = self.field_values
-
         # Fields are blocked when their conditions can't be met. This only
         # occurs if a condition field's value can't be as the condition
         # requires. This can occur either because the user has already assigned
@@ -523,7 +514,8 @@ class BitField(object):
         for identifier, field in self.fields.items():
             if not field.conditions \
                or all(cond_field not in blocked and
-                      field_values.get(cond_field, cond_value) == cond_value
+                      self.field_values.get(cond_field, cond_value) ==
+                      cond_value
                       for cond_field, cond_value
                       in field.conditions.items()):
                 yield (identifier, field)

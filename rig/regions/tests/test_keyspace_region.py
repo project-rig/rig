@@ -42,6 +42,13 @@ class TestKeyspacesRegion(object):
                             prepend_num_keyspaces=True)
         assert r.sizeof(slice(None)) == 4
 
+    def test_sizeof_partitioned(self):
+        r = KeyspacesRegion([BitField(32)]*4, fields=[mock.Mock()],
+                            partitioned_by_atom=True,
+                            prepend_num_keyspaces=False)
+        assert r.sizeof(slice(1, 2)) == 4
+        assert r.sizeof(slice(2, 4)) == 8
+
     def test_write_subregion_calls_fields(self):
         """Check that writing a subregion to file calls the field functions
         with each key and that any extra arguments are passed along.

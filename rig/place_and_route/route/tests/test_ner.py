@@ -222,8 +222,8 @@ def test_copy_and_disconnect_tree():
         assert old_chips.issuperset(new_chips)
 
         # Check the locations missing are exactly those on dead cores
-        assert old_chips.difference(new_chips) \
-            == set(c for c in old_chips if c not in machine)
+        assert (old_chips.difference(new_chips) ==  # pragma: no branch
+                set(c for c in old_chips if c not in machine))
 
         # Check that the set of broken links is as expected
         assert new_broken_links == expected_broken_links
@@ -268,10 +268,11 @@ def test_copy_and_disconnect_tree():
 
             # Ensure that any children missing are exactly those which are
             # disconnected or on dead chips
-            assert old_children.difference(new_children) \
-                == set(c for c in old_children
-                       if c not in machine or
-                       not links_between(chip, c, machine))
+            assert (  # pragma: no branch
+                    old_children.difference(new_children) ==
+                    set(c for c in old_children
+                        if c not in machine or
+                        not links_between(chip, c, machine)))
 
 
 def test_a_star():
@@ -394,8 +395,9 @@ def test_avoid_dead_links_no_change():
             assert new_node.chip == old_node.chip
 
             # Children should be the same
-            assert set(n.chip for n in new_node.children) \
-                == set(n.chip for n in old_node.children)
+            assert (  # pragma: no branch
+                    set(n.chip for n in new_node.children) ==
+                    set(n.chip for n in old_node.children))
 
 
 def test_avoid_dead_links_change():
@@ -431,6 +433,22 @@ def test_avoid_dead_links_change():
     t = RoutingTree((0, 0), set([t0]))
     test_cases.append(t)
 
+    # A subtree which blocks A* from reaching the start without crossing itself
+    # but which doesn't directly encircle the top of the blockage.
+    t55 = RoutingTree((2, 5), set([]))
+    t54 = RoutingTree((3, 5), set([t55]))
+    t53 = RoutingTree((4, 5), set([t54]))
+    t52 = RoutingTree((5, 2), set([]))
+    t51 = RoutingTree((5, 3), set([t52]))
+    t50 = RoutingTree((5, 4), set([t51]))
+    t4 = RoutingTree((5, 5), set([t50, t53]))
+    t3 = RoutingTree((4, 4), set([t4]))
+    t2 = RoutingTree((3, 3), set([t3]))
+    t1 = RoutingTree((2, 2), set([t2]))
+    t0 = RoutingTree((1, 1), set([t1]))
+    t = RoutingTree((0, 0), set([t0]))
+    test_cases.append(t)
+
     # For each test case just ensure the new tree is a tree and visits all
     # non-dead nodes from the testcase. No checks made for
     # minimality/efficiency etc.
@@ -445,8 +463,9 @@ def test_avoid_dead_links_change():
             assert new_lookup[node.chip] is node
 
         # Check all non-dead nodes still exist
-        assert set(n.chip for n in old_root if n.chip in machine).issubset(
-            set(n.chip for n in new_root))
+        assert (  # pragma: no branch
+                set(n.chip for n in old_root if n.chip in machine).issubset(
+                    set(n.chip for n in new_root)))
 
         # Check for cycles
         visited = set()

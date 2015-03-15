@@ -96,7 +96,7 @@ def test_trivial(algorithm, kwargs):
     # resources.
     machine = Machine(1, 1, chip_resources={Cores: 8})
     vertices = [object() for _ in range(8)]
-    assert algorithm({v: {Cores: 1} for v in vertices},
+    assert algorithm({v: {Cores: 1} for v in vertices},  # pragma: no branch
                      [], machine, [], **kwargs) \
         == {v: (0, 0) for v in vertices}
 
@@ -105,7 +105,7 @@ def test_trivial(algorithm, kwargs):
     machine = Machine(1, 1, chip_resources={Cores: 8})
     vertices = [object() for _ in range(8)]
     nets = [Net(vertices[0], vertices[1:])]
-    assert algorithm({v: {Cores: 1} for v in vertices},
+    assert algorithm({v: {Cores: 1} for v in vertices},  # pragma: no branch
                      nets, machine, [], **kwargs) \
         == {v: (0, 0) for v in vertices}
 

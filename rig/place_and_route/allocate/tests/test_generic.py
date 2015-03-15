@@ -4,8 +4,10 @@ import pytest
 
 from rig.machine import Machine, Cores, SDRAM
 
+from rig.routing_table import Routes
+
 from rig.place_and_route.constraints import \
-    ReserveResourceConstraint, AlignResourceConstraint
+    ReserveResourceConstraint, AlignResourceConstraint, RouteEndpointConstraint
 
 from rig.place_and_route.exceptions import InsufficientResourceError
 
@@ -27,7 +29,8 @@ def test_null_allocation(algorithm, kwargs):
     machine = Machine(2, 2, chip_resources={})
     vertices_resources = {object(): {} for _ in range(4)}
     placements = {v: (i % 2, i//2) for i, v in enumerate(vertices_resources)}
-    assert algorithm(vertices_resources, [], machine, [], placements,
+    assert algorithm(vertices_resources,  # pragma: no branch
+                     [], machine, [], placements,
                      **kwargs) \
         == {v: {} for v in vertices_resources}
 
@@ -37,14 +40,17 @@ def test_null_allocation(algorithm, kwargs):
 
 
 @pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
-def test_allocation(algorithm, kwargs):
-    """Test allocating non-empty sets of vertices."""
+@pytest.mark.parametrize("constraints",
+                         ([], [RouteEndpointConstraint(None, Routes.north)]))
+def test_allocation(algorithm, kwargs, constraints):
+    """Test allocating non-empty sets of vertices and with irellevant
+    constraints."""
     # Test single vertex with a single allocation which should exactly fit
     machine = Machine(1, 1, chip_resources={Cores: 1})
     vertex = object()
     vertices_resources = {vertex: {Cores: 1}}
     placements = {vertex: (0, 0)}
-    assert algorithm(vertices_resources, [], machine, [], placements,
+    assert algorithm(vertices_resources, [], machine, constraints, placements,
                      **kwargs) \
         == {vertex: {Cores: slice(0, 1)}}
 
@@ -54,7 +60,7 @@ def test_allocation(algorithm, kwargs):
     vertex = object()
     vertices_resources = {vertex: {SDRAM: 128}}
     placements = {vertex: (0, 0)}
-    assert algorithm(vertices_resources, [], machine, [], placements,
+    assert algorithm(vertices_resources, [], machine, constraints, placements,
                      **kwargs) \
         == {vertex: {SDRAM: slice(0, 128)}}
 
@@ -63,7 +69,7 @@ def test_allocation(algorithm, kwargs):
     vertex = object()
     vertices_resources = {vertex: {Cores: 1}}
     placements = {vertex: (0, 0)}
-    assert algorithm(vertices_resources, [], machine, [], placements,
+    assert algorithm(vertices_resources, [], machine, constraints, placements,
                      **kwargs) \
         == {vertex: {Cores: slice(0, 1)}}
 
@@ -72,7 +78,7 @@ def test_allocation(algorithm, kwargs):
     vertex = object()
     vertices_resources = {vertex: {Cores: 1, SDRAM: 128}}
     placements = {vertex: (0, 0)}
-    assert algorithm(vertices_resources, [], machine, [], placements,
+    assert algorithm(vertices_resources, [], machine, constraints, placements,
                      **kwargs) \
         == {vertex: {Cores: slice(0, 1), SDRAM: slice(0, 128)}}
 
@@ -83,7 +89,7 @@ def test_allocation(algorithm, kwargs):
     sdram_vertex = object()
     vertices_resources = {core_vertex: {Cores: 1}, sdram_vertex: {SDRAM: 128}}
     placements = {core_vertex: (0, 0), sdram_vertex: (0, 0)}
-    assert algorithm(vertices_resources, [], machine, [], placements,
+    assert algorithm(vertices_resources, [], machine, constraints, placements,
                      **kwargs) \
         == {core_vertex: {Cores: slice(0, 1)},
             sdram_vertex: {SDRAM: slice(0, 128)}}
@@ -94,7 +100,7 @@ def test_allocation(algorithm, kwargs):
     second_vertex = object()
     vertices_resources = {first_vertex: {Cores: 1}, second_vertex: {Cores: 1}}
     placements = {first_vertex: (0, 0), second_vertex: (1, 0)}
-    assert algorithm(vertices_resources, [], machine, [], placements,
+    assert algorithm(vertices_resources, [], machine, constraints, placements,
                      **kwargs) \
         == {first_vertex: {Cores: slice(0, 1)},
             second_vertex: {Cores: slice(0, 1)}}
@@ -104,8 +110,8 @@ def test_allocation(algorithm, kwargs):
     machine = Machine(1, 1, chip_resources={Cores: num})
     vertices_resources = {object(): {Cores: 1} for _ in range(num)}
     placements = {v: (0, 0) for v in vertices_resources}
-    allocation = algorithm(vertices_resources, [], machine, [], placements,
-                           **kwargs)
+    allocation = algorithm(vertices_resources, [], machine, constraints,
+                           placements, **kwargs)
     core_allocations = [False]*num
     for vertex in vertices_resources:
         assert vertex in allocation

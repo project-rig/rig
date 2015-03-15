@@ -1,3 +1,5 @@
+import pytest
+
 from six import iteritems
 
 from rig.machine import Machine, Cores, SDRAM
@@ -20,14 +22,17 @@ class TestWrapper(object):
         assert application_map == {}
         assert routing_tables == {}
 
-    def test_ring(self):
+    @pytest.mark.parametrize("reserve_monitor, align_sdram",
+                             [(True, True), (False, False)])
+    def test_ring(self, reserve_monitor, align_sdram):
         # A simple example where a ring network is defined. In the ring, each
         # node is connected by a multicast net to its two immediate neighbours.
 
-        m = Machine(4, 4)
+        m = Machine(2, 2)
 
         # Create a ring network which will consume all available cores
-        num_vertices = m.width * m.height * (m.chip_resources[Cores] - 1)
+        num_vertices = m.width * m.height * (
+            m.chip_resources[Cores] - (1 if reserve_monitor else 0))
         vertices = [object() for _ in range(num_vertices)]
         vertices_resources = {v: {Cores: 1, SDRAM: 3} for v in vertices}
         vertices_applications = {v: "app.aplx" for v in vertices}
@@ -39,7 +44,8 @@ class TestWrapper(object):
 
         placements, allocations, application_map, routing_tables = \
             wrapper(vertices_resources, vertices_applications,
-                    nets, net_keys, m)
+                    nets, net_keys, m, reserve_monitor=reserve_monitor,
+                    align_sdram=align_sdram)
 
         # Check all vertices are placed & allocated
         assert set(vertices) == set(placements) == set(allocations)
@@ -59,7 +65,10 @@ class TestWrapper(object):
             assert cores.stop - cores.start == 1
 
             # Not the monitor and within the cores that exist
-            assert 1 < cores.stop <= m.chip_resources[Cores]
+            if reserve_monitor:
+                assert 1 < cores.stop <= m.chip_resources[Cores]
+            else:
+                assert 0 < cores.stop <= m.chip_resources[Cores]
 
             # No cores are over-allocated
             assert (x, y, cores.start) not in used_cores
@@ -70,15 +79,17 @@ class TestWrapper(object):
             assert sdram.stop - sdram.start == 3
 
             # Memory was aligned
-            assert sdram.start % 4 == 0
+            if align_sdram:
+                assert sdram.start % 4 == 0
 
             # No memory was over-allocated
             assert (x, y, sdram.start) not in used_memory
             used_memory.add((x, y, sdram.start))
 
         # Check the correct application map is given (same app on every core)
-        assert application_map == {
-            "app.aplx": {(x, y): set(range(1, m.chip_resources[Cores]))
+        assert application_map == {  # pragma: no branch
+            "app.aplx": {(x, y): set(range(1 if reserve_monitor else 0,
+                                           m.chip_resources[Cores]))
                          for x in range(m.width)
                          for y in range(m.height)}}
 

@@ -102,7 +102,7 @@ def test_longest_dimension_first():
     generated_x_first = False
     generated_y_first = False
     generated_z_first = False
-    for _ in range(1000):
+    for _ in range(1000):  # pragma: no branch
         first_move = list(longest_dimension_first((1, 1, 1)))[0]
         if first_move == (1, 0):
             generated_x_first = True
@@ -172,8 +172,8 @@ def test_links_between():
 
     # If some links are down, these should be omitted
     machine = Machine(1, 1, dead_links=set([(0, 0, Links.north)]))
-    assert links_between((0, 0), (0, 0), machine) \
-        == set(l for l in Links if l != Links.north)
+    assert (links_between((0, 0), (0, 0), machine) ==  # pragma: no branch
+            set(l for l in Links if l != Links.north))
 
     # Should work the same in large system
     machine = Machine(10, 10, dead_links=set([(4, 4, Links.north)]))
