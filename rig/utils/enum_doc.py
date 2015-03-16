@@ -1,5 +1,6 @@
 """Docstring sanitisers for Sphinx"""
 
+
 def int_enum_doc(enum):
     """Decorator which re-writes documentation strings for an IntEnum so that
     Sphinx presents it correctly.

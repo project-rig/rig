@@ -224,7 +224,8 @@ class TestMachineControllerLive(object):
                     assert status.cpu_state is consts.AppState.run
                     assert status.rt_code is consts.RuntimeException.none
 
-    def test_get_machine(self, live_machine, spinnaker_width, spinnaker_height):
+    def test_get_machine(self, live_machine, spinnaker_width,
+                         spinnaker_height):
         # Just check that the output of get_machine is sane, doesn't verify
         # that it is actually correct. This test will fail if the target
         # machine is very dead...

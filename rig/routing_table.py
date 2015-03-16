@@ -7,6 +7,7 @@ from rig.utils.enum_doc import int_enum_doc
 
 from collections import namedtuple
 
+
 class RoutingTableEntry(namedtuple("RoutingTableEntry", "route key mask")):
     """Named tuple representing a single routing entry in a SpiNNaker routing
     table.

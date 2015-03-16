@@ -83,8 +83,8 @@ class MachineController(ContextMixin):
             :py:class:`rig.machine_control.struct_file.read_struct_file`. If
             None, the default struct file will be used.
         initial_context : `{argument: value}`
-            Default argument values to pass to methods in this class. By default
-            this just specifies a default App-ID.
+            Default argument values to pass to methods in this class. By
+            default this just specifies a default App-ID.
         """
         # Initialise the context stack
         ContextMixin.__init__(self, initial_context)
@@ -142,7 +142,7 @@ class MachineController(ContextMixin):
         Future versions of this command will automatically chose the most
         appropriate connection to use for machines with more than one Ethernet
         connection.
-        
+
         Parameters
         ----------
         x : int
@@ -194,7 +194,8 @@ class MachineController(ContextMixin):
         .. warning::
             This function does not check that the system has been booted
             successfully. This can be checked by ensuring that
-            :py:meth:`.get_software_version` returns a sensible value.
+            :py:meth:`.MachineController.get_software_version` returns a
+            sensible value.
 
         .. warning::
             If the system has already been booted, this command will not cause
@@ -221,8 +222,8 @@ class MachineController(ContextMixin):
 
             controller.boot(**spine_boot_options)
 
-        This is neccessary on boards such as SpiNN-3 boards if the more than LED
-        0 are required by an application since by default, only LED 0 is
+        This is neccessary on boards such as SpiNN-3 boards if the more than
+        LED 0 are required by an application since by default, only LED 0 is
         enabled.
         """
         boot_kwargs.setdefault("boot_port", self.boot_port)
@@ -416,15 +417,15 @@ class MachineController(ContextMixin):
                                p=Required):
         """Read a value out of the VCPU struct for a specific core.
 
-        Similar to :py:meth:`.read_struct_field` except this method accesses the
-        individual VCPU struct for to each core and contains application runtime
-        status.
+        Similar to :py:meth:`.read_struct_field` except this method accesses
+        the individual VCPU struct for to each core and contains application
+        runtime status.
 
         Parameters
         ----------
         field_name : string
             Name of the field to read from the struct (e.g. `"cpu_state"`)
-        
+
         Returns
         -------
         value
@@ -594,8 +595,8 @@ class MachineController(ContextMixin):
         Raises
         ------
         SpiNNakerMemoryError
-            If the memory cannot be allocated, the tag is already taken or it is
-            invalid.
+            If the memory cannot be allocated, the tag is already taken or it
+            is invalid.
         """
         assert 0 <= tag < 256
 
@@ -880,8 +881,8 @@ class MachineController(ContextMixin):
         .. warning::
             In current implementations of SARK, signals are highly likely to
             arrive but this is not guaranteed (especially when the system's
-            network is heavily utilised). Users should treat this mechanism with
-            caution.
+            network is heavily utilised). Users should treat this mechanism
+            with caution.
 
         Parameters
         ----------
@@ -1227,7 +1228,7 @@ class IPTag(collections.namedtuple("IPTag",
                                    "addr mac port timeout flags count rx_port "
                                    "spin_addr spin_port")):
     """An IPTag as read from a SpiNNaker machine.
-    
+
     Parameters
     ----------
     addr : str
@@ -1304,7 +1305,7 @@ class SpiNNakerLoadingError(Exception):
 
 class MemoryIO(object):
     """A file-like view into the memory-space of a chip."""
-    
+
     def __init__(self, machine_controller, x, y, start_address, end_address):
         """Create a file-like view onto a subset of the memory-space of a chip.
 

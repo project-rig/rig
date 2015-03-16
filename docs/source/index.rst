@@ -23,7 +23,7 @@ SpiNNaker.  Tools exist for:
 .. toctree::
         :maxdepth: 2
 
-        bitfield
+        bitfield_doctest
         regions
 
 Problem mapping

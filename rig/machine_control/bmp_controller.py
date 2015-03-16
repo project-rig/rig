@@ -126,7 +126,7 @@ class BMPController(ContextMixin):
         See the arguments for
         :py:meth:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
-        
+
         Parameters
         ----------
         cabinet : int
@@ -283,7 +283,7 @@ class BMPController(ContextMixin):
         See the SpI/O project's spinnaker_fpga design's `README`_ for a listing
         of FPGA registers. The SpI/O project can be found on GitHub at:
         https://github.com/SpiNNakerManchester/spio/
-        
+
         .. _README: https://github.com/SpiNNakerManchester/spio/\
                     blob/master/designs/spinnaker_fpgas/README.md#spi-interface
 
@@ -316,7 +316,7 @@ class BMPController(ContextMixin):
         See the SpI/O project's spinnaker_fpga design's `README`_ for a listing
         of FPGA registers. The SpI/O project can be found on GitHub at:
         https://github.com/SpiNNakerManchester/spio/
-        
+
         .. _README: https://github.com/SpiNNakerManchester/spio/\
                     blob/master/designs/spinnaker_fpgas/README.md#spi-interface
 
