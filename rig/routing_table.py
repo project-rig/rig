@@ -3,8 +3,9 @@
 
 from enum import IntEnum
 
-from collections import namedtuple
+from rig.utils.enum_doc import int_enum_doc
 
+from collections import namedtuple
 
 class RoutingTableEntry(namedtuple("RoutingTableEntry", "route key mask")):
     """Named tuple representing a single routing entry in a SpiNNaker routing
@@ -24,6 +25,7 @@ class RoutingTableEntry(namedtuple("RoutingTableEntry", "route key mask")):
     """
 
 
+@int_enum_doc
 class Routes(IntEnum):
     """Enumeration of routes which a SpiNNaker packet can take after arriving
     at a router.

@@ -17,7 +17,7 @@ def read_struct_file(struct_data):
 
     Returns
     -------
-    {struct_name: :py:class:`~rig.machine_control.Struct`}
+    {struct_name: :py:class:`~.Struct`}
         A dictionary mapping the struct name to a :py:class:`~.Struct`
         instance. **Note:** the struct name will be a string of bytes, e.g.,
         `b"vcpu"`.

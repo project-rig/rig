@@ -97,7 +97,7 @@ class MatrixRegion(Region):
     def sizeof(self, vertex_slice):
         """Get the size of a slice of this region in bytes.
 
-        See :py:method:`Region.sizeof`
+        See :py:meth:`.region.Region.sizeof`
         """
         # Get the size of the prepends
         pp_size = 0

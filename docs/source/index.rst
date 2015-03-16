@@ -35,6 +35,7 @@ Problem mapping
         place_and_route
         machine
         routing_table
+        netlist
         geometry
 
 
@@ -44,7 +45,8 @@ Execution control
 .. toctree::
         :maxdepth: 2
 
-        scp
+        control
+        control_api
 
 Indices and tables
 ==================

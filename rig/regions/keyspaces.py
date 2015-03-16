@@ -49,7 +49,7 @@ class KeyspacesRegion(Region):
     def sizeof(self, vertex_slice):
         """Get the size of a slice of this region in bytes.
 
-        See :py:method:`Region.sizeof`
+        See :py:meth:`.region.Region.sizeof`
         """
         # Get the size from representing the fields
         if not self.partitioned:

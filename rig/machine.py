@@ -3,6 +3,8 @@
 
 from enum import IntEnum
 
+from rig.utils.enum_doc import int_enum_doc
+
 import sentinel
 
 
@@ -30,6 +32,7 @@ in library functions. Users are free to define their own alternatives.
 """
 
 
+@int_enum_doc
 class Links(IntEnum):
     """Enumeration of links from a SpiNNaker chip.
 
