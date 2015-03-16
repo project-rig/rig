@@ -75,12 +75,16 @@ class MachineController(ContextMixin):
         n_tries : int
             Number of SDP packet retransmission attempts.
         timeout : float
+            Timeout in seconds before an SCP response is assumed lost and the
+            request is retransmitted.
         structs : dict or None
             A dictionary of struct data defining the memory locations of
-            important values in SARK. If None, the default struct file used for
-            booting will be used.
+            important values in SARK as produced by
+            :py:class:`rig.machine_control.struct_file.read_struct_file`. If
+            None, the default struct file will be used.
         initial_context : `{argument: value}`
-            Dictionary of default arguments to pass to methods in this class.
+            Default argument values to pass to methods in this class. By
+            default this just specifies a default App-ID.
         """
         # Initialise the context stack
         ContextMixin.__init__(self, initial_context)
@@ -106,33 +110,46 @@ class MachineController(ContextMixin):
             SCPConnection(initial_host, scp_port, n_tries, timeout)
         ]
 
+    def __call__(self, **context_args):
+        """For use with `with`: set default argument values.
+
+        E.g::
+
+            with controller(x=3, y=4):
+                # All commands in this block now communicate with chip (3, 4)
+        """
+        return self.get_new_context(**context_args)
+
     @property
     def scp_data_length(self):
-        """The maximum SCP data field length supported by the machine."""
+        """The maximum SCP data field length supported by the machine
+        (bytes).
+        """
         # If not known, query the machine
         if self._scp_data_length is None:
             data = self.get_software_version(0, 0)
             self._scp_data_length = data.buffer_size
         return self._scp_data_length
 
-    def __call__(self, **context_args):
-        """Create a new context for use with `with`.
-
-        E.g::
-
-            with controller(x=3, y=4):
-                # All commands will now communicate with chip (3, 4)
-        """
-        return self.get_new_context(**context_args)
-
     @ContextMixin.use_named_contextual_arguments(
         x=Required, y=Required, p=Required)
     def send_scp(self, *args, **kwargs):
-        """Transmit an SCP Packet.
+        """Transmit an SCP Packet and return the response.
 
-        See the arguments for
-        :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
-        details.
+        This function is a thin wrapper around
+        :py:meth:`~rig.machine_control.scp_connection.SCPConnection`.
+
+        Future versions of this command will automatically choose the most
+        appropriate connection to use for machines with more than one Ethernet
+        connection.
+
+        Parameters
+        ----------
+        x : int
+        y : int
+        p : int
+        *args
+        **kwargs
         """
         # Retrieve contextual arguments from the keyword arguments.  The
         # context system ensures that these values are present.
@@ -145,8 +162,11 @@ class MachineController(ContextMixin):
         """Determine the best connection to use to send an SCP packet and use
         it to transmit.
 
+        This internal version of the method is identical to send_scp except it
+        has positional arguments for x, y and p.
+
         See the arguments for
-        :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
+        :py:meth:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
         # Determine the size of packet we expect in return, this is usually the
@@ -165,14 +185,28 @@ class MachineController(ContextMixin):
         The system will be booted from the chip whose hostname was given as the
         argument to the MachineController.
 
-        This method is simply a very thin wrapper around
-        :py:func:`~rig.machine_control.boot.boot`.
+        This method is a thin wrapper around
+        :py:func:`rig.machine_control.boot.boot`.
+
+        After booting, the structs in this MachineController will be set to
+        those used to boot the machine.
 
         .. warning::
             This function does not check that the system has been booted
-            successfully. Further, if the system has already been booted, this
-            command will not cause the system to 'reboot' using the supplied
-            firmware.
+            successfully. This can be checked by ensuring that
+            :py:meth:`.MachineController.get_software_version` returns a
+            sensible value.
+
+        .. warning::
+            If the system has already been booted, this command will not cause
+            the system to 'reboot' using the supplied firmware.
+
+        .. warning::
+            Booting the system over the open internet is likely to fail due to
+            the port number being blocked by most ISPs and UDP not being
+            reliable. A proxy such as `spinnaker_proxy
+            <https://github.com/project-rig/spinnaker_proxy>`_ may be useful in
+            this situation.
 
         Parameters
         ----------
@@ -186,9 +220,11 @@ class MachineController(ContextMixin):
         The constants `rig.machine_control.boot.spinX_boot_options` can be used
         to specify boot parameters, for example::
 
-            controller.boot(**spin5_boot_options)
+            controller.boot(**spin3_boot_options)
 
-        Will boot the Spin5 board connected to by `controller`.
+        This is neccessary on boards such as SpiNN-3 boards if the more than
+        LED 0 are required by an application since by default, only LED 0 is
+        enabled.
         """
         boot_kwargs.setdefault("boot_port", self.boot_port)
         self.structs = boot.boot(self.initial_host, width=width, height=height,
@@ -201,7 +237,7 @@ class MachineController(ContextMixin):
 
         Returns
         -------
-        :py:class:`CoreInfo`
+        :py:class:`.CoreInfo`
             Information about the software running on a core.
         """
         sver = self._send_scp(x, y, processor, SCPCommands.sver)
@@ -224,12 +260,21 @@ class MachineController(ContextMixin):
     def write(self, address, data, x=Required, y=Required, p=0):
         """Write a bytestring to an address in memory.
 
+        It is strongly encouraged to only read and write to blocks of memory
+        allocated using :py:meth:`.sdram_alloc`. Additionally,
+        :py:meth:`.sdram_alloc_as_io` can be used to safely wrap read/write
+        access to memory with a file-like interface and prevent accidental
+        access to areas outside the allocated block.
+
         Parameters
         ----------
         address : int
-            The address at which to start writing the data.
+            The address at which to start writing the data. Addresses are given
+            within the address space of a SpiNNaker core. See the SpiNNaker
+            datasheet for more information.
         data : :py:class:`bytes`
-            Data to write into memory.
+            Data to write into memory. Writes are automatically broken into a
+            sequence of SCP write commands.
         """
         # While there is still data perform a write: get the block to write
         # this time around, determine the data type, perform the write and
@@ -270,7 +315,8 @@ class MachineController(ContextMixin):
         address : int
             The address at which to start reading the data.
         length_bytes : int
-            The number of bytes to read from memory.
+            The number of bytes to read from memory. Large reads are
+            transparently broken into multiple SCP read commands.
 
         Returns
         -------
@@ -324,6 +370,10 @@ class MachineController(ContextMixin):
                           x=Required, y=Required, p=0):
         """Read the value out of a struct maintained by SARK.
 
+        This method is particularly useful for reading fields from the ``sv``
+        struct which, for example, holds information about system status. See
+        ``sark.h`` for details.
+
         Parameters
         ----------
         struct_name : string
@@ -331,7 +381,9 @@ class MachineController(ContextMixin):
         field_name : string
             Name of the field to read, e.g., `"eth_addr"`
 
-        .. note::
+        Returns
+        -------
+        value
             The value returned is unpacked given the struct specification.
 
             Currently arrays are returned as tuples, e.g.::
@@ -366,13 +418,19 @@ class MachineController(ContextMixin):
                                p=Required):
         """Read a value out of the VCPU struct for a specific core.
 
+        Similar to :py:meth:`.read_struct_field` except this method accesses
+        the individual VCPU struct for to each core and contains application
+        runtime status.
+
         Parameters
         ----------
         field_name : string
-            Name of the field to read from the struct.
+            Name of the field to read from the struct (e.g. `"cpu_state"`)
 
-        See the documentation for :py:meth:`.read_struct_field` for further
-        details.
+        Returns
+        -------
+        value
+            A value of the type contained in the specified struct field.
         """
         # Get the base address of the VCPU struct for this chip, then advance
         # to get the correct VCPU struct for the requested core.
@@ -403,11 +461,11 @@ class MachineController(ContextMixin):
 
     @ContextMixin.use_contextual_arguments
     def get_processor_status(self, p=Required, x=Required, y=Required):
-        """Get the status of a given processor.
+        """Get the status of a given core and the application executing on it.
 
         Returns
         -------
-        :py:class:`~ProcessorStatus`
+        :py:class:`.ProcessorStatus`
             Representation of the current state of the processor.
         """
         # Get the VCPU base
@@ -442,6 +500,9 @@ class MachineController(ContextMixin):
     def iptag_set(self, iptag, addr, port, x=Required, y=Required):
         """Set the value of an IPTag.
 
+        Forward SDP packets with the specified IP tag sent by a SpiNNaker
+        application to a given external IP address.
+
         Parameters
         ----------
         iptag : int
@@ -449,7 +510,7 @@ class MachineController(ContextMixin):
         addr : string
             IP address or hostname that the IPTag should point at.
         port : int
-            Port that the IPTag should direct packets to.
+            UDP port that the IPTag should direct packets to.
         """
         # Format the IP address
         ip_addr = struct.pack('!4B',
@@ -469,7 +530,7 @@ class MachineController(ContextMixin):
 
         Returns
         -------
-        :py:class:`IPTag`
+        :py:class:`.IPTag`
             The IPTag returned from SpiNNaker.
         """
         ack = self._send_scp(x, y, 0, SCPCommands.iptag,
@@ -493,6 +554,10 @@ class MachineController(ContextMixin):
     def set_led(self, led, action=None, x=Required, y=Required):
         """Set or toggle the state of an LED.
 
+        .. note::
+            By default, SARK takes control of LED 0 and so changes to this LED
+            will not typically last long enough to be useful.
+
         Parameters
         ----------
         led : int or iterable
@@ -511,15 +576,19 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments
     def sdram_alloc(self, size, tag=0, x=Required, y=Required,
                     app_id=Required):
-        """Allocate a region of SDRAM for the given application.
+        """Allocate a region of SDRAM for an application.
+
+        Requests SARK to allocate a block of SDRAM for an application. This
+        allocation will be freed when the application is stopped.
 
         Parameters
         ----------
         size : int
             Number of bytes to attempt to allocate in SDRAM.
         tag : int
-            8-bit tag that can be used identify the region of memory later.  If
-            `0` then no tag is applied.
+            8-bit (chip-wide) tag that can be looked up by a SpiNNaker
+            application to discover the address of the allocated block.  If `0`
+            then no tag is applied.
 
         Returns
         -------
@@ -529,8 +598,8 @@ class MachineController(ContextMixin):
         Raises
         ------
         SpiNNakerMemoryError
-            If the memory cannot be allocated, or the tag is already taken or
-            invalid.
+            If the memory cannot be allocated, the tag is already taken or it
+            is invalid.
         """
         assert 0 <= tag < 256
 
@@ -547,12 +616,12 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments
     def sdram_alloc_as_io(self, size, tag=0, x=Required, y=Required,
                           app_id=Required):
-        """Like :py:meth:`.sdram_alloc` but a file-like object which allows
-        reading and writing to the region is returned.
+        """Like :py:meth:`.sdram_alloc` but returns a file-like object which
+        allows safe reading and writing to the block that is allocated.
 
         Returns
         -------
-        :py:class:`~MemoryIO`
+        :py:class:`.MemoryIO`
             File-like object which allows accessing the newly allocated region
             of memory.
 
@@ -717,7 +786,8 @@ class MachineController(ContextMixin):
         """Load an application to a set of application cores.
 
         This method guarantees that once it returns, all required cores will
-        have been loaded. If this is not possible, an exception will be raised.
+        have been loaded. If this is not possible after a small number of
+        attempts, an exception will be raised.
 
         This method can be called in either of the following ways::
 
@@ -812,13 +882,13 @@ class MachineController(ContextMixin):
         """Transmit a signal to applications.
 
         .. warning::
-            In current implementations of the SpiNNaker system software,
-            signals are highly likely to arrive but this is not guaranteed
-            (especially when the system's network is heavily utilised). Users
-            should treat this mechanism with caution.
+            In current implementations of SARK, signals are highly likely to
+            arrive but this is not guaranteed (especially when the system's
+            network is heavily utilised). Users should treat this mechanism
+            with caution.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         signal : :py:class:`~rig.machine_control.consts.AppSignal`
             Signal to transmit.
         """
@@ -837,9 +907,14 @@ class MachineController(ContextMixin):
     def load_routing_tables(self, routing_tables, app_id=Required):
         """Allocate space for an load multicast routing tables.
 
+        The routing table entries will be removed automatically when the
+        associated application is stopped.
+
         Parameters
         ----------
-        routing_tables : {(x, y): [RoutingTableEntry(...), ...], ...}
+        routing_tables : {(x, y): \
+                          [:py:class:`~rig.routing_table.RoutingTableEntry`\
+                           (...), ...], ...}
             Map of chip co-ordinates to routing table entries, as produced, for
             example by
             :py:func:`~rig.place_and_route.util.build_routing_tables`.
@@ -860,12 +935,12 @@ class MachineController(ContextMixin):
 
         .. note::
             This method only loads routing table entries for a single chip.
-            Most users should use `.load_routing_tables` which loads routing
-            tables to multiple chips.
+            Most users should use :py:meth:`.load_routing_tables` which loads
+            routing tables to multiple chips.
 
         Parameters
         ----------
-        entries : [RoutingTableEntry(...), ...]
+        entries : [:py:class:`~rig.routing_table.RoutingTableEntry`(...), ...]
             List of :py:class:`rig.routing_table.RoutingTableEntry`\ s.
 
         Raises
@@ -909,11 +984,12 @@ class MachineController(ContextMixin):
 
     @ContextMixin.use_contextual_arguments
     def get_routing_table_entries(self, x=Required, y=Required):
-        """Get the routing table entries for a given chip.
+        """Dump the multicast routing table of a given chip.
 
         Returns
         -------
-        [(:py:class:`~RoutingTableEntry`, app_id, core) or None, ...]
+        [(:py:class:`~rig.routing_table.RoutingTableEntry`, app_id, core) \
+          or None, ...]
             Ordered list of routing table entries with app_ids and
             core numbers.
         """
@@ -1117,16 +1193,15 @@ class ProcessorStatus(collections.namedtuple(
         Register values dumped during a runtime exception. (All zero by
         default.)
     program_status_register : int
-        Program status register (dumped during a runtime exception and zero by
-        default).
+        CPSR register (dumped during a runtime exception and zero by default).
     stack_pointer : int
         Stack pointer (dumped during a runtime exception and zero by default).
     link_register : int
         Link register (dumped during a runtime exception and zero by default).
-    rt_code : `~rig.machine_controller.consts.RuntimeExceptions`
+    rt_code : :py:class:`~rig.machine_control.consts.RuntimeException`
         Code for any run-time exception which may have occurred.
     cpu_flags : int
-    cpu_state : `~rig.machine_controller.consts.AppState`
+    cpu_state : :py:class:`~rig.machine_control.consts.AppState`
         Current state of the processor.
     mbox_ap_msg : int
     mbox_mp_msg : int
@@ -1153,17 +1228,31 @@ class ProcessorStatus(collections.namedtuple(
 
 
 class IPTag(collections.namedtuple("IPTag",
-                                   "addr max port timeout flags count rx_port "
+                                   "addr mac port timeout flags count rx_port "
                                    "spin_addr spin_port")):
-    """An IPTag as read from a SpiNNaker machine."""
+    """An IPTag as read from a SpiNNaker machine.
+
+    Parameters
+    ----------
+    addr : str
+        IP address SDP packets are forwarded to
+    mac : int
+    port : int
+        Port number to forward SDP packets to
+    timeout : int
+    count : int
+    rx_port : int
+    spinn_addr : int
+    spinn_port : int
+    """
     @classmethod
     def from_bytestring(cls, bytestring):
-        (ip, max, port, timeout, flags, count, rx_port, spin_addr,
+        (ip, mac, port, timeout, flags, count, rx_port, spin_addr,
          spin_port) = struct.unpack("<4s 6s 3H I 2H B", bytestring[:25])
         # Convert the IP address into a string, otherwise save
         ip_addr = '.'.join(str(x) for x in struct.unpack("4B", ip))
 
-        return cls(ip_addr, max, port, timeout, flags, count, rx_port,
+        return cls(ip_addr, mac, port, timeout, flags, count, rx_port,
                    spin_addr, spin_port)
 
 
@@ -1218,12 +1307,14 @@ class SpiNNakerLoadingError(Exception):
 
 
 class MemoryIO(object):
+    """A file-like view into a subspace of the memory-space of a chip."""
+
     def __init__(self, machine_controller, x, y, start_address, end_address):
         """Create a file-like view onto a subset of the memory-space of a chip.
 
         Parameters
         ----------
-        machine_controller : :py:class:`~MachineController`
+        machine_controller : :py:class:`~.MachineController`
             A communicator to handle transmitting and receiving packets from
             the SpiNNaker machine.
         x : int
@@ -1246,15 +1337,15 @@ class MemoryIO(object):
         self._offset = 0
 
     def read(self, n_bytes):
-        """Read a number of bytes from the SDRAM.
+        """Read a number of bytes from the memory.
+
+        .. note::
+            Reads beyond the specified memory range will be truncated.
 
         Parameters
         ----------
         n_bytes : int
             A number of bytes to read.
-
-        .. note::
-            Reads beyond the specified memory range will be truncated.
 
         Returns
         -------
@@ -1275,15 +1366,15 @@ class MemoryIO(object):
         return data
 
     def write(self, bytes):
-        """Write data to the SDRAM.
+        """Write data to the memory.
+
+        .. note::
+            Writes beyond the specified memory range will be truncated.
 
         Parameters
         ----------
         bytes : :py:class:`bytes`
-            Data to write to the SDRAM as a bytestring.
-
-        .. note::
-            Writes beyond the specified memory range will be truncated.
+            Data to write to the memory as a bytestring.
 
         Returns
         -------
@@ -1316,7 +1407,8 @@ class MemoryIO(object):
 
     @property
     def address(self):
-        """Get the current address (indexed from 0x00000000)."""
+        """Get the current hardware memory address (indexed from 0x00000000).
+        """
         return self._offset + self._start_address
 
     def seek(self, n_bytes, from_what=0):

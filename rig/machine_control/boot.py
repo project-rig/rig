@@ -11,6 +11,8 @@ import socket
 import struct
 import time
 
+from rig.utils.enum_doc import int_enum_doc
+
 # Specifies the size of packets that should be sent to SpiNNaker to boot the
 # board.
 DTCM_SIZE = 32 * 1024
@@ -30,22 +32,31 @@ spin1_boot_options = {
     "width": 2, "height": 2, "hardware_version": 0,
     "led_config": 0x00076104,
 }
+"""Boot options for :py:func:`.boot` for SpiNN-1 boards."""
+
 spin2_boot_options = {
     "width": 2, "height": 2, "hardware_version": 2,
     "led_config": 0x00006103,
 }
+"""Boot options for :py:func:`.boot` for SpiNN-2 boards."""
+
 spin3_boot_options = {
     "width": 2, "height": 2, "hardware_version": 3,
     "led_config": 0x00000502,
 }
+"""Boot options for :py:func:`.boot` for SpiNN-3 boards."""
+
 spin4_boot_options = {
     "width": 8, "height": 8, "hardware_version": 4,
     "led_config": 0x00000001,
 }
+"""Boot options for :py:func:`.boot` for standalone SpiNN-4 boards."""
+
 spin5_boot_options = {
     "width": 8, "height": 8, "hardware_version": 5,
     "led_config": 0x00000001,
 }
+"""Boot options for :py:func:`.boot` for standalone SpiNN-5 boards."""
 
 
 def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
@@ -94,9 +105,9 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
     The constants `rig.machine_control.boot.spinX_boot_options` can be used to
     specify boot parameters, for example::
 
-        boot("board1", **spin5_boot_options)
+        boot("board1", **spin3_boot_options)
 
-    Will boot the Spin5 board connected with hostname "board1".
+    Will boot the Spin3 board connected with hostname "board1".
 
     Returns
     -------
@@ -196,6 +207,7 @@ def boot_packet(sock, cmd, arg1=0, arg2=0, arg3=0, data=b""):
     sock.send(header + fdata)
 
 
+@int_enum_doc
 class BootCommand(enum.IntEnum):
     """Boot packet command numbers"""
 

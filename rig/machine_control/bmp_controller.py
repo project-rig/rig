@@ -121,9 +121,17 @@ class BMPController(ContextMixin):
     def send_scp(self, *args, **kwargs):
         """Transmit an SCP Packet to a specific board.
 
+        Automatically determines the appropriate connection to use.
+
         See the arguments for
-        :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
+        :py:meth:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
+
+        Parameters
+        ----------
+        cabinet : int
+        frame : int
+        board : int
         """
         # Retrieve contextual arguments from the keyword arguments.  The
         # context system ensures that these values are present.
@@ -137,7 +145,7 @@ class BMPController(ContextMixin):
         it to transmit.
 
         See the arguments for
-        :py:method:`~rig.machine_control.scp_connection.SCPConnection` for
+        :py:meth:`~rig.machine_control.scp_connection.SCPConnection` for
         details.
         """
         # Find the connection which best matches the specified coordinates,
@@ -167,7 +175,7 @@ class BMPController(ContextMixin):
 
         Returns
         -------
-        :py:class:`BMPInfo`
+        :py:class:`.BMPInfo`
             Information about the software running on a BMP.
         """
         sver = self._send_scp(cabinet, frame, board, SCPCommands.sver)
@@ -231,6 +239,11 @@ class BMPController(ContextMixin):
                 board=Required):
         """Set or toggle the state of an LED.
 
+        .. note::
+            At the time of writing, LED 7 is only set by the BMP on start-up to
+            indicate that the watchdog timer reset the board. After this point,
+            the LED is available for use by applications.
+
         Parameters
         ----------
         led : int or iterable
@@ -267,9 +280,12 @@ class BMPController(ContextMixin):
                       board=Required):
         """Read the value of an FPGA (SPI) register.
 
-        See the SpI/O project's spinnaker_fpga design's README for a listing of
-        FPGA registers. The SpI/O project can be found on GitHub at:
+        See the SpI/O project's spinnaker_fpga design's `README`_ for a listing
+        of FPGA registers. The SpI/O project can be found on GitHub at:
         https://github.com/SpiNNakerManchester/spio/
+
+        .. _README: https://github.com/SpiNNakerManchester/spio/\
+                    blob/master/designs/spinnaker_fpgas/README.md#spi-interface
 
         Parameters
         ----------
@@ -297,9 +313,12 @@ class BMPController(ContextMixin):
                        frame=Required, board=Required):
         """Write the value of an FPGA (SPI) register.
 
-        See the SpI/O project's spinnaker_fpga design's README for a listing of
-        FPGA registers. The SpI/O project can be found on GitHub at:
+        See the SpI/O project's spinnaker_fpga design's `README`_ for a listing
+        of FPGA registers. The SpI/O project can be found on GitHub at:
         https://github.com/SpiNNakerManchester/spio/
+
+        .. _README: https://github.com/SpiNNakerManchester/spio/\
+                    blob/master/designs/spinnaker_fpgas/README.md#spi-interface
 
         Parameters
         ----------

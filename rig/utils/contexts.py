@@ -31,6 +31,7 @@ previous example.
 """
 import collections
 import inspect
+import functools
 import sentinel
 from six import iteritems
 
@@ -83,6 +84,7 @@ class ContextMixin(object):
         kwargs = arg_names[-len(defaults):]  # names of the keyword arguments
         default_call = dict(zip(kwargs, defaults))
 
+        @functools.wraps(f)
         def f_(*args, **kwargs):
             self = args[0]
             # Bind all arguments with their names
@@ -105,7 +107,6 @@ class ContextMixin(object):
             kwargs.update(calls)
             return f(self, **kwargs)
 
-        f_.__doc__ = f.__doc__
         return f_
 
     @staticmethod
@@ -120,6 +121,7 @@ class ContextMixin(object):
             All named arguments are given along with their default value.
         """
         def decorator(f):
+            @functools.wraps(f)
             def f_(self, *args, **kwargs):
                 # Construct the list of required arguments, update using the
                 # context arguments and the kwargs passed to the method.
@@ -139,8 +141,6 @@ class ContextMixin(object):
                             "{!s}: missing argument {}".format(f.__name__, k))
 
                 return f(self, *args, **new_kwargs)
-
-            f_.__doc__ = f.__doc__
             return f_
 
         return decorator

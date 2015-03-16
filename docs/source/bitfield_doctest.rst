@@ -426,7 +426,7 @@ collisions since each user's bit fields are distinguished by the `user` field.
 
 
 :py:class:`.BitField` API
--------------------------------------
+-------------------------
 
 .. autoclass:: rig.bitfield.BitField
     :members:
