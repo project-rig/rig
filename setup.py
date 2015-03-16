@@ -7,7 +7,7 @@ setup(
     packages=find_packages(),
 
     # Metadata for PyPi
-    author="Andrew Mundy, Jonathan Heathcote",
+    author="Jonathan Heathcote, Andrew Mundy",
     description="A set of libraries for mapping problems to SpiNNaker",
     license="GPLv2",
 
