@@ -56,6 +56,11 @@ Index](https://pypi.python.org/pypi/rig/) using:
 
 Documentation is available online on [ReadTheDocs](http://rig.readthedocs.org/).
 
+Rig also provides a handful of simple commandline tools which may be useful:
+
+`rig-boot`
+    Boots a SpiNNaker board.
+
 Developing Rig
 --------------
 
