@@ -19,6 +19,7 @@ setup(
     entry_points={
         "console_scripts": [
             "rig-boot = rig.scripts.rig_boot:main",
+            "rig-power = rig.scripts.rig_power:main",
         ],
     }
 )

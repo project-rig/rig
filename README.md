@@ -60,6 +60,8 @@ Rig also provides a handful of simple commandline tools which may be useful:
 
 `rig-boot`
     Boots a SpiNNaker board.
+`rig-power`
+    Power on/off SpiNNaker boards (via their BMP)
 
 Developing Rig
 --------------

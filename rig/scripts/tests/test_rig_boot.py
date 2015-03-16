@@ -90,12 +90,12 @@ def binary(request):
     temp = tempfile.NamedTemporaryFile(delete=False)
     temp.write(content)
     temp.close()
-    
+
     def teardown():
         temp.close()
         os.unlink(temp.name)
     request.addfinalizer(teardown)
-    
+
     return (temp.name, content)
 
 

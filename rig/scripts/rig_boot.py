@@ -27,7 +27,7 @@ def main(args=None):
                         help="board hardware version number")
     parser.add_argument("--led-config", type=int, default=None,
                         help="LED configuration word")
-    
+
     parser.add_argument("--binary", type=str, default=None,
                         help="binary to boot the system with")
 
