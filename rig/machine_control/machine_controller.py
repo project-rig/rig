@@ -139,7 +139,7 @@ class MachineController(ContextMixin):
         This function is a thin wrapper around
         :py:meth:`~rig.machine_control.scp_connection.SCPConnection`.
 
-        Future versions of this command will automatically chose the most
+        Future versions of this command will automatically choose the most
         appropriate connection to use for machines with more than one Ethernet
         connection.
 
@@ -220,7 +220,7 @@ class MachineController(ContextMixin):
         The constants `rig.machine_control.boot.spinX_boot_options` can be used
         to specify boot parameters, for example::
 
-            controller.boot(**spine_boot_options)
+            controller.boot(**spin3_boot_options)
 
         This is neccessary on boards such as SpiNN-3 boards if the more than
         LED 0 are required by an application since by default, only LED 0 is
@@ -614,7 +614,7 @@ class MachineController(ContextMixin):
     def sdram_alloc_as_io(self, size, tag=0, x=Required, y=Required,
                           app_id=Required):
         """Like :py:meth:`.sdram_alloc` but returns a file-like object which
-        allows safe reading and writing to the block is allocated.
+        allows safe reading and writing to the block that is allocated.
 
         Returns
         -------
@@ -1304,7 +1304,7 @@ class SpiNNakerLoadingError(Exception):
 
 
 class MemoryIO(object):
-    """A file-like view into the memory-space of a chip."""
+    """A file-like view into a subspace of the memory-space of a chip."""
 
     def __init__(self, machine_controller, x, y, start_address, end_address):
         """Create a file-like view onto a subset of the memory-space of a chip.
