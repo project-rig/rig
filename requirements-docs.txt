@@ -2,4 +2,5 @@ sphinx
 numpydoc
 six
 enum34
+sentinel
 mock
