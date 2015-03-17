@@ -263,9 +263,9 @@ class MachineController(ContextMixin):
 
         It is strongly encouraged to only read and write to blocks of memory
         allocated using :py:meth:`.sdram_alloc`. Additionally,
-        :py:meth:`.sdram_alloc_as_io` can be used to safely wrap read/write
-        access to memory with a file-like interface and prevent accidental
-        access to areas outside the allocated block.
+        :py:meth:`.sdram_alloc_as_filelike` can be used to safely wrap
+        read/write access to memory with a file-like interface and prevent
+        accidental access to areas outside the allocated block.
 
         Parameters
         ----------
@@ -615,8 +615,8 @@ class MachineController(ContextMixin):
         return rv.arg1
 
     @ContextMixin.use_contextual_arguments
-    def sdram_alloc_as_io(self, size, tag=0, x=Required, y=Required,
-                          app_id=Required):
+    def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
+                                app_id=Required):
         """Like :py:meth:`.sdram_alloc` but returns a file-like object which
         allows safe reading and writing to the block that is allocated.
 
@@ -1447,52 +1447,6 @@ class MemoryIO(object):
                 "from_what: can only take values 0 (from start), "
                 "1 (from current) or 2 (from end) not {}".format(from_what)
             )
-
-    def create_view(self, n_bytes):
-        """Get a new :py:class:`.MemoryIO` starting from the current address
-        and extending for the given number of bytes.
-
-        The original file-like memory view will seek to the end of the new
-        region of memory.
-
-        For example::
-
-            >>> with controller(x=3, y=4):
-            >>>    mem = controller.sdram_alloc_as_io(1024)  # 1kB of SDRAM
-
-            >>> # Get a new file-like for 100 bytes of this 1kB starting 100
-            >>> # bytes in.
-            >>> mem.seek(100)
-            >>> smaller_mem = mem.create_view(100)
-            >>> mem.tell()
-            200
-
-        Parameters
-        ----------
-        n_bytes : int
-            Number of bytes to return as the new file-like.
-
-        Raises
-        ------
-        SpiNNakerMemoryError
-            If an attempt is made to allocate more memory than is available in
-            this view of the memory.
-        """
-        # Create the region of memory
-        start_address = self.address
-        end_address = start_address + n_bytes
-
-        # If the end_address is beyond our range then raise an error
-        if end_address > self._end_address:
-            raise SpiNNakerMemoryError(n_bytes, self._x, self._y)
-
-        new_memio = MemoryIO(self._machine_controller, self._x, self._y,
-                             start_address, end_address)
-
-        # Seek this memory view
-        self.seek(n_bytes, os.SEEK_CUR)
-
-        return new_memio
 
 
 def unpack_routing_table_entry(packed):
