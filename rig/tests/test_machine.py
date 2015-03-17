@@ -161,3 +161,50 @@ def test_links_from_vector():
 
     assert Links.from_vector((-3, -7)) == Links.north_east
     assert Links.from_vector((+3, +7)) == Links.south_west
+
+
+def test_links_to_vector():
+    assert (+1, +0) == Links.east.to_vector()
+    assert (-1, -0) == Links.west.to_vector()
+    assert (+0, +1) == Links.north.to_vector()
+    assert (-0, -1) == Links.south.to_vector()
+    assert (+1, +1) == Links.north_east.to_vector()
+    assert (-1, -1) == Links.south_west.to_vector()
+
+
+def test_has_wrap_around_links():
+    # Test singleton with wrap-arounds
+    machine = Machine(1, 1)
+    assert machine.has_wrap_around_links()
+    assert machine.has_wrap_around_links(1.0)
+    assert machine.has_wrap_around_links(0.1)
+
+    # Test singleton with dead chip
+    machine = Machine(1, 1, dead_chips=set([(0, 0)]))
+    assert not machine.has_wrap_around_links()
+    assert not machine.has_wrap_around_links(1.0)
+    assert not machine.has_wrap_around_links(0.1)
+
+    # Test singleton with one dead link
+    machine = Machine(1, 1, dead_links=set([(0, 0, Links.north)]))
+    assert machine.has_wrap_around_links(5.0 / 6.0)
+    assert not machine.has_wrap_around_links(1.0)
+
+    # Test fully-working larger machine
+    machine = Machine(10, 10)
+    assert machine.has_wrap_around_links()
+    assert machine.has_wrap_around_links(1.0)
+    assert machine.has_wrap_around_links(0.1)
+
+    # Test larger machine with 50% dead links (note that we simply kill 50% of
+    # links on border chips, not all chips, ensuring this function probably
+    # isn't testing all links, just those on the borders)
+    machine = Machine(10, 10, dead_links=set(
+        [(x, y, link)
+         for x in range(10)
+         for y in range(10)
+         for link in [Links.north, Links.west, Links.south_west]
+         if x == 0 or y == 0]))
+    assert not machine.has_wrap_around_links(1.0)
+    assert machine.has_wrap_around_links(0.5)
+    assert machine.has_wrap_around_links(0.1)

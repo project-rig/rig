@@ -63,55 +63,6 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
             yield (x, y)
 
 
-def has_wrap_around_links(machine, minimum_working=0.9):
-    """Test if a machine has wrap-around connections installed.
-
-    Since the Machine object does not explicitly define whether a machine has
-    wrap-around links they must be tested for directly. This test performs a
-    "fuzzy" test on the number of wrap-around links which are working to
-    determine if wrap-around links are really present.
-
-    Parameters
-    ----------
-    machine : :py:class:`~rig.machine.Machine`
-    minimum_working : 0.0 <= float <= 1.0
-        The minimum proportion of all wrap-around links which must be working
-        for this function to return True.
-
-    Returns
-    -------
-    bool
-        True if the system has wrap-around links, False if not.
-    """
-    working = 0
-    for x in range(machine.width):
-        if (x, 0, Links.south) in machine:
-            working += 1
-        if (x, machine.height - 1, Links.north) in machine:
-            working += 1
-        if (x, 0, Links.south_west) in machine:
-            working += 1
-        if (x, machine.height - 1, Links.north_east) in machine:
-            working += 1
-
-    for y in range(machine.height):
-        if (0, y, Links.west) in machine:
-            working += 1
-        if (machine.width - 1, y, Links.east) in machine:
-            working += 1
-
-        # Don't re-count links counted when scanning the x-axis
-        if y != 0 and (0, y, Links.south_west) in machine:
-            working += 1
-        if (y != machine.height - 1 and
-                (machine.width - 1, y, Links.north_east) in machine):
-            working += 1
-
-    total = (4 * machine.width) + (4 * machine.height) - 2
-
-    return (float(working) / float(total)) >= minimum_working
-
-
 def links_between(a, b, machine):
     """Get the set of working links connecting chips a and b.
 
