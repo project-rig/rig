@@ -95,7 +95,7 @@ class Links(IntEnum):
         return _link_direction_lookup[(x, y)]
 
     def to_vector(self):
-        """Given a link direction, return the equivilent vector."""
+        """Given a link direction, return the equivalent vector."""
         return _direction_link_lookup[self]
 
 
