@@ -269,10 +269,10 @@ def test_copy_and_disconnect_tree():
             # Ensure that any children missing are exactly those which are
             # disconnected or on dead chips
             assert (  # pragma: no branch
-                    old_children.difference(new_children) ==
-                    set(c for c in old_children
-                        if c not in machine or
-                        not links_between(chip, c, machine)))
+                old_children.difference(new_children) ==
+                set(c for c in old_children
+                    if c not in machine or
+                    not links_between(chip, c, machine)))
 
 
 def test_a_star():
@@ -396,8 +396,8 @@ def test_avoid_dead_links_no_change():
 
             # Children should be the same
             assert (  # pragma: no branch
-                    set(n.chip for n in new_node.children) ==
-                    set(n.chip for n in old_node.children))
+                set(n.chip for n in new_node.children) ==
+                set(n.chip for n in old_node.children))
 
 
 def test_avoid_dead_links_change():
@@ -464,8 +464,8 @@ def test_avoid_dead_links_change():
 
         # Check all non-dead nodes still exist
         assert (  # pragma: no branch
-                set(n.chip for n in old_root if n.chip in machine).issubset(
-                    set(n.chip for n in new_root)))
+            set(n.chip for n in old_root if n.chip in machine).issubset(
+                set(n.chip for n in new_root)))
 
         # Check for cycles
         visited = set()

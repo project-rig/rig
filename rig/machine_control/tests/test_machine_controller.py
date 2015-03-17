@@ -291,10 +291,10 @@ class TestMachineControllerLive(object):
 
     @pytest.mark.parametrize("data", [b"Hello, SpiNNaker",
                                       b"Bonjour SpiNNaker"])
-    def test_sdram_alloc_as_io_read_write(self, controller, data):
+    def test_sdram_alloc_as_filelike_read_write(self, controller, data):
         # Allocate some memory, write to it and check that we can read back
         with controller(x=1, y=0):
-            mem = controller.sdram_alloc_as_io(len(data))
+            mem = controller.sdram_alloc_as_filelike(len(data))
             assert mem.write(data) == len(data)
             mem.seek(0)
             assert mem.read(len(data)) == data
@@ -764,7 +764,7 @@ class TestMachineController(object):
                                               0x80, 0, addr, None, None, b"")
 
         # Try the allocation
-        fp = cn.sdram_alloc_as_io(size, tag, x, y, app_id=app_id)
+        fp = cn.sdram_alloc_as_filelike(size, tag, x, y, app_id=app_id)
 
         # Check the fp has the expected start and end
         assert fp._start_address == addr
@@ -818,7 +818,7 @@ class TestMachineController(object):
         "field, data, converted",
         [("app_name", b"rig_test\x00\x00\x00\x00\x00\x00\x00\x00", "rig_test"),
          ("cpu_flags", b"\x08", 8)]
-     )
+    )
     def test_read_vcpu_struct(self, x, y, p, vcpu_base, field, data,
                               converted):
         struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
@@ -1511,6 +1511,20 @@ class TestMemoryIO(object):
         # Check the reads caused the appropriate calls to the machine
         # controller.
         mock_controller.read.assert_has_calls(calls)
+
+    @pytest.mark.parametrize("x, y", [(1, 3), (3, 0)])
+    @pytest.mark.parametrize("start_address, length, offset",
+                             [(0x60000000, 100, 25), (0x61000000, 4, 0)])
+    def test_read_no_parameter(self, mock_controller, x, y, start_address,
+                               length, offset):
+        sdram_file = MemoryIO(mock_controller, x, y,
+                              start_address, start_address+length)
+
+        # Assert that reading with no parameter reads the full number of bytes
+        sdram_file.seek(offset)
+        sdram_file.read()
+        mock_controller.read.assert_called_one_with(
+            start_address + offset, length - offset, x, y, 0)
 
     def test_read_beyond(self, mock_controller):
         sdram_file = MemoryIO(mock_controller, 0, 0,

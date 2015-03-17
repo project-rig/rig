@@ -1,6 +1,7 @@
 """A high level interface for controlling a SpiNNaker system."""
 
 import collections
+import os
 import six
 from six import iteritems
 import socket
@@ -262,9 +263,9 @@ class MachineController(ContextMixin):
 
         It is strongly encouraged to only read and write to blocks of memory
         allocated using :py:meth:`.sdram_alloc`. Additionally,
-        :py:meth:`.sdram_alloc_as_io` can be used to safely wrap read/write
-        access to memory with a file-like interface and prevent accidental
-        access to areas outside the allocated block.
+        :py:meth:`.sdram_alloc_as_filelike` can be used to safely wrap
+        read/write access to memory with a file-like interface and prevent
+        accidental access to areas outside the allocated block.
 
         Parameters
         ----------
@@ -614,8 +615,8 @@ class MachineController(ContextMixin):
         return rv.arg1
 
     @ContextMixin.use_contextual_arguments
-    def sdram_alloc_as_io(self, size, tag=0, x=Required, y=Required,
-                          app_id=Required):
+    def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
+                                app_id=Required):
         """Like :py:meth:`.sdram_alloc` but returns a file-like object which
         allows safe reading and writing to the block that is allocated.
 
@@ -1336,7 +1337,7 @@ class MemoryIO(object):
         # Current offset from start address
         self._offset = 0
 
-    def read(self, n_bytes):
+    def read(self, n_bytes=-1):
         """Read a number of bytes from the memory.
 
         .. note::
@@ -1345,13 +1346,18 @@ class MemoryIO(object):
         Parameters
         ----------
         n_bytes : int
-            A number of bytes to read.
+            A number of bytes to read.  If the number of bytes is negative or
+            omitted then read all data until the end of memory region.
 
         Returns
         -------
         :py:class:`bytes`
             Data read from SpiNNaker as a bytestring.
         """
+        # If n_bytes is negative then calculate it as the number of bytes left
+        if n_bytes < 0:
+            n_bytes = self._end_address - self.address
+
         # Determine how far to read, then read nothing beyond that point.
         if self.address + n_bytes > self._end_address:
             n_bytes = min(n_bytes, self._end_address - self.address)
@@ -1411,7 +1417,7 @@ class MemoryIO(object):
         """
         return self._offset + self._start_address
 
-    def seek(self, n_bytes, from_what=0):
+    def seek(self, n_bytes, from_what=os.SEEK_SET):
         """Seek to a new position in the memory region.
 
         Parameters
@@ -1426,6 +1432,9 @@ class MemoryIO(object):
                 mem.seek(-1, 2)  # Goes to the last byte in the region
                 mem.seek(-5, 1)  # Goes 5 bytes before that point
                 mem.seek(0)      # Returns to the start of the region
+
+            Note that `os.SEEK_END`, `os.SEEK_CUR` and `os.SEEK_SET` are also
+            valid arguments.
         """
         if from_what == 0:
             self._offset = n_bytes
