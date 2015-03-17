@@ -56,6 +56,16 @@ Index](https://pypi.python.org/pypi/rig/) using:
 
 Documentation is available online on [ReadTheDocs](http://rig.readthedocs.org/).
 
+Rig also provides a handful of simple commandline tools which may be useful:
+
+`rig-boot`
+    Boots a SpiNNaker board.
+`rig-power`
+    Power on/off SpiNNaker boards (via their BMP).
+`rig-info`
+    Print basic SpiNNaker/BMP status information (e.g. working cores, running
+    applications, temperature).
+
 Developing Rig
 --------------
 

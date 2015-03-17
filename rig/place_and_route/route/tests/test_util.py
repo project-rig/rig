@@ -1,5 +1,5 @@
 from rig.place_and_route.route.util import \
-    longest_dimension_first, has_wrap_around_links, links_between
+    longest_dimension_first, links_between
 
 from rig.machine import Machine, Links
 
@@ -125,44 +125,6 @@ def test_longest_dimension_first():
         assert len(list(longest_dimension_first(vector))) \
             == sum(map(abs, vector)), \
             vector
-
-
-def test_has_wrap_around_links():
-    # Test singleton with wrap-arounds
-    machine = Machine(1, 1)
-    assert has_wrap_around_links(machine)
-    assert has_wrap_around_links(machine, 1.0)
-    assert has_wrap_around_links(machine, 0.1)
-
-    # Test singleton with dead chip
-    machine = Machine(1, 1, dead_chips=set([(0, 0)]))
-    assert not has_wrap_around_links(machine)
-    assert not has_wrap_around_links(machine, 1.0)
-    assert not has_wrap_around_links(machine, 0.1)
-
-    # Test singleton with one dead link
-    machine = Machine(1, 1, dead_links=set([(0, 0, Links.north)]))
-    assert has_wrap_around_links(machine, 5.0 / 6.0)
-    assert not has_wrap_around_links(machine, 1.0)
-
-    # Test fully-working larger machine
-    machine = Machine(10, 10)
-    assert has_wrap_around_links(machine)
-    assert has_wrap_around_links(machine, 1.0)
-    assert has_wrap_around_links(machine, 0.1)
-
-    # Test larger machine with 50% dead links (note that we simply kill 50% of
-    # links on border chips, not all chips, ensuring this function probably
-    # isn't testing all links, just those on the borders)
-    machine = Machine(10, 10, dead_links=set(
-        [(x, y, link)
-         for x in range(10)
-         for y in range(10)
-         for link in [Links.north, Links.west, Links.south_west]
-         if x == 0 or y == 0]))
-    assert not has_wrap_around_links(machine, 1.0)
-    assert has_wrap_around_links(machine, 0.5)
-    assert has_wrap_around_links(machine, 0.1)
 
 
 def test_links_between():

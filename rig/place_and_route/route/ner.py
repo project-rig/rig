@@ -14,7 +14,7 @@ from ...geometry import concentric_hexagons, to_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \
     shortest_torus_path_length, shortest_torus_path
 
-from .util import longest_dimension_first, has_wrap_around_links, links_between
+from .util import longest_dimension_first, links_between
 
 from ..exceptions import MachineHasDisconnectedSubregion
 
@@ -375,7 +375,7 @@ def route(vertices_resources, nets, machine, constraints, placements,
         the paper and shown to be acceptable in practice. If set to zero, this
         method is becomes longest dimension first routing.
     """
-    wrap_around = has_wrap_around_links(machine)
+    wrap_around = machine.has_wrap_around_links()
 
     # Vertices constrained to route to a specific link. {vertex: route}
     route_to_endpoint = {}

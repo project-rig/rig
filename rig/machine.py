@@ -1,6 +1,8 @@
 """Identifiers for resources available in a SpiNNaker machine.
 """
 
+from six import iteritems
+
 from enum import IntEnum
 
 from rig.utils.enum_doc import int_enum_doc
@@ -95,6 +97,11 @@ class Links(IntEnum):
 
         return _link_direction_lookup[(x, y)]
 
+    def to_vector(self):
+        """Given a link direction, return the equivalent vector."""
+        return _direction_link_lookup[self]
+
+
 _link_direction_lookup = {
     (+1, +0): Links.east,
     (-1, +0): Links.west,
@@ -103,6 +110,7 @@ _link_direction_lookup = {
     (+1, +1): Links.north_east,
     (-1, -1): Links.south_west,
 }
+_direction_link_lookup = {l: v for (v, l) in iteritems(_link_direction_lookup)}
 
 
 class Machine(object):
@@ -224,3 +232,50 @@ class Machine(object):
             raise IndexError("{} is not part of the machine.".format(repr(xy)))
 
         self.chip_resource_exceptions[xy] = resources
+
+    def has_wrap_around_links(self, minimum_working=0.9):
+        """Test if a machine has wrap-around connections installed.
+
+        Since the Machine object does not explicitly define whether a machine
+        has wrap-around links they must be tested for directly. This test
+        performs a "fuzzy" test on the number of wrap-around links which are
+        working to determine if wrap-around links are really present.
+
+        Parameters
+        ----------
+        minimum_working : 0.0 <= float <= 1.0
+            The minimum proportion of all wrap-around links which must be
+            working for this function to return True.
+
+        Returns
+        -------
+        bool
+            True if the system has wrap-around links, False if not.
+        """
+        working = 0
+        for x in range(self.width):
+            if (x, 0, Links.south) in self:
+                working += 1
+            if (x, self.height - 1, Links.north) in self:
+                working += 1
+            if (x, 0, Links.south_west) in self:
+                working += 1
+            if (x, self.height - 1, Links.north_east) in self:
+                working += 1
+
+        for y in range(self.height):
+            if (0, y, Links.west) in self:
+                working += 1
+            if (self.width - 1, y, Links.east) in self:
+                working += 1
+
+            # Don't re-count links counted when scanning the x-axis
+            if y != 0 and (0, y, Links.south_west) in self:
+                working += 1
+            if (y != self.height - 1 and
+                    (self.width - 1, y, Links.north_east) in self):
+                working += 1
+
+        total = (4 * self.width) + (4 * self.height) - 2
+
+        return (float(working) / float(total)) >= minimum_working
