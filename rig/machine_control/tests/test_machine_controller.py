@@ -818,7 +818,7 @@ class TestMachineController(object):
         "field, data, converted",
         [("app_name", b"rig_test\x00\x00\x00\x00\x00\x00\x00\x00", "rig_test"),
          ("cpu_flags", b"\x08", 8)]
-     )
+    )
     def test_read_vcpu_struct(self, x, y, p, vcpu_base, field, data,
                               converted):
         struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")

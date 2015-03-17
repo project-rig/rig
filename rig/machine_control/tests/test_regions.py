@@ -104,7 +104,7 @@ class TestRegionTree(object):
                 assert sr.add_coordinate(i, j) == (i == 3 and j == 3)
 
         # This should propagate up
-        assert pr.add_coordinate(3, 3) == False
+        assert pr.add_coordinate(3, 3) is False
         assert pr.locally_selected == {0}
 
         # We should be able to get a minimised regions out of this tree
