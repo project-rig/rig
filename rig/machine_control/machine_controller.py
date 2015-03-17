@@ -1,6 +1,7 @@
 """A high level interface for controlling a SpiNNaker system."""
 
 import collections
+import os
 import six
 from six import iteritems
 import socket
@@ -1336,7 +1337,7 @@ class MemoryIO(object):
         # Current offset from start address
         self._offset = 0
 
-    def read(self, n_bytes):
+    def read(self, n_bytes=-1):
         """Read a number of bytes from the memory.
 
         .. note::
@@ -1345,13 +1346,18 @@ class MemoryIO(object):
         Parameters
         ----------
         n_bytes : int
-            A number of bytes to read.
+            A number of bytes to read.  If the number of bytes is negative or
+            omitted then read all data until the end of memory region.
 
         Returns
         -------
         :py:class:`bytes`
             Data read from SpiNNaker as a bytestring.
         """
+        # If n_bytes is negative then calculate it as the number of bytes left
+        if n_bytes < 0:
+            n_bytes = self._end_address - self.address
+
         # Determine how far to read, then read nothing beyond that point.
         if self.address + n_bytes > self._end_address:
             n_bytes = min(n_bytes, self._end_address - self.address)
@@ -1411,7 +1417,7 @@ class MemoryIO(object):
         """
         return self._offset + self._start_address
 
-    def seek(self, n_bytes, from_what=0):
+    def seek(self, n_bytes, from_what=os.SEEK_SET):
         """Seek to a new position in the memory region.
 
         Parameters
@@ -1426,6 +1432,9 @@ class MemoryIO(object):
                 mem.seek(-1, 2)  # Goes to the last byte in the region
                 mem.seek(-5, 1)  # Goes 5 bytes before that point
                 mem.seek(0)      # Returns to the start of the region
+
+            Note that `os.SEEK_END`, `os.SEEK_CUR` and `os.SEEK_SET` are also
+            valid arguments.
         """
         if from_what == 0:
             self._offset = n_bytes
@@ -1438,6 +1447,52 @@ class MemoryIO(object):
                 "from_what: can only take values 0 (from start), "
                 "1 (from current) or 2 (from end) not {}".format(from_what)
             )
+
+    def alloc_next_as_io(self, n_bytes):
+        """Get a new :py:class:`.MemoryIO` starting from the current address
+        and extending for the given number of bytes.
+
+        The original file-like memory view will seek to the end of the new
+        region of memory.
+
+        For example::
+
+            >>> with controller(x=3, y=4):
+            >>>    mem = controller.sdram_alloc_as_io(1024)  # 1kB of SDRAM
+
+            >>> # Get a new file-like for 100 bytes of this 1kB starting 100
+            >>> # bytes in.
+            >>> mem.seek(100)
+            >>> smaller_mem = mem.alloc_next_as_io(100)
+            >>> mem.tell()
+            200
+
+        Parameters
+        ----------
+        n_bytes : int
+            Number of bytes to return as the new file-like.
+
+        Raises
+        ------
+        SpiNNakerMemoryError
+            If an attempt is made to allocate more memory than is available in
+            this view of the memory.
+        """
+        # Create the region of memory
+        start_address = self.address
+        end_address = start_address + n_bytes
+
+        # If the end_address is beyond our range then raise an error
+        if end_address > self._end_address:
+            raise SpiNNakerMemoryError(n_bytes, self._x, self._y)
+
+        new_memio = MemoryIO(self._machine_controller, self._x, self._y,
+                             start_address, end_address)
+
+        # Seek this memory view
+        self.seek(n_bytes, os.SEEK_CUR)
+
+        return new_memio
 
 
 def unpack_routing_table_entry(packed):

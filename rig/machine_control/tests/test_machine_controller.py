@@ -1512,6 +1512,20 @@ class TestMemoryIO(object):
         # controller.
         mock_controller.read.assert_has_calls(calls)
 
+    @pytest.mark.parametrize("x, y", [(1, 3), (3, 0)])
+    @pytest.mark.parametrize("start_address, length, offset",
+                             [(0x60000000, 100, 25), (0x61000000, 4, 0)])
+    def test_read_no_parameter(self, mock_controller, x, y, start_address,
+                               length, offset):
+        sdram_file = MemoryIO(mock_controller, x, y,
+                              start_address, start_address+length)
+
+        # Assert that reading with no parameter reads the full number of bytes
+        sdram_file.seek(offset)
+        sdram_file.read()
+        mock_controller.read.assert_called_one_with(
+            start_address + offset, length - offset, x, y, 0)
+
     def test_read_beyond(self, mock_controller):
         sdram_file = MemoryIO(mock_controller, 0, 0,
                               start_address=0, end_address=10)
@@ -1598,6 +1612,53 @@ class TestMemoryIO(object):
 
         with pytest.raises(ValueError):
             sdram_file.seek(1, from_what=3)
+
+    @pytest.mark.parametrize(
+        "x, y, start_address, end_address, offset, grab",
+        [(1, 3, 0x60000000, 0x61000000, 0x100, 0x300),
+         (5, 1, 0x68000000, 0x69000000, 0x10, 0x30),
+         (1, 3, 0x60000000, 0x60000008, 0x4, 0x4),
+         ]
+    )
+    def test_alloc_next_as_io(self, x, y, mock_controller, start_address,
+                              end_address, offset, grab):
+        # Create the SDRAM file and seek to the offset
+        sdram_file = MemoryIO(mock_controller, x, y, start_address,
+                              end_address)
+        sdram_file.seek(offset)
+
+        # Grab next bytes as a new MemoryIO
+        region = sdram_file.alloc_next_as_io(grab)
+
+        # Check that we have a new MemoryIO with appropriate parameters and
+        # that the original MemoryIO has seeked to the end of the new MemoryIO.
+        assert sdram_file.tell() == offset + grab
+        assert isinstance(region, MemoryIO)
+        assert region._machine_controller is mock_controller
+        assert region._x == x
+        assert region._y == y
+        assert region._start_address == sdram_file._start_address + offset
+        assert region._end_address == region._start_address + grab
+
+    @pytest.mark.parametrize(
+        "x, y, start_address, end_address, offset, grab",
+        [(1, 3, 0x60000000, 0x60000008, 0x4, 0x5),
+         ]
+    )
+    def test_alloc_next_as_io_fails(self, x, y, mock_controller, start_address,
+                                    end_address, offset, grab):
+        """Check that alloc_next_as_io raises an error if we try to grab too
+        much memory.
+        """
+        # Create the SDRAM file and seek to the offset
+        sdram_file = MemoryIO(mock_controller, x, y, start_address,
+                              end_address)
+        sdram_file.seek(offset)
+
+        # Grab next bytes as a new MemoryIO should fail
+        with pytest.raises(SpiNNakerMemoryError) as excinfo:
+            sdram_file.alloc_next_as_io(grab)
+        assert str(grab) in str(excinfo.value)
 
 
 @pytest.mark.parametrize(
