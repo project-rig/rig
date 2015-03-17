@@ -12,6 +12,8 @@ class Mock(MagicMock):
 MOCK_MODULES = ['pygtk', 'gtk', 'gobject', 'argparse', 'numpy', 'pandas']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
+AUTHORS = u'Project Rig'
+
 
 #
 # Rig documentation build configuration file, created by
@@ -67,7 +69,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Rig'
-copyright = u'2015, Andrew Mundy, Jonathan Heathcote'
+copyright = u'2015, the Rig Project'
 
 # Autodoc should list members in the same order as the source code.
 autodoc_member_order = "bysource"
@@ -226,7 +228,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     ('index', 'Rig.tex', u'Rig Documentation',
-     u'Andrew Mundy, Jonathan Heathcote', 'manual'),
+     AUTHORS, 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -256,7 +258,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'rig', u'Rig Documentation',
-     [u'Andrew Mundy, Jonathan Heathcote'], 1)
+     [AUTHORS], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -270,7 +272,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     ('index', 'Rig', u'Rig Documentation',
-     u'Andrew Mundy, Jonathan Heathcote', 'Rig',
+     AUTHORS, 'Rig',
      'Tools for mapping problems to SpiNNaker',
      'Miscellaneous'),
 ]
