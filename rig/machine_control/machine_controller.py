@@ -1448,7 +1448,7 @@ class MemoryIO(object):
                 "1 (from current) or 2 (from end) not {}".format(from_what)
             )
 
-    def alloc_next_as_io(self, n_bytes):
+    def create_view(self, n_bytes):
         """Get a new :py:class:`.MemoryIO` starting from the current address
         and extending for the given number of bytes.
 
@@ -1463,7 +1463,7 @@ class MemoryIO(object):
             >>> # Get a new file-like for 100 bytes of this 1kB starting 100
             >>> # bytes in.
             >>> mem.seek(100)
-            >>> smaller_mem = mem.alloc_next_as_io(100)
+            >>> smaller_mem = mem.create_view(100)
             >>> mem.tell()
             200
 

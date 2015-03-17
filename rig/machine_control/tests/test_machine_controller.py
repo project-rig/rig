@@ -1620,15 +1620,15 @@ class TestMemoryIO(object):
          (1, 3, 0x60000000, 0x60000008, 0x4, 0x4),
          ]
     )
-    def test_alloc_next_as_io(self, x, y, mock_controller, start_address,
-                              end_address, offset, grab):
+    def test_create_view(self, x, y, mock_controller, start_address,
+                         end_address, offset, grab):
         # Create the SDRAM file and seek to the offset
         sdram_file = MemoryIO(mock_controller, x, y, start_address,
                               end_address)
         sdram_file.seek(offset)
 
         # Grab next bytes as a new MemoryIO
-        region = sdram_file.alloc_next_as_io(grab)
+        region = sdram_file.create_view(grab)
 
         # Check that we have a new MemoryIO with appropriate parameters and
         # that the original MemoryIO has seeked to the end of the new MemoryIO.
@@ -1645,9 +1645,9 @@ class TestMemoryIO(object):
         [(1, 3, 0x60000000, 0x60000008, 0x4, 0x5),
          ]
     )
-    def test_alloc_next_as_io_fails(self, x, y, mock_controller, start_address,
-                                    end_address, offset, grab):
-        """Check that alloc_next_as_io raises an error if we try to grab too
+    def test_create_view_fails(self, x, y, mock_controller, start_address,
+                               end_address, offset, grab):
+        """Check that create_view raises an error if we try to grab too
         much memory.
         """
         # Create the SDRAM file and seek to the offset
@@ -1657,7 +1657,7 @@ class TestMemoryIO(object):
 
         # Grab next bytes as a new MemoryIO should fail
         with pytest.raises(SpiNNakerMemoryError) as excinfo:
-            sdram_file.alloc_next_as_io(grab)
+            sdram_file.create_view(grab)
         assert str(grab) in str(excinfo.value)
 
 
