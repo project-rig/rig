@@ -439,7 +439,7 @@ def test_multiple_outstanding(loop, mock_spinnaker_protocol, scp_protocol):
     """Test that if multiple outstanding commands can be sent."""
     scp_protocol.max_outstanding = 3
     scp_protocol.n_tries = 2
-    scp_protocol.timeout = 0.010
+    scp_protocol.timeout = 0.100
 
     # Generate a packet that will never come back and which will otherwise be
     # stuck being re-transmitted.
@@ -448,12 +448,12 @@ def test_multiple_outstanding(loop, mock_spinnaker_protocol, scp_protocol):
                                   arg1=None, arg2=None, arg3=None,
                                   expected_args=0)
 
-    # Generate 8 packets which turn around after 5ms each. These will be sent
+    # Generate 8 packets which turn around after 50ms each. These will be sent
     # in parallel and should be handled in two groups of two (since the third
     # slot is used up by the stuck packet).
     send = []
     for _ in range(8):
-        send.append(scp_protocol.send_scp(x=5, y=1, p=0, cmd=0,
+        send.append(scp_protocol.send_scp(x=50, y=1, p=0, cmd=0,
                                           data=b"Hello, world!",
                                           arg1=None, arg2=None, arg3=None,
                                           expected_args=0))
@@ -465,16 +465,16 @@ def test_multiple_outstanding(loop, mock_spinnaker_protocol, scp_protocol):
     after = time.time()
 
     # Time elapsed should have been about the time required to send two packets
-    # (since the timeout took 2*10ms and the four rounds of parallel sends took
-    # 5ms each). This test allows a little margin for slow execution.
-    assert 0.02 <= after - before < 0.03
+    # (since the timeout took 2*100ms and the four rounds of parallel sends
+    # took 50ms each). This test allows a little margin for slow execution.
+    assert 0.20 <= after - before < 0.30
 
     # The stuck packet should time out
     assert isinstance(responses[0], TimeoutError)
 
     # The other packets should all arrive intact
     for response in responses[1:]:
-        assert response.dest_x == 5
+        assert response.dest_x == 50
         assert response.dest_y == 1
         assert response.dest_cpu == 0
         assert response.cmd_rc == 0
@@ -491,7 +491,7 @@ def test_multiple_outstanding(loop, mock_spinnaker_protocol, scp_protocol):
                          request.dest_cpu == 0,
                          request.cmd_rc == 0,
                          request.data == b"Hello, world!"))
-        was_sent = all((request.dest_x == 5,
+        was_sent = all((request.dest_x == 50,
                         request.dest_y == 1,
                         request.dest_cpu == 0,
                         request.cmd_rc == 0,
