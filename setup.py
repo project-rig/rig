@@ -12,7 +12,7 @@ setup(
     license="GPLv2",
 
     # Requirements
-    install_requires=["numpy>1.6", "six", "enum34", "sentinel"],
+    install_requires=["numpy>1.6", "six", "enum34", "sentinel", "trollius"],
     tests_require=["pytest>=2.6", "pytest-cov", "mock", "toposort"],
     
     # Scripts
