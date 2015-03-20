@@ -38,6 +38,38 @@ import functools
 
 class LookBlockingMixin(object):
     """Mixin which makes internally-asynchronous code optionally look blocking.
+    
+    Example usage::
+    
+        class MyClass(LookBlockingMixin):
+            def __init__(self, loop=None):
+                LookBlockingMixin.__init__(self, loop)
+            
+            @LookBlockingMixin.look_blocking
+            @trollius.coroutine
+            def sleep_and_return_arg(self, arg):
+                # Coroutine: returns its argument after a 2 second delay.
+                yield From(trollius.sleep(2.0, loop=self.loop))
+                raise Return(arg)
+    
+    For users who wish to use MyClass in a blocking fashion::
+        
+        >>> c = MyClass()
+        >>> c.sleep_and_return_arg(123)
+        # After two seconds...
+        123
+    
+    For users who wish to work in a non-blocking style::
+    
+        >>> # Users can optionally provide their own event loop
+        >>> loop = trollius.get_event_loop()
+        >>> c = MyClass(loop=loop)
+        >>> loop.run_until_complete(trollius.gather(
+        ...     c.sleep_and_return_arg(123, async=True),
+        ...     c.sleep_and_return_arg(456, async=True),
+        ...     c.sleep_and_return_arg(789, async=True), loop=loop))
+        # After two seconds...
+        [123, 456, 789]
     """
 
     def __init__(self, loop=None):
