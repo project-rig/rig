@@ -3,6 +3,7 @@ import pytest
 import struct
 
 from mock import Mock
+from rig.tests.future_mock import future_mock
 
 from rig.machine_control import BMPController
 from rig.machine_control.bmp_controller import BMPInfo
@@ -43,13 +44,13 @@ def bc_mock_sver(request, sver_response):
     arg3 = sver_response.build_date
 
     bc = BMPController(request.param)
-    bc._send_scp = Mock()
-    bc._send_scp.return_value = Mock(spec_set=SCPPacket)
-    bc._send_scp.return_value.arg1 = arg1
-    bc._send_scp.return_value.arg2 = arg2
-    bc._send_scp.return_value.arg3 = arg3
-    bc._send_scp.return_value.data = \
-        sver_response.version_string.encode("utf-8")
+
+    val = Mock(spec_set=SCPPacket)
+    val.arg1 = arg1
+    val.arg2 = arg2
+    val.arg3 = arg3
+    val.data = sver_response.version_string.encode("utf-8")
+    bc._send_scp = future_mock(val)
 
     return bc
 
@@ -58,9 +59,6 @@ def bc_mock_sver(request, sver_response):
 @pytest.mark.incremental
 class TestBMPControllerLive(object):
     """Test the BMP controller against real hardware."""
-
-    def test_scp_data_length(self, live_controller):
-        assert live_controller.scp_data_length >= 256
 
     def test_get_software_version(self, live_controller):
         # Check "SVER" works
@@ -138,47 +136,70 @@ class TestBMPController(object):
     def test_single_hostname(self):
         bc = BMPController("127.0.0.1")
         assert set(bc.connections) == set([(0, 0)])
-        assert bc.connections[(0, 0)].sock.getsockname()[0] == "127.0.0.1"
+        hostname = bc.connections[(0, 0)].transport.get_extra_info(
+            "sockname")[0]
+        assert hostname == "127.0.0.1"
+
+    def test_multiple_hostnames(self):
+        bc = BMPController({(0, 0): "127.0.0.1", (1, 2, 3): "127.0.0.1"})
+        assert set(bc.connections) == set([(0, 0), (1, 2, 3)])
+        hostname0 = bc.connections[(0, 0)].transport.get_extra_info(
+            "sockname")[0]
+        hostname1 = bc.connections[(1, 2, 3)].transport.get_extra_info(
+            "sockname")[0]
+        assert hostname0 == "127.0.0.1"
+        assert hostname1 == "127.0.0.1"
+
+    def test_bad_hostname(self):
+        # Make sure a single bad hostname causes all hostnames provided to be
+        # rejected.
+        bc = BMPController({})
+        with pytest.raises(IOError):
+            bc.connect_to_hosts({(0, 0): "localhost",
+                                 (0, 1): "invalid hostname"})
+        assert len(bc.connections) == 0
 
     def test_connection_selection(self):
         # Test that the controller selects appropriate connections
         bc = BMPController({})
-        bc._scp_data_length = 128
+
+        # Create fake connections which return nothing but whose calls can be
+        # verified.
         bc.connections = {
-            (0, 0): Mock(),
-            (0, 0, 1): Mock(),
-            (0, 1, 1): Mock(),
-            (1, 2, 3): Mock(),
+            (0, 0): Mock(send_scp=future_mock()),
+            (0, 0, 1): Mock(send_scp=future_mock()),
+            (0, 1, 1): Mock(send_scp=future_mock()),
+            (1, 2, 3): Mock(send_scp=future_mock()),
         }
 
         # Use generic connection when that is all that's available
         bc.send_scp(0, cabinet=0, frame=0, board=0)
         bc.connections[(0, 0)].send_scp.assert_called_once_with(
-            128, 0, 0, 0, 0)
+            0, 0, 0, 0)
         bc.connections[(0, 0)].send_scp.reset_mock()
 
         bc.send_scp(2, cabinet=0, frame=0, board=2)
         bc.connections[(0, 0)].send_scp.assert_called_once_with(
-            128, 0, 0, 2, 2)
+            0, 0, 2, 2)
         bc.connections[(0, 0)].send_scp.reset_mock()
 
         # Use specific connection in preference to generic one
         bc.send_scp(1, cabinet=0, frame=0, board=1)
         bc.connections[(0, 0, 1)].send_scp.assert_called_once_with(
-            128, 0, 0, 1, 1)
+            0, 0, 1, 1)
         bc.connections[(0, 0, 1)].send_scp.reset_mock()
 
         # Use a specific connection when that is all there is
         bc.send_scp(3, cabinet=0, frame=1, board=1)
         bc.connections[(0, 1, 1)].send_scp.assert_called_once_with(
-            128, 0, 0, 1, 3)
+            0, 0, 1, 3)
         bc.connections[(0, 1, 1)].send_scp.reset_mock()
 
         # Try using contexts
         with bc(cabinet=1, frame=2, board=3):
             bc.send_scp(4)
         bc.connections[(1, 2, 3)].send_scp.assert_called_once_with(
-            128, 0, 0, 3, 4)
+            0, 0, 3, 4)
         bc.connections[(1, 2, 3)].send_scp.reset_mock()
 
         # Fail with coordinates which can't be reached
@@ -191,16 +212,11 @@ class TestBMPController(object):
         # Test the sver command works.
         assert bc_mock_sver.get_software_version() == sver_response
 
-    def test_scp_data_length(self, bc_mock_sver, sver_response):
-        # Test the data length can be ascertained (and remembered)
-        assert bc_mock_sver.scp_data_length == sver_response.buffer_size
-        assert bc_mock_sver.scp_data_length == sver_response.buffer_size
-
     def test_set_power(self):
         # Check power control of both one device and several to ensure that the
         # correct encoding is used.
         bc = BMPController("localhost")
-        bc._send_scp = Mock()
+        bc._send_scp = future_mock()
 
         # Check single device and power down
         bc.set_power(False, 0, 0, 2)
@@ -208,7 +224,8 @@ class TestBMPController(object):
         arg2 = 1 << 2
         bc._send_scp.assert_called_once_with(
             0, 0, 2, SCPCommands.power,
-            arg1=arg1, arg2=arg2, timeout=0.0, expected_args=0
+            arg1=arg1, arg2=arg2, additional_timeout=0.0, expected_args=0,
+            async=True
         )
         bc._send_scp.reset_mock()
 
@@ -219,8 +236,9 @@ class TestBMPController(object):
         arg2 = (1 << 1) | (1 << 2) | (1 << 4) | (1 << 8)
         bc._send_scp.assert_called_once_with(
             0, 0, 1, SCPCommands.power,
-            arg1=arg1, arg2=arg2, timeout=consts.BMP_POWER_ON_TIMEOUT,
-            expected_args=0
+            arg1=arg1, arg2=arg2,
+            additional_timeout=consts.BMP_POWER_ON_TIMEOUT,
+            expected_args=0, async=True
         )
 
     @pytest.mark.parametrize("board,boards", [(0, [0]), (1, [1]), ([2], [2]),
@@ -240,7 +258,7 @@ class TestBMPController(object):
         """
         # Create the mock controller
         bc = BMPController("localhost")
-        bc._send_scp = Mock()
+        bc._send_scp = future_mock()
 
         # Perform the action
         bc.set_led(led, action, board=board)
@@ -258,9 +276,10 @@ class TestBMPController(object):
         # Check that register read commands are encoded validly and that
         # addresses are rounded appropriately
         bc = BMPController("localhost")
-        bc._send_scp = Mock()
-        bc._send_scp.return_value = Mock(spec_set=SCPPacket)
-        bc._send_scp.return_value.data = struct.pack("<I", 0xDEADBEEF)
+
+        ret_val = Mock(spec_set=SCPPacket)
+        ret_val.data = struct.pack("<I", 0xDEADBEEF)
+        bc._send_scp = future_mock(ret_val)
 
         assert bc.read_fpga_reg(fpga_num, addr) == 0xDEADBEEF
         arg1 = real_addr
@@ -268,7 +287,7 @@ class TestBMPController(object):
         arg3 = fpga_num
         bc._send_scp.assert_called_once_with(
             0, 0, 0, SCPCommands.link_read,
-            arg1=arg1, arg2=arg2, arg3=arg3, expected_args=0
+            arg1=arg1, arg2=arg2, arg3=arg3, expected_args=0, async=True
         )
 
     @pytest.mark.parametrize("addr,real_addr", [(0, 0), (1, 0), (4, 4)])
@@ -277,7 +296,7 @@ class TestBMPController(object):
         # Check that register write commands are encoded validly and that
         # addresses are rounded appropriately
         bc = BMPController("localhost")
-        bc._send_scp = Mock()
+        bc._send_scp = future_mock()
 
         bc.write_fpga_reg(fpga_num, addr, 0xDEADBEEF)
         arg1 = real_addr
@@ -287,7 +306,7 @@ class TestBMPController(object):
             0, 0, 0, SCPCommands.link_write,
             arg1=arg1, arg2=arg2, arg3=arg3,
             data=struct.pack("<I", 0xDEADBEEF),
-            expected_args=0
+            expected_args=0, async=True
         )
 
     @pytest.mark.parametrize("t_ext0,t_ext0_raw",
@@ -306,9 +325,9 @@ class TestBMPController(object):
                       fan_0, fan_0_raw, fan_1, fan_1_raw):
         # Generate fake ADC data and check that it is decoded correctly
         bc = BMPController("localhost")
-        bc._send_scp = Mock()
-        bc._send_scp.return_value = Mock(spec_set=SCPPacket)
-        bc._send_scp.return_value.data = \
+
+        ret_val = Mock(spec_set=SCPPacket)
+        ret_val.data = \
             struct.pack("<"   # Little-endian
                         "8H"  # uint16_t adc[8]
                         "4h"  # int16_t t_int[4]
@@ -338,12 +357,13 @@ class TestBMPController(object):
                         0,                           # fan[3] Unused
                         0,                           # warning (unused)
                         0)                           # shutdown (unused)
+        bc._send_scp = future_mock(ret_val)
 
         adc = bc.read_adc()
         bc._send_scp.assert_called_once_with(
             0, 0, 0, SCPCommands.bmp_info,
             arg1=BMPInfoType.adc,
-            expected_args=0
+            expected_args=0, async=True
         )
 
         # Fuzzy float test

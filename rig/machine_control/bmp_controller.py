@@ -1,10 +1,12 @@
-from six import iteritems
+from six import itervalues
 
-import time
 import struct
 import collections
 
-from .scp_connection import SCPConnection
+import trollius
+from trollius import From, Return
+
+from .scp_protocol import SCPProtocol
 
 from . import consts
 
@@ -13,9 +15,10 @@ from .consts import SCPCommands, LEDAction, BMPInfoType, BMP_V_SCALE_2_5, \
     BMP_MISSING_FAN
 
 from rig.utils.contexts import ContextMixin, Required
+from rig.utils.look_blocking import LookBlockingMixin
 
 
-class BMPController(ContextMixin):
+class BMPController(ContextMixin, LookBlockingMixin):
     """Control the BMPs (Board Management Processors) onboard SpiNN-5 boards in
     a SpiNNaker machine.
 
@@ -59,7 +62,8 @@ class BMPController(ContextMixin):
     """
 
     def __init__(self, hosts, scp_port=consts.SCP_PORT, n_tries=5, timeout=0.5,
-                 initial_context={"cabinet": 0, "frame": 0, "board": 0}):
+                 initial_context={"cabinet": 0, "frame": 0, "board": 0},
+                 loop=None):
         """Create a new controller for BMPs in a SpiNNaker machine.
 
         Parameters
@@ -82,9 +86,16 @@ class BMPController(ContextMixin):
             Dictionary of default arguments to pass to methods in this class.
             This defaults to selecting the coordinate (0, 0, 0) which is
             convenient in single-board systems.
+        loop : :py:class:`asyncio.BaseEventLoop` or None
+            If you're using BMPController in an asynchronous fashion, this
+            argument can be used to specify the event loop to use. If
+            unspecified, the default trollius event loop will be used.
         """
         # Initialise the context stack
         ContextMixin.__init__(self, initial_context)
+
+        # Setup event loop
+        LookBlockingMixin.__init__(self, loop)
 
         # Record paramters
         self.scp_port = scp_port
@@ -93,29 +104,77 @@ class BMPController(ContextMixin):
         self._scp_data_length = None
 
         # Create connections
+        self.connections = {}
         if isinstance(hosts, str):
             hosts = {(0, 0): hosts}
-        self.connections = {
-            coord: SCPConnection(host, scp_port, n_tries, timeout)
-            for coord, host in iteritems(hosts)
-        }
+        self.connect_to_hosts(hosts)
 
-    @property
-    def scp_data_length(self):
-        if self._scp_data_length is None:
-            # Select an arbitrary host to send an sver to (preferring
-            # fully-specified hosts)
-            coord = max(self.connections, key=len)
-            if len(coord) == 2:
-                coord = (coord[0], coord[1], 0)
-            data = self.get_software_version(*coord)
-            self._scp_data_length = data.buffer_size
-        return self._scp_data_length
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
+    def connect_to_hosts(self, hosts):
+        """Create connections to the supplied set of hosts.
+
+        .. note::
+            This function has an all-or-nothing behaviour: if any connection
+            cannot be made, all already-successful connections will be closed
+            and further connection attempts cancelled.
+
+        .. warning::
+            If a connection already exists for one of the coordinates/hosts
+            supplied, the behaviour of this method is undefined.
+
+        Parameters
+        ----------
+        hosts : {coord: hostname, ...}
+            `coord` may be given as ether (cabinet, frame) or (cabinet, frame,
+            board) tuples. In the former case, the address will be used to
+            communicate with all boards in the specified frame except those
+            listed explicitly.
+        """
+        # Open connections to all boards in parallel (enforcing the maximum
+        # number of outstanding connections to one since BMPs do not handle
+        # multiple outstanding connections correctly).
+        connection_requests = [
+            self.loop.create_datagram_endpoint(
+                lambda: SCPProtocol(loop=self.loop,
+                                    max_outstanding=1,
+                                    n_tries=self.n_tries,
+                                    timeout=self.timeout),
+                remote_addr=(remote_addr, self.scp_port))
+            for remote_addr in itervalues(hosts)
+        ]
+
+        # Ensure all connections were successful
+
+        responses = yield From(trollius.gather(*connection_requests,
+                                               loop=self.loop,
+                                               return_exceptions=True))
+
+        exc = None
+        connections = {}
+        for coord, response in zip(hosts, responses):
+            if isinstance(response, Exception) and exc is None:
+                # Record the first exception
+                exc = response
+            else:
+                # Keep a reference to the protocol
+                connections[coord] = response[1]
+
+        # If anything failed, kill all the connections and re-raise the
+        # exception, otherwise add the protocols to the set of connections
+        if exc is None:
+            self.connections.update(connections)
+        else:
+            for protocol in itervalues(connections):
+                protocol.close()
+            raise exc
 
     def __call__(self, **context_args):
         """Create a new context for use with `with`."""
         return self.get_new_context(**context_args)
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     @ContextMixin.use_named_contextual_arguments(
         cabinet=Required, frame=Required, board=Required)
     def send_scp(self, *args, **kwargs):
@@ -124,7 +183,7 @@ class BMPController(ContextMixin):
         Automatically determines the appropriate connection to use.
 
         See the arguments for
-        :py:meth:`~rig.machine_control.scp_connection.SCPConnection` for
+        :py:meth:`~rig.machine_control.scp_protocol.SCPProtocol.send_scp` for
         details.
 
         Parameters
@@ -138,14 +197,17 @@ class BMPController(ContextMixin):
         cabinet = kwargs.pop("cabinet")
         frame = kwargs.pop("frame")
         board = kwargs.pop("board")
-        return self._send_scp(cabinet, frame, board, *args, **kwargs)
+        return self._send_scp(cabinet, frame, board, *args, async=True,
+                              **kwargs)
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     def _send_scp(self, cabinet, frame, board, *args, **kwargs):
         """Determine the best connection to use to send an SCP packet and use
         it to transmit.
 
         See the arguments for
-        :py:meth:`~rig.machine_control.scp_connection.SCPConnection` for
+        :py:meth:`~rig.machine_control.scp_protocol.SCPProtocol.send_scp` for
         details.
         """
         # Find the connection which best matches the specified coordinates,
@@ -158,16 +220,10 @@ class BMPController(ContextMixin):
                                                              frame,
                                                              board)
 
-        # Determine the size of packet we expect in return, this is usually the
-        # size that we are informed we should expect by SCAMP/SARK or else is
-        # the default.
-        if self._scp_data_length is None:
-            length = consts.SCP_SVER_RECEIVE_LENGTH_MAX
-        else:
-            length = self._scp_data_length
+        return connection.send_scp(0, 0, board, *args, **kwargs)
 
-        return connection.send_scp(length, 0, 0, board, *args, **kwargs)
-
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     @ContextMixin.use_contextual_arguments
     def get_software_version(self, cabinet=Required, frame=Required,
                              board=Required):
@@ -178,7 +234,9 @@ class BMPController(ContextMixin):
         :py:class:`.BMPInfo`
             Information about the software running on a BMP.
         """
-        sver = self._send_scp(cabinet, frame, board, SCPCommands.sver)
+        sver = yield From(self._send_scp(cabinet, frame, board,
+                                         SCPCommands.sver,
+                                         async=True))
 
         # Format the result
         # arg1
@@ -191,9 +249,12 @@ class BMPController(ContextMixin):
         version = (sver.arg2 >> 16) / 100.
         buffer_size = (sver.arg2 & 0xffff)
 
-        return BMPInfo(code_block, frame_id, can_id, board_id, version,
-                       buffer_size, sver.arg3, sver.data.decode("utf-8"))
+        raise Return(BMPInfo(code_block, frame_id, can_id, board_id, version,
+                             buffer_size, sver.arg3,
+                             sver.data.decode("utf-8")))
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     @ContextMixin.use_contextual_arguments
     def set_power(self, state, cabinet=Required, frame=Required,
                   board=Required, delay=0.0, post_power_on_delay=5.0):
@@ -227,13 +288,17 @@ class BMPController(ContextMixin):
 
         # Allow additional time for response when powering on (since FPGAs must
         # be loaded)
-        self._send_scp(cabinet, frame, board, SCPCommands.power,
-                       arg1=arg1, arg2=arg2,
-                       timeout=consts.BMP_POWER_ON_TIMEOUT if state else 0.0,
-                       expected_args=0)
+        yield From(self._send_scp(cabinet, frame, board, SCPCommands.power,
+                                  arg1=arg1, arg2=arg2,
+                                  additional_timeout=(
+                                      consts.BMP_POWER_ON_TIMEOUT
+                                      if state else 0.0),
+                                  expected_args=0, async=True))
         if state:
-            time.sleep(post_power_on_delay)
+            yield From(trollius.sleep(post_power_on_delay, loop=self.loop))
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     @ContextMixin.use_contextual_arguments
     def set_led(self, led, action=None, cabinet=Required, frame=Required,
                 board=Required):
@@ -272,9 +337,12 @@ class BMPController(ContextMixin):
         # Bitmask of boards to control
         arg2 = sum(1 << b for b in boards)
 
-        self._send_scp(cabinet, frame, board, SCPCommands.led, arg1=arg1,
-                       arg2=arg2, expected_args=0)
+        yield From(self._send_scp(cabinet, frame, board, SCPCommands.led,
+                                  arg1=arg1, arg2=arg2, expected_args=0,
+                                  async=True))
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     @ContextMixin.use_contextual_arguments
     def read_fpga_reg(self, fpga_num, addr, cabinet=Required, frame=Required,
                       board=Required):
@@ -303,11 +371,14 @@ class BMPController(ContextMixin):
         arg1 = addr & (~0x3)
         arg2 = 4  # Read a 32-bit value
         arg3 = fpga_num
-        response = self._send_scp(cabinet, frame, board, SCPCommands.link_read,
-                                  arg1=arg1, arg2=arg2, arg3=arg3,
-                                  expected_args=0)
-        return struct.unpack("<I", response.data)[0]
+        response = yield From(self._send_scp(cabinet, frame, board,
+                                             SCPCommands.link_read,
+                                             arg1=arg1, arg2=arg2, arg3=arg3,
+                                             expected_args=0, async=True))
+        raise Return(struct.unpack("<I", response.data)[0])
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     @ContextMixin.use_contextual_arguments
     def write_fpga_reg(self, fpga_num, addr, value, cabinet=Required,
                        frame=Required, board=Required):
@@ -333,10 +404,14 @@ class BMPController(ContextMixin):
         arg1 = addr & (~0x3)
         arg2 = 4  # Write a 32-bit value
         arg3 = fpga_num
-        self._send_scp(cabinet, frame, board, SCPCommands.link_write,
-                       arg1=arg1, arg2=arg2, arg3=arg3,
-                       data=struct.pack("<I", value), expected_args=0)
+        yield From(self._send_scp(cabinet, frame, board,
+                                  SCPCommands.link_write,
+                                  arg1=arg1, arg2=arg2, arg3=arg3,
+                                  data=struct.pack("<I", value),
+                                  expected_args=0, async=True))
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     @ContextMixin.use_contextual_arguments
     def read_adc(self, cabinet=Required, frame=Required, board=Required):
         """Read ADC data from the BMP including voltages and temperature.
@@ -345,8 +420,10 @@ class BMPController(ContextMixin):
         -------
         :py:class:`.ADCInfo`
         """
-        response = self._send_scp(cabinet, frame, board, SCPCommands.bmp_info,
-                                  arg1=BMPInfoType.adc, expected_args=0)
+        response = yield From(self._send_scp(cabinet, frame, board,
+                                             SCPCommands.bmp_info,
+                                             arg1=BMPInfoType.adc,
+                                             expected_args=0, async=True))
         data = struct.unpack("<"   # Little-endian
                              "8H"  # uint16_t adc[8]
                              "4h"  # int16_t t_int[4]
@@ -356,7 +433,7 @@ class BMPController(ContextMixin):
                              "I",  # uint32_t shutdown
                              response.data)
 
-        return ADCInfo(
+        raise Return(ADCInfo(
             voltage_1_2c=data[1] * BMP_V_SCALE_2_5,
             voltage_1_2b=data[2] * BMP_V_SCALE_2_5,
             voltage_1_2a=data[3] * BMP_V_SCALE_2_5,
@@ -371,7 +448,7 @@ class BMPController(ContextMixin):
                         if data[13] != BMP_MISSING_TEMP else None),
             fan_0=float(data[16]) if data[16] != BMP_MISSING_FAN else None,
             fan_1=float(data[17]) if data[17] != BMP_MISSING_FAN else None,
-        )
+        ))
 
 
 class BMPInfo(collections.namedtuple(
