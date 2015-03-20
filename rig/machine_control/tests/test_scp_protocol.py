@@ -364,13 +364,13 @@ def test_cancelled_before_sent(loop, mock_spinnaker_protocol, scp_protocol):
 def test_cancelled_before_resend(loop, mock_spinnaker_protocol, scp_protocol):
     """Test that packets cancelled before they get re-transmitted."""
     scp_protocol.n_tries = 2
-    scp_protocol.timeout = 0.01
+    scp_protocol.timeout = 0.1
 
     # This one will be cancelled just before its first retransmit
     fut1 = scp_protocol.send_scp(x=1, y=0, p=0, cmd=3, data=b"Hello, world!",
                                  arg1=None, arg2=None, arg3=None,
                                  expected_args=0)
-    loop.call_later(0.005, fut1.cancel)
+    loop.call_later(0.05, fut1.cancel)
 
     # This one will get through after the first has been dropped due to
     # cancellation
@@ -396,14 +396,14 @@ def test_cancelled_before_response(loop, mock_spinnaker_protocol, scp_protocol,
     """Test that packets cancelled before they return doesn't break anything"""
     # This one will get cancelled after it arrives at the server but before it
     # bounces back.
-    fut1 = scp_protocol.send_scp(x=10, y=1, p=0, cmd=rc_base + 0,
+    fut1 = scp_protocol.send_scp(x=100, y=1, p=0, cmd=rc_base + 0,
                                  data=b"Hello, world!",
                                  arg1=None, arg2=None, arg3=None,
                                  expected_args=0)
-    loop.call_later(0.001, fut1.cancel)
+    loop.call_later(0.01, fut1.cancel)
 
     # This one will not get cancelled but will arrive afterwards
-    fut2 = scp_protocol.send_scp(x=10, y=1, p=0, cmd=rc_base + 1,
+    fut2 = scp_protocol.send_scp(x=100, y=1, p=0, cmd=rc_base + 1,
                                  data=b"Hello, world!",
                                  arg1=None, arg2=None, arg3=None,
                                  expected_args=0)
@@ -415,7 +415,7 @@ def test_cancelled_before_response(loop, mock_spinnaker_protocol, scp_protocol,
     else:
         # Make sure the second request came back
         response = loop.run_until_complete(fut2)
-        assert response.dest_x == 10
+        assert response.dest_x == 100
         assert response.dest_y == 1
         assert response.dest_cpu == 0
         assert response.cmd_rc == 1
@@ -428,7 +428,7 @@ def test_cancelled_before_response(loop, mock_spinnaker_protocol, scp_protocol,
     assert len(mock_spinnaker_protocol.received) == 2
     for num, data in enumerate(mock_spinnaker_protocol.received):
         request = SCPPacket.from_bytestring(data[2:], n_args=0)
-        assert request.dest_x == 10
+        assert request.dest_x == 100
         assert request.dest_y == 1
         assert request.dest_cpu == 0
         assert request.cmd_rc == rc_base + num
@@ -518,11 +518,11 @@ def test_dead_connection(loop, mock_spinnaker_protocol, scp_protocol):
     fut1c = scp_protocol.send_scp(x=0, y=0, p=0, cmd=3, data=b"Hello, world!",
                                   arg1=None, arg2=None, arg3=None,
                                   expected_args=0)
-    loop.call_later(0.001, fut1c.cancel)
+    loop.call_later(0.01, fut1c.cancel)
 
     # Kill the connection after the first packets have been sent and while
     # we're waiting for their response
-    loop.call_later(0.002, scp_protocol.transport.close)
+    loop.call_later(0.02, scp_protocol.transport.close)
 
     # Queue up another packet which will get killed before it is even sent
     fut2 = scp_protocol.send_scp(x=0, y=0, p=0, cmd=3, data=b"Hello, world!",
@@ -532,7 +532,7 @@ def test_dead_connection(loop, mock_spinnaker_protocol, scp_protocol):
     fut2c = scp_protocol.send_scp(x=0, y=0, p=0, cmd=3, data=b"Hello, world!",
                                   arg1=None, arg2=None, arg3=None,
                                   expected_args=0)
-    loop.call_later(0.001, fut2c.cancel)
+    loop.call_later(0.01, fut2c.cancel)
 
     # Run the system and check both non-cancelled requests failed
     responses = loop.run_until_complete(trollius.gather(
