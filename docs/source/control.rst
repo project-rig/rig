@@ -186,6 +186,12 @@ reduce the repetition, Python's ``with`` statement can be used::
     ...     block_addr = mc.sdram_alloc(1024, 3)
     ...     mc.write(block_addr, b"Hello, world!")
 
+Alternatively, the current context can be modified by calling
+:py:meth:`~.MachineController.update_current_context`::
+
+    >>> # Following this call all commands will use app_id=56
+    >>> mc.update_current_context(app_id=56)
+
 
 :py:class:`.BMPController` Tutorial
 -----------------------------------
