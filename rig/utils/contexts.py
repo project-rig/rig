@@ -67,6 +67,10 @@ class ContextMixin(object):
         """Create a new context with the given keyword arguments."""
         return Context(kwargs, self.__context_stack)
 
+    def update_current_context(self, **context_args):
+        """Update the current context to contain new arguments."""
+        self.__context_stack[-1].update(context_args)
+
     def get_context_arguments(self):
         """Return a dictionary containing the current context arguments."""
         cargs = {}
@@ -161,8 +165,12 @@ class Context(object):
             Context stack to which this context will append itself when
             entered.
         """
-        self.context_arguments = context_arguments
+        self.context_arguments = dict(context_arguments)
         self.stack = stack
+
+    def update(self, updates):
+        """Update the arguments contained within this context."""
+        self.context_arguments.update(updates)
 
     def __enter__(self):
         # Add this context object to the stack

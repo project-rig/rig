@@ -64,6 +64,43 @@ def test_contextmixin_required_passed(object_to_test, arg1, arg2):
 
 
 @pytest.mark.parametrize("arg1", [1, None, 5])
+@pytest.mark.parametrize("arg2", [1, None, 5])
+def test_contextmixin_update_current_context(object_to_test, arg1, arg2):
+    # Create the object
+    obj = object_to_test()
+
+    # Missing arguments currently
+    with pytest.raises(TypeError) as excinfo:
+        obj.method_a(1)
+    assert "arg1" in str(excinfo.value)
+    assert "method_a" in str(excinfo.value)
+
+    # Update the current context
+    obj.update_current_context(arg1=arg1, bob=3)
+
+    assert obj.method_a(1) == (1, arg1, 30)
+    assert obj.method_a(1, arg2=50) == (1, arg1, 50)
+
+    # And again
+    obj.update_current_context(arg2=arg2)
+    assert (obj.method_b("World", "Hello") ==
+            ("World", arg1, arg2, ("Hello", ), {}))
+    assert (obj.method_b(123, arg1="Hello", arg2=4) ==
+            (123, "Hello", 4, tuple(), {}))
+
+    # Within a context
+    t_arg1 = 11111
+    with obj.get_new_context(arg1=t_arg1):
+        assert obj.method_a(1) == (1, t_arg1, arg2)
+
+        obj.update_current_context(arg1=arg1)
+        assert obj.method_a(1) == (1, arg1, arg2)
+
+    # And outside of that context
+    assert obj.method_a(1) == (1, arg1, arg2)
+
+
+@pytest.mark.parametrize("arg1", [1, None, 5])
 def test_contextmixin_required_not_passed_context(object_to_test, arg1):
     # Create the object
     obj = object_to_test()
