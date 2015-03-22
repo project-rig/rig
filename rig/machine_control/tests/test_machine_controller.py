@@ -6,7 +6,8 @@ from six import iteritems
 import struct
 import tempfile
 import os
-from .test_scp_connection import SendReceive, mock_conn  # noqa
+
+from rig.tests.future_mock import future_mock, future_side_effect
 
 from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
@@ -24,6 +25,7 @@ from rig.routing_table import RoutingTableEntry, Routes
 
 @pytest.fixture(scope="module")
 def controller(spinnaker_ip):
+    """A live connection to a real machine."""
     return MachineController(spinnaker_ip)
 
 
@@ -34,6 +36,7 @@ def live_machine(controller):
 
 @pytest.fixture
 def cn():
+    """A controller not connected to anything real."""
     cn = MachineController("localhost")
     cn._scp_data_length = 256
     return cn
@@ -43,14 +46,12 @@ def cn():
 def controller_rw_mock():
     """Create a controller with mock _read and _write methods."""
     cn = MachineController("localhost")
-    cn._read = mock.Mock(spec_set=[])
-    cn._write = mock.Mock(spec_set=[])
+    cn._write = future_mock()
     cn._scp_data_length = 256
 
     def read_mock(x, y, p, address, length_bytes, data_type=DataType.byte):
         return b'\x00' * length_bytes
-
-    cn._read.side_effect = read_mock
+    cn._read = future_side_effect(read_mock)
 
     return cn
 
@@ -136,7 +137,8 @@ class TestMachineControllerLive(object):
     def test_set_get_clear_iptag(self, controller):
         # Get our address, then add a new IPTag pointing
         # **YUCK**
-        ip_addr = controller.connections[0].sock.getsockname()[0]
+        transport = controller.connections[(0, 0)].transport
+        ip_addr = transport.get_extra_info("sockname")[0]
         port = 1234
         iptag = 7
 
@@ -326,6 +328,21 @@ class TestMachineController(object):
         - Check that transmitted packets are sensible.
         - Check that error codes / correct returns are dealt with correctly.
     """
+    def test_no_hostname(self):
+        # No connections should be set up if no hostname is supplied to the
+        # constructor.
+        mc = MachineController()
+        assert len(mc.connections) == 0
+
+    def test_bad_hostname(self):
+        # Make sure a single bad hostname causes all hostnames provided to be
+        # rejected.
+        mc = MachineController()
+        with pytest.raises(IOError):
+            mc.connect_to_hosts({(0, 0): "localhost",
+                                 (0, 1): "invalid hostname"})
+        assert len(mc.connections) == 0
+
     def test_supplied_structs(self):
         """Check that when struct data is supplied, it is used."""
         structs = {
@@ -334,10 +351,9 @@ class TestMachineController(object):
             struct_file.StructField(b"I", 0x0000BEEF, "%d", 1234, 1)
 
         cn = MachineController("localhost", structs=structs)
-        cn.read = mock.Mock()
-        cn.read.return_value = b"\x01\x00\x00\x00"
+        cn.read = future_mock(b"\x01\x00\x00\x00")
         assert cn.read_struct_field("test_struct", "test_field", 0, 0, 0) == 1
-        cn.read.assert_called_once_with(0xDEADBEEF, 4, 0, 0, 0)
+        cn.read.assert_called_once_with(0xDEADBEEF, 4, 0, 0, 0, async=True)
 
     def test_send_scp(self):
         """Check that arbitrary SCP commands can be sent using the context
@@ -345,7 +361,7 @@ class TestMachineController(object):
         """
         # Create the controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock(spec_set=[])
+        cn._send_scp = future_mock()
 
         # Assert a failure with no context
         with pytest.raises(TypeError):
@@ -360,21 +376,22 @@ class TestMachineController(object):
         # Provide a context, should work
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver)
-        cn._send_scp.assert_called_once_with(3, 2, 0, SCPCommands.sver)
+        cn._send_scp.assert_called_once_with(3, 2, 0, SCPCommands.sver,
+                                             async=True)
 
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver, x=4)
-        cn._send_scp.assert_called_with(4, 2, 0, SCPCommands.sver)
+        cn._send_scp.assert_called_with(4, 2, 0, SCPCommands.sver, async=True)
 
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver, y=4)
-        cn._send_scp.assert_called_with(3, 4, 0, SCPCommands.sver)
+        cn._send_scp.assert_called_with(3, 4, 0, SCPCommands.sver, async=True)
 
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver, p=4)
-        cn._send_scp.assert_called_with(3, 2, 4, SCPCommands.sver)
+        cn._send_scp.assert_called_with(3, 2, 4, SCPCommands.sver, async=True)
 
-    def test_get_software_version(self, mock_conn):  # noqa
+    def test_get_software_version(self):  # noqa
         """Check that the reporting of the software version is correct.
 
         SCP Layout
@@ -394,12 +411,13 @@ class TestMachineController(object):
         """
         # Create the machine controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = mock.Mock(spec_set=SCPPacket)
-        cn._send_scp.return_value.arg1 = ((1 << 8 | 2) << 16) | (3 << 8) | 4
-        cn._send_scp.return_value.arg2 = (256 << 16) | 256
-        cn._send_scp.return_value.arg3 = 888999
-        cn._send_scp.return_value.data = b"Hello, World!"
+        return_value = mock.Mock(spec_set=SCPPacket)
+        return_value = mock.Mock(spec_set=SCPPacket)
+        return_value.arg1 = ((1 << 8 | 2) << 16) | (3 << 8) | 4
+        return_value.arg2 = (256 << 16) | 256
+        return_value.arg3 = 888999
+        return_value.data = b"Hello, World!"
+        cn._send_scp = future_mock(return_value)
 
         # Run the software version command
         sver = cn.get_software_version(0, 1, 2)
@@ -417,19 +435,19 @@ class TestMachineController(object):
     def test_scp_data_length(self, size):
         cn = MachineController("localhost")
         cn._scp_data_length = None
-        cn.get_software_version = mock.Mock()
-        cn.get_software_version.return_value = CoreInfo(
-            None, None, None, None, size, None, None)
+        cn.get_software_version = future_mock(
+            CoreInfo(None, None, None, None, size, None, None))
 
-        assert cn.scp_data_length == size
-        cn.get_software_version.assert_called_once_with(0, 0)
+        assert cn.get_scp_data_length() == size
+        assert cn.get_scp_data_length() == size
+        cn.get_software_version.assert_called_once_with(0, 0, async=True)
 
     @pytest.mark.parametrize(  # noqa
         "address, data, dtype",
         [(0x60000000, b"Hello, World", DataType.byte),
          (0x60000002, b"Hello, World", DataType.short),
          (0x60000004, b"Hello, World", DataType.word)])
-    def test__write(self, mock_conn, address, data, dtype):
+    def test__write(self, address, data, dtype):
         """Check writing data can be performed correctly.
 
         SCP Layout
@@ -449,7 +467,7 @@ class TestMachineController(object):
         """
         # Create the mock controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
+        cn._send_scp = future_mock()
 
         # Try the write
         cn._write(0, 1, 2, address, data, dtype)
@@ -488,7 +506,7 @@ class TestMachineController(object):
             address += len(segments[-1])
 
         controller_rw_mock._write.assert_has_calls(
-            [mock.call(0, 1, 2, a, d, data_type) for (a, d) in
+            [mock.call(0, 1, 2, a, d, data_type, async=True) for (a, d) in
              zip(addresses, segments)]
         )
 
@@ -518,9 +536,9 @@ class TestMachineController(object):
         """
         # Create the mock controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = mock.Mock(spec_set=SCPPacket)
-        cn._send_scp.return_value.data = data
+        return_value = mock.Mock(spec_set=SCPPacket)
+        return_value.data = data
+        cn._send_scp = future_mock(return_value)
 
         # Try the read
         read = cn._read(0, 1, 2, address, len(data), dtype)
@@ -571,7 +589,7 @@ class TestMachineController(object):
         assert len(lens) == len(offsets) == n_packets, "Test is broken"
 
         controller_rw_mock._read.assert_has_calls(
-            [mock.call(0, 0, 0, o, l, data_type) for (o, l) in
+            [mock.call(0, 0, 0, o, l, data_type, async=True) for (o, l) in
              zip(offsets, lens)]
         )
 
@@ -632,9 +650,9 @@ class TestMachineController(object):
 
         # Create the mock controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                                              0x80, 0, 0, 0, 0, data)
+        cn._send_scp = future_mock(
+            SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0x80, 0, 0, 0, 0, data))
 
         # Get the IPtag
         r_iptag = cn.iptag_get(iptag, x=1, y=2)
@@ -719,9 +737,8 @@ class TestMachineController(object):
         # Create the mock controller
         cn = MachineController("localhost")
 
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                                              0x80, 0, addr, None, None, b"")
+        cn._send_scp = future_mock(SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                                             0x80, 0, addr, None, None, b""))
 
         # Try the allocation
         address = cn.sdram_alloc(size, tag, 1, 2, app_id=app_id)
@@ -731,7 +748,7 @@ class TestMachineController(object):
 
         # Check the packet was sent as expected
         cn._send_scp.assert_called_once_with(1, 2, 0, 28, app_id << 8,
-                                             size, tag)
+                                             size, tag, async=True)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (5, 6)])
     @pytest.mark.parametrize("size", [8, 200])
@@ -739,9 +756,8 @@ class TestMachineController(object):
         """Test that sdram_alloc raises an exception when ALLOC fails."""
         # Create the mock controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                                              0x80, 0, 0, None, None, b"")
+        cn._send_scp = future_mock(SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                                             0x80, 0, 0, None, None, b""))
 
         with pytest.raises(SpiNNakerMemoryError) as excinfo:
             cn.sdram_alloc(size, x=x, y=y, app_id=30)
@@ -759,9 +775,8 @@ class TestMachineController(object):
         # Create the mock controller
         cn = MachineController("localhost")
 
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                                              0x80, 0, addr, None, None, b"")
+        cn._send_scp = future_mock(SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                                             0x80, 0, addr, None, None, b""))
 
         # Try the allocation
         fp = cn.sdram_alloc_as_filelike(size, tag, x, y, app_id=app_id)
@@ -791,10 +806,9 @@ class TestMachineController(object):
         # Create the mock controller
         cn = MachineController("localhost")
         cn.structs = structs
-        cn.read = mock.Mock()
-        cn.read.return_value = b"\x00" * struct.calcsize(
-            structs[six.b(which_struct)][six.b(field)].pack_chars) * \
-            structs[six.b(which_struct)][six.b(field)].length
+        cn.read = future_mock(b"\x00" * struct.calcsize(
+            structs[six.b(which_struct)][six.b(field)].pack_chars) *
+            structs[six.b(which_struct)][six.b(field)].length)
 
         # Perform the struct read
         with cn(x=x, y=y, p=p):
@@ -807,7 +821,7 @@ class TestMachineController(object):
         assert cn.read.called_once_with(
             structs[which_struct].base + structs[which_struct][field].offset,
             struct.calcsize(structs[which_struct][field].pack_chars),
-            x, y, p
+            x, y, p, async=True
         )
 
     @pytest.mark.parametrize("x, y, p, vcpu_base",
@@ -835,18 +849,17 @@ class TestMachineController(object):
 
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.side_effect = mock_read_struct_field
+        cn.read_struct_field = future_side_effect(mock_read_struct_field)
         cn.structs = structs
-        cn.read = mock.Mock()
-        cn.read.return_value = data
+        cn.read = future_mock(data)
 
         # Perform the struct field read
         assert cn.read_vcpu_struct_field(field, x, y, p) == converted
 
         # Check that the VCPU base was used
         cn.read.assert_called_once_with(
-            vcpu_base + vcpu_struct.size * p + field_.offset, len(data), x, y)
+            vcpu_base + vcpu_struct.size * p + field_.offset, len(data), x, y,
+            async=True)
 
     @pytest.mark.parametrize("x, y, p, vcpu_base", [(0, 1, 11, 0x67801234),
                                                     (1, 4, 17, 0x33331110)])
@@ -863,10 +876,8 @@ class TestMachineController(object):
 
         # Create the mock controller
         cn = MachineController("localhost")
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.side_effect = mock_read_struct_field
+        cn.read_struct_field = future_side_effect(mock_read_struct_field)
         cn.structs = structs
-        cn.read = mock.Mock()
 
         # Create data to read for the processor status struct
         vcpu_struct.update_default_values(
@@ -887,18 +898,19 @@ class TestMachineController(object):
             app_id=30,
             app_name=b"Hello World!\x00\x00\x00\x00",
         )
-        cn.read.return_value = vcpu_struct.pack()
+        cn.read = future_mock(vcpu_struct.pack())
 
         # Get the processor status
         with cn(x=x, y=y, p=p):
             ps = cn.get_processor_status()
 
         # Assert that we asked for the vcpu_base
-        cn.read_struct_field.assert_called_once_with("sv", "vcpu_base", x, y)
+        cn.read_struct_field.assert_called_once_with("sv", "vcpu_base", x, y,
+                                                     async=True)
 
         # And that the read was from the correct location
         cn.read.assert_called_once_with(vcpu_base + vcpu_struct.size * p,
-                                        vcpu_struct.size, x, y)
+                                        vcpu_struct.size, x, y, async=True)
 
         # Finally, that the returned ProcessorStatus is sensible
         assert isinstance(ps, ProcessorStatus)
@@ -943,9 +955,8 @@ class TestMachineController(object):
         """Test loading a single APLX to a set of cores."""
         BASE_ADDRESS = 0x68900000
         # Create the mock controller
-        cn._send_scp = mock.Mock()
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.return_value = BASE_ADDRESS
+        cn._send_scp = future_mock()
+        cn.read_struct_field = future_mock(BASE_ADDRESS)
 
         # Target cores for APLX
         targets = {(0, 1): set(cores)}
@@ -958,7 +969,8 @@ class TestMachineController(object):
                 cn.flood_fill_aplx(aplx_file, targets)
 
         # Check the base address was retrieved
-        cn.read_struct_field.assert_called_once_with("sv", "sdram_sys", 0, 0)
+        cn.read_struct_field.assert_called_once_with("sv", "sdram_sys", 0, 0,
+                                                     async=True)
 
         # Determine the expected core mask
         coremask = 0x00000000
@@ -1037,10 +1049,9 @@ class TestMachineController(object):
         """
         # Construct the machine controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn.flood_fill_aplx = mock.Mock()
-        cn.read_vcpu_struct_field = mock.Mock()
-        cn.send_signal = mock.Mock()
+        cn._send_scp = future_mock()
+        cn.flood_fill_aplx = future_mock()
+        cn.send_signal = future_mock()
 
         # Construct a list of targets and a list of failed targets
         app_id = 27
@@ -1054,7 +1065,7 @@ class TestMachineController(object):
                 return consts.AppState.idle
             else:
                 return consts.AppState.wait
-        cn.read_vcpu_struct_field.side_effect = read_struct_field
+        cn.read_vcpu_struct_field = future_side_effect(read_struct_field)
 
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
@@ -1063,16 +1074,18 @@ class TestMachineController(object):
 
         # First and second loads
         cn.flood_fill_aplx.assert_has_calls([
-            mock.call({"test.aplx": targets}, app_id=app_id, wait=True),
-            mock.call({"test.aplx": faileds}, app_id=app_id, wait=True),
+            mock.call({"test.aplx": targets}, app_id=app_id, wait=True,
+                      async=True),
+            mock.call({"test.aplx": faileds}, app_id=app_id, wait=True,
+                      async=True),
         ])
 
         # Reading struct values
         cn.read_vcpu_struct_field.assert_has_calls([
-            mock.call("cpu_state", x, y, p)
+            mock.call("cpu_state", x, y, p, async=True)
             for (x, y), ps in iteritems(targets) for p in ps
         ] + [
-            mock.call("cpu_state", x, y, p)
+            mock.call("cpu_state", x, y, p, async=True)
             for (x, y), ps in iteritems(faileds) for p in ps
         ])
 
@@ -1085,10 +1098,9 @@ class TestMachineController(object):
         """
         # Construct the machine controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn.flood_fill_aplx = mock.Mock()
-        cn.read_vcpu_struct_field = mock.Mock()
-        cn.send_signal = mock.Mock()
+        cn._send_scp = future_mock()
+        cn.flood_fill_aplx = future_mock()
+        cn.send_signal = future_mock()
 
         # Construct a list of targets and a list of failed targets
         app_id = 27
@@ -1102,7 +1114,8 @@ class TestMachineController(object):
                 return consts.AppState.idle
             else:
                 return consts.AppState.wait
-        cn.read_vcpu_struct_field.side_effect = read_struct_field
+
+        cn.read_vcpu_struct_field = future_side_effect(read_struct_field)
 
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
@@ -1111,21 +1124,24 @@ class TestMachineController(object):
 
         # First and second loads
         cn.flood_fill_aplx.assert_has_calls([
-            mock.call({"test.aplx": targets}, app_id=app_id, wait=True),
-            mock.call({"test.aplx": faileds}, app_id=app_id, wait=True),
+            mock.call({"test.aplx": targets}, app_id=app_id, wait=True,
+                      async=True),
+            mock.call({"test.aplx": faileds}, app_id=app_id, wait=True,
+                      async=True),
         ])
 
         # Reading struct values
         cn.read_vcpu_struct_field.assert_has_calls([
-            mock.call("cpu_state", x, y, p)
+            mock.call("cpu_state", x, y, p, async=True)
             for (x, y), ps in iteritems(targets) for p in ps
         ] + [
-            mock.call("cpu_state", x, y, p)
+            mock.call("cpu_state", x, y, p, async=True)
             for (x, y), ps in iteritems(faileds) for p in ps
         ])
 
         # Start signal sent
-        cn.send_signal.assert_called_once_with(consts.AppSignal.start, app_id)
+        cn.send_signal.assert_called_once_with(consts.AppSignal.start, app_id,
+                                               async=True)
 
     def test_load_and_check_aplxs_fails(self):
         """Test that APLX loading takes place multiple times if one of the
@@ -1133,10 +1149,9 @@ class TestMachineController(object):
         """
         # Construct the machine controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn.flood_fill_aplx = mock.Mock()
-        cn.read_vcpu_struct_field = mock.Mock()
-        cn.send_signal = mock.Mock()
+        cn._send_scp = future_mock()
+        cn.flood_fill_aplx = future_mock()
+        cn.send_signal = future_mock()
 
         # Construct a list of targets and a list of failed targets
         app_id = 27
@@ -1148,7 +1163,7 @@ class TestMachineController(object):
                 return consts.AppState.idle
             else:
                 return consts.AppState.wait
-        cn.read_vcpu_struct_field.side_effect = read_struct_field
+        cn.read_vcpu_struct_field = future_side_effect(read_struct_field)
 
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
@@ -1206,20 +1221,18 @@ class TestMachineController(object):
                                         base_addr, rtr_base):
         # Create the controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = SCPPacket(
+        cn._send_scp = future_mock(SCPPacket(
             False, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0x80, rtr_base,
             None, None, b""
-        )
+        ))
 
         # Allow writing to a file
         temp_mem = tempfile.TemporaryFile()
-        cn.write = mock.Mock()
-        cn.write.side_effect = lambda addr, data, x, y: temp_mem.write(data)
+        cn.write = future_side_effect(
+            lambda addr, data, x, y: temp_mem.write(data))
 
         # Allow reading the struct field
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.return_value = base_addr
+        cn.read_struct_field = future_mock(base_addr)
 
         # Try the load
         with cn(x=x, y=y, app_id=app_id):
@@ -1230,11 +1243,12 @@ class TestMachineController(object):
         cn._send_scp.assert_any_call(
             x, y, 0, SCPCommands.alloc_free,
             (app_id << 8) | consts.AllocOperations.alloc_rtr,
-            len(entries)
+            len(entries), async=True
         )
 
         # (2) Request for the "sv" "sdram_sys" value
-        cn.read_struct_field.assert_called_once_with("sv", "sdram_sys", x, y)
+        cn.read_struct_field.assert_called_once_with("sv", "sdram_sys", x, y,
+                                                     async=True)
 
         # (3) A write to this address of the routing table entries
         temp_mem.seek(0)
@@ -1260,17 +1274,16 @@ class TestMachineController(object):
             x, y, 0, SCPCommands.router,
             ((len(entries) << 16) | (app_id << 8) |
              consts.RouterOperations.load),
-            base_addr, rtr_base
+            base_addr, rtr_base, async=True
         )
 
     def test_load_routing_table_entries_fails(self):
         # Create the controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = SCPPacket(
+        cn._send_scp = future_mock(SCPPacket(
             False, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0x0, 0,
             None, None, b""
-        )  # Indicates NO space for entries
+        ))  # Indicates NO space for entries
 
         with pytest.raises(SpiNNakerRouterError) as excinfo:
             cn.load_routing_table_entries([None] * 100, 0, 4, 32)
@@ -1284,7 +1297,7 @@ class TestMachineController(object):
           }])
     def test_loading_routing_tables(self, routing_tables):
         cn = MachineController("localhost")
-        cn.load_routing_table_entries = mock.Mock()
+        cn.load_routing_table_entries = future_mock()
 
         # Load the set of routing table entries
         with cn(app_id=69):
@@ -1292,7 +1305,7 @@ class TestMachineController(object):
 
         # Check all the calls were made
         cn.load_routing_table_entries.assert_has_calls(
-            [mock.call(entries, x=x, y=y, app_id=69)
+            [mock.call(entries, x=x, y=y, app_id=69, async=True)
              for (x, y), entries in iteritems(routing_tables)]
         )
 
@@ -1319,18 +1332,17 @@ class TestMachineController(object):
     def test_get_routing_table_entries(self, x, y, addr, data, expected):
         # Create the controller
         cn = MachineController("localhost")
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.return_value = addr
-        cn.read = mock.Mock()
-        cn.read.return_value = data
+        cn.read_struct_field = future_mock(addr)
+        cn.read = future_mock(data)
 
         # Read a routing table, assert that the return values are sane and that
         # appropriate calls are made.
         with cn(x=x, y=y):
             assert cn.get_routing_table_entries() == expected
 
-        cn.read_struct_field.assert_called_once_with("sv", "rtr_copy", x, y)
-        cn.read.assert_called_once_with(addr, 1024*16, x, y)
+        cn.read_struct_field.assert_called_once_with("sv", "rtr_copy", x, y,
+                                                     async=True)
+        cn.read.assert_called_once_with(addr, 1024*16, x, y, async=True)
 
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")
@@ -1344,8 +1356,7 @@ class TestMachineController(object):
             assert x == 0
             assert y == 0
             return (w << 8) | h
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.side_effect = read_struct_field
+        cn.read_struct_field = future_side_effect(read_struct_field)
 
         p2p_table_len = ((256*256)//8*4)
         reads = set()
@@ -1360,8 +1371,7 @@ class TestMachineController(object):
             return (struct.pack("<I", sum(i << 3 * i for i in range(8))) *
                     (length // 4))
         # Return one of each kind of table entry per word for each read
-        cn.read = mock.Mock()
-        cn.read.side_effect = read
+        cn.read = future_side_effect(read)
 
         p2p_table = cn.get_p2p_routing_table(x=0, y=0)
 
@@ -1384,12 +1394,12 @@ class TestMachineController(object):
                                        set(Links)])
     def test_get_working_links(self, links):
         cn = MachineController("localhost")
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.return_value = sum(1 << l for l in links)
+        cn.read_struct_field = future_mock(sum(1 << l for l in links))
 
         assert cn.get_working_links(x=0, y=0) == links
 
-        assert cn.read_struct_field.called_once_with("sv", "link_up", 0, 0, 0)
+        assert cn.read_struct_field.called_once_with("sv", "link_up", 0, 0, 0,
+                                                     async=True)
 
     @pytest.mark.parametrize("num_cpus", [1, 18])
     def test_get_num_working_cores(self, num_cpus):
@@ -1416,27 +1426,24 @@ class TestMachineController(object):
                 ("sv", "sysram_heap"): sysram_heap,
                 ("sv", "vcpu_base"): vcpu_base,
             }[(struct_name, field_name)]
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.side_effect = read_struct_field
+        cn.read_struct_field = future_side_effect(read_struct_field)
 
         # Return a set of p2p tables where an 8x8 set of chips is alive with
         # all chips with (3,3) being dead.
-        cn.get_p2p_routing_table = mock.Mock()
-        cn.get_p2p_routing_table.return_value = {
+        cn.get_p2p_routing_table = future_mock({
             (x, y): (consts.P2PTableEntry.north
                      if x < 8 and y < 8 and (x, y) != (3, 3) else
                      consts.P2PTableEntry.none)
             for x in range(256)
             for y in range(256)
-        }
+        })
 
         # Return 18 working cores except for (2, 2) which will have only 3
         # cores.
 
         def get_num_working_cores(x, y):
             return 18 if (x, y) != (2, 2) else 3
-        cn.get_num_working_cores = mock.Mock()
-        cn.get_num_working_cores.side_effect = get_num_working_cores
+        cn.get_num_working_cores = future_side_effect(get_num_working_cores)
 
         # Return all working links except for (4, 4) which will have no north
         # link.
@@ -1446,8 +1453,7 @@ class TestMachineController(object):
                 return set(Links)
             else:
                 return set(Links) - set([Links.north])
-        cn.get_working_links = mock.Mock()
-        cn.get_working_links.side_effect = get_working_links
+        cn.get_working_links = future_side_effect(get_working_links)
 
         m = cn.get_machine()
 
@@ -1472,18 +1478,18 @@ class TestMachineController(object):
 
         # Check that only the expected calls were made to mocks
         cn.read_struct_field.assert_has_calls([
-            mock.call("sv", "sdram_heap", 0, 0),
-            mock.call("sv", "sdram_sys", 0, 0),
-            mock.call("sv", "sysram_heap", 0, 0),
-            mock.call("sv", "vcpu_base", 0, 0),
+            mock.call("sv", "sdram_heap", 0, 0, async=True),
+            mock.call("sv", "sdram_sys", 0, 0, async=True),
+            mock.call("sv", "sysram_heap", 0, 0, async=True),
+            mock.call("sv", "vcpu_base", 0, 0, async=True),
         ], any_order=True)
-        cn.get_p2p_routing_table.assert_called_once_with(0, 0)
+        cn.get_p2p_routing_table.assert_called_once_with(0, 0, async=True)
         cn.get_num_working_cores.assert_has_calls([
-            mock.call(x, y) for x in range(8) for y in range(8)
+            mock.call(x, y, async=True) for x in range(8) for y in range(8)
             if (x, y) != (3, 3)
         ], any_order=True)
         cn.get_working_links.assert_has_calls([
-            mock.call(x, y) for x in range(8) for y in range(8)
+            mock.call(x, y, async=True) for x in range(8) for y in range(8)
             if (x, y) != (3, 3)
         ], any_order=True)
 

@@ -6,11 +6,11 @@ import trollius
 from trollius import From, Return
 
 
-class TestException(Exception):
+class MyException(Exception):
     pass
 
 
-class TestClass(LookBlockingMixin):
+class MyClass(LookBlockingMixin):
     """A test class with a single async method."""
 
     def __init__(self, loop):
@@ -37,34 +37,34 @@ class TestClass(LookBlockingMixin):
     @LookBlockingMixin.look_blocking
     @trollius.coroutine
     def coro_sleep_and_raise(self):
-        """Coroutine: raise an TestException exception after a delay."""
+        """Coroutine: raise an MyException exception after a delay."""
         yield From(trollius.sleep(0.01, loop=self.loop))
-        raise TestException("I woke up on the wrong side of the bed!")
+        raise MyException("I woke up on the wrong side of the bed!")
 
     @LookBlockingMixin.look_blocking
     @trollius.coroutine
     def fut_sleep_and_raise(self):
-        """Return a future which raises a TestException exception after a delay
+        """Return a future which raises a MyException exception after a delay
         """
         fut = trollius.Future(loop=self.loop)
 
         def fail():
             if not fut.cancelled():  # pragma: no branch
-                fut.set_exception(TestException("I don't want to wake up!"))
+                fut.set_exception(MyException("I don't want to wake up!"))
         self.loop.call_later(0.01, fail)
         return fut
 
 
 @pytest.mark.parametrize("supplied_loop", [None, trollius.new_event_loop()])
 def test_look_blocking(supplied_loop):
-    t = TestClass(supplied_loop)
+    t = MyClass(supplied_loop)
 
     # Make sure the blocking interfaces work
     assert t.coro_sleep_and_return_arg(123) == 123
     assert t.fut_sleep_and_return_arg(456) == 456
-    with pytest.raises(TestException):
+    with pytest.raises(MyException):
         t.coro_sleep_and_raise()
-    with pytest.raises(TestException):
+    with pytest.raises(MyException):
         t.fut_sleep_and_raise()
 
     # Make sure the non-blocking interfaces work
@@ -72,7 +72,7 @@ def test_look_blocking(supplied_loop):
         t.coro_sleep_and_return_arg(123, async=True)) == 123
     assert t.loop.run_until_complete(
         t.fut_sleep_and_return_arg(456, async=True)) == 456
-    with pytest.raises(TestException):
+    with pytest.raises(MyException):
         t.loop.run_until_complete(t.coro_sleep_and_raise(async=True))
-    with pytest.raises(TestException):
+    with pytest.raises(MyException):
         t.loop.run_until_complete(t.fut_sleep_and_raise(async=True))

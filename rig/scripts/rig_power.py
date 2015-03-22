@@ -11,7 +11,7 @@ from six import next
 
 from rig.machine_control import BMPController
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.scp_protocol import TimeoutError
 
 ON_CHOICES = "on 1".split()
 OFF_CHOICES = "off 0".split()

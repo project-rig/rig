@@ -3,6 +3,8 @@ from six import itervalues
 import struct
 import collections
 
+import socket
+
 import trollius
 from trollius import From, Return
 
@@ -61,7 +63,7 @@ class BMPController(ContextMixin, LookBlockingMixin):
     cover common uses of the BMP in normal application usage.
     """
 
-    def __init__(self, hosts, scp_port=consts.SCP_PORT, n_tries=5, timeout=0.5,
+    def __init__(self, hosts, scp_port=consts.SCP_PORT, n_tries=5, timeout=1.0,
                  initial_context={"cabinet": 0, "frame": 0, "board": 0},
                  loop=None):
         """Create a new controller for BMPs in a SpiNNaker machine.
@@ -140,12 +142,12 @@ class BMPController(ContextMixin, LookBlockingMixin):
                                     max_outstanding=1,
                                     n_tries=self.n_tries,
                                     timeout=self.timeout),
-                remote_addr=(remote_addr, self.scp_port))
+                remote_addr=(remote_addr, self.scp_port),
+                family=socket.AF_INET)
             for remote_addr in itervalues(hosts)
         ]
 
         # Ensure all connections were successful
-
         responses = yield From(trollius.gather(*connection_requests,
                                                loop=self.loop,
                                                return_exceptions=True))

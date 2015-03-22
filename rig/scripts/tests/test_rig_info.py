@@ -7,7 +7,7 @@ import mock
 
 import rig.scripts.rig_info as rig_info
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.scp_protocol import TimeoutError
 
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 

@@ -8,7 +8,7 @@ import argparse
 
 from rig.machine_control import boot, MachineController
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.scp_protocol import TimeoutError
 
 BOOT_OPTION_POSTFIX = "_boot_options"
 """Postfix for boot option dicts in boot."""

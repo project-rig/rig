@@ -3,7 +3,7 @@ appropriate arguments are given."""
 
 import pytest
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.scp_protocol import TimeoutError
 
 import rig.scripts.rig_power as rig_power
 

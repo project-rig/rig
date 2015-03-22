@@ -15,7 +15,7 @@ from rig.machine import Cores
 
 from rig.machine_control import MachineController, BMPController
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.scp_protocol import TimeoutError
 
 
 def get_spinnaker_info(mc):
