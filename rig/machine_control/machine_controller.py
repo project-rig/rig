@@ -66,7 +66,7 @@ class MachineController(ContextMixin, LookBlockingMixin):
 
     """
     def __init__(self, zero_zero_host=None, scp_port=consts.SCP_PORT,
-                 boot_port=consts.BOOT_PORT, n_tries=5, timeout=1.0,
+                 boot_port=consts.BOOT_PORT, n_tries=5, timeout=1.5,
                  structs=None, initial_context={"app_id": 66}, loop=None):
         """Create a new controller for a SpiNNaker machine.
 

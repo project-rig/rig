@@ -63,7 +63,7 @@ class BMPController(ContextMixin, LookBlockingMixin):
     cover common uses of the BMP in normal application usage.
     """
 
-    def __init__(self, hosts, scp_port=consts.SCP_PORT, n_tries=5, timeout=1.0,
+    def __init__(self, hosts, scp_port=consts.SCP_PORT, n_tries=5, timeout=1.5,
                  initial_context={"cabinet": 0, "frame": 0, "board": 0},
                  loop=None):
         """Create a new controller for BMPs in a SpiNNaker machine.
