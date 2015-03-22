@@ -34,11 +34,20 @@ def future_side_effect(side_effect):  # pragma: no cover
     """
     def new_side_effect(*args, **kwargs):
         async = kwargs.pop("async", False)
-        if async:
-            fut = trollius.Future()
-            fut.set_result(side_effect(*args, **kwargs))
-            return fut
-        else:
-            return side_effect(*args, **kwargs)
+        try:
+            return_value = side_effect(*args, **kwargs)
+            if async:
+                fut = trollius.Future()
+                fut.set_result(return_value)
+                return fut
+            else:
+                return return_value
+        except Exception as e:
+            if async:
+                fut = trollius.Future()
+                fut.set_exception(e)
+                return fut
+            else:
+                raise
 
     return Mock(side_effect=new_side_effect)

@@ -18,6 +18,8 @@ from ..machine_controller import (
 from ..packets import SCPPacket
 from .. import regions, consts, struct_file
 
+from ..scp_protocol import TimeoutError
+
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 
 from rig.routing_table import RoutingTableEntry, Routes
@@ -111,6 +113,12 @@ class TestMachineControllerLive(object):
                 assert "SpiNNaker" in sver.version_string
                 assert sver.version >= 1.3
                 assert sver.position == (x, y)
+
+    def test_discover_connections(self, controller,
+                                  spinnaker_width, spinnaker_height):
+        # Sadly there is little that can be verified here other than this
+        # doesn't crash.
+        assert controller.discover_connections() >= 0
 
     def test_write_and_read(self, controller):
         """Test write and read capabilities by writing a string to SDRAM and
@@ -340,7 +348,7 @@ class TestMachineController(object):
         mc = MachineController()
         with pytest.raises(IOError):
             mc.connect_to_hosts({(0, 0): "localhost",
-                                 (0, 1): "invalid hostname"})
+                                 (12, 12): "invalid hostname"})
         assert len(mc.connections) == 0
 
     def test_supplied_structs(self):
@@ -360,8 +368,23 @@ class TestMachineController(object):
         system.
         """
         # Create the controller
-        cn = MachineController("localhost")
-        cn._send_scp = future_mock()
+        cn = MachineController()
+        cn.connections = {(0, 0): future_mock(),
+                          (4, 8): future_mock(),
+                          # (8, 4) is missing!
+                          }
+
+        # Test that before get_dimensions has been called the (0, 0) connection
+        # is used.
+        cn.send_scp(SCPCommands.sver, x=0, y=0, p=0)
+        cn.connections[(0, 0)].send_scp.assert_called_once_with(
+            0, 0, 0, SCPCommands.sver)
+        cn.connections[(0, 0)].send_scp.reset_mock()
+
+        cn.send_scp(SCPCommands.sver, x=4, y=8, p=0)
+        cn.connections[(0, 0)].send_scp.assert_called_once_with(
+            4, 8, 0, SCPCommands.sver)
+        cn.connections[(0, 0)].send_scp.reset_mock()
 
         # Assert a failure with no context
         with pytest.raises(TypeError):
@@ -376,20 +399,40 @@ class TestMachineController(object):
         # Provide a context, should work
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver)
-        cn._send_scp.assert_called_once_with(3, 2, 0, SCPCommands.sver,
-                                             async=True)
+        cn.connections[(0, 0)].send_scp.assert_called_once_with(
+            3, 2, 0, SCPCommands.sver)
 
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver, x=4)
-        cn._send_scp.assert_called_with(4, 2, 0, SCPCommands.sver, async=True)
+        cn.connections[(0, 0)].send_scp.assert_called_with(
+            4, 2, 0, SCPCommands.sver)
 
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver, y=4)
-        cn._send_scp.assert_called_with(3, 4, 0, SCPCommands.sver, async=True)
+        cn.connections[(0, 0)].send_scp.assert_called_with(
+            3, 4, 0, SCPCommands.sver)
 
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver, p=4)
-        cn._send_scp.assert_called_with(3, 2, 4, SCPCommands.sver, async=True)
+        cn.connections[(0, 0)].send_scp.assert_called_with(
+            3, 2, 4, SCPCommands.sver)
+
+        cn.connections[(0, 0)].send_scp.reset_mock()
+
+        # Test that after get_dimensions has been called, other connections are
+        # used
+        cn._dimensions = (12, 12)
+
+        cn.send_scp(SCPCommands.sver, x=4, y=8, p=0)
+        cn.connections[(4, 8)].send_scp.assert_called_once_with(
+            4, 8, 0, SCPCommands.sver)
+        cn.connections[(4, 8)].send_scp.reset_mock()
+
+        # Test falling back on (0, 0) when a connection is not present
+        cn.send_scp(SCPCommands.sver, x=8, y=4, p=0)
+        cn.connections[(0, 0)].send_scp.assert_called_once_with(
+            8, 4, 0, SCPCommands.sver)
+        cn.connections[(0, 0)].send_scp.reset_mock()
 
     def test_get_software_version(self):  # noqa
         """Check that the reporting of the software version is correct.
@@ -1344,6 +1387,23 @@ class TestMachineController(object):
                                                      async=True)
         cn.read.assert_called_once_with(addr, 1024*16, x, y, async=True)
 
+    def test_get_dimensions(self):
+        cn = MachineController("localhost")
+
+        # Pretend this is a 10x15 machine
+        w, h = 10, 15
+
+        def read_struct_field(struct, field, x, y):
+            assert struct == "sv"
+            assert field == "p2p_dims"
+            assert x == 0
+            assert y == 0
+            return (w << 8) | h
+        cn.read_struct_field = future_side_effect(read_struct_field)
+
+        assert cn.get_dimensions() == (w, h)
+        assert cn._dimensions == (w, h)
+
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")
 
@@ -1492,6 +1552,107 @@ class TestMachineController(object):
             mock.call(x, y, async=True) for x in range(8) for y in range(8)
             if (x, y) != (3, 3)
         ], any_order=True)
+
+    def test_discover_connections(self):
+        # Set up a fake six-board 36x12 machine where:
+        # * Chips (0, 0) and (12, 0) are already connected
+        # * Chip (4, 8) is dead (not in p2p tables)
+        # * Chip (8, 4) is not connected to Ethernet (according to sv->eth_up)
+        # * Chip (16, 8) claims to be connected but will fail to connect
+        # * Chip (20, 4) claims to be connected but will fali to respond
+        # * All other chips will be successfully added
+        # * Chips have the IP 192.168.x.y
+        cn = MachineController("localhost")
+
+        cn.connections[(12, 0)] = mock.Mock()
+
+        cn.get_dimensions = future_mock((36, 12))
+        cn._dimensions = (36, 12)
+
+        # Only include spinn-5 Ethernet locations (this will cause the function
+        # to crash if it tries to look at other chips, which it shouldn't!)
+        cn.get_p2p_routing_table = future_mock({
+            (0, 0): consts.P2PTableEntry.north,
+            (4, 8): consts.P2PTableEntry.none,  # Dead!
+            (8, 4): consts.P2PTableEntry.north,
+            (12, 0): consts.P2PTableEntry.north,
+            (16, 8): consts.P2PTableEntry.north,
+            (20, 4): consts.P2PTableEntry.north,
+            (24, 0): consts.P2PTableEntry.north,
+            (28, 8): consts.P2PTableEntry.north,
+            (32, 4): consts.P2PTableEntry.north,
+        })
+
+        def read_struct_field(struct_name, field_name, x, y):
+            assert struct_name == "sv"
+            if field_name == "eth_up":
+                return int((x, y) != (8, 4))  # (8, 4) is not connected
+            elif field_name == "ip_addr":
+                return 192 << 24 | 168 << 16 | x << 8 | y << 0
+            else:  # pragma: no cover
+                assert False, "Unexpected field '{}' read.".format(field_name)
+        cn.read_struct_field = future_side_effect(read_struct_field)
+
+        # A local set of connections created (so that closed connections can be
+        # checked)
+        connections = {}
+
+        def connect_to_hosts(hosts):
+            assert len(hosts) == 1
+            coord, host = next(iteritems(hosts))
+            # Make sure IP address is correct
+            assert host == "192.168.{}.{}".format(*coord)
+
+            if coord == (16, 8):
+                raise IOError("This connection fails.")
+            else:
+                connection = mock.Mock()
+                cn.connections[coord] = connection
+                connections[coord] = connection
+        cn.connect_to_hosts = future_side_effect(connect_to_hosts)
+
+        def get_software_version(x, y):
+            if (x, y) == (20, 4):
+                raise TimeoutError("Chip does not respond")
+            else:
+                return mock.Mock()
+        cn.get_software_version = future_side_effect(get_software_version)
+
+        # Run the method...
+        num_connections_made = cn.discover_connections()
+
+        # Should end up having discovered the three remaining chips
+        assert num_connections_made == 3
+
+        # Make sure connections were only attempted to the expected set
+        cn.connect_to_hosts.assert_has_calls(
+            [mock.call({(16, 8): "192.168.16.8"}, async=True),
+             mock.call({(20, 4): "192.168.20.4"}, async=True),
+             mock.call({(24, 0): "192.168.24.0"}, async=True),
+             mock.call({(28, 8): "192.168.28.8"}, async=True),
+             mock.call({(32, 4): "192.168.32.4"}, async=True)],
+            any_order=True,
+        )
+
+        # Make sure communication only happened with the expected set
+        cn.get_software_version.assert_has_calls(
+            [mock.call(20, 4, async=True),
+             mock.call(24, 0, async=True),
+             mock.call(28, 8, async=True),
+             mock.call(32, 4, async=True)],
+            any_order=True,
+        )
+
+        # Make sure the bad connection was closed but the others weren't
+        for coord, connection in iteritems(connections):
+            if coord == (20, 4):
+                assert connection.close.called
+            else:
+                assert not connection.close.called
+
+        # Make sure the remaining connections are the expected set
+        assert set(cn.connections) == set([
+            (0, 0), (12, 0), (24, 0), (28, 8), (32, 4)])
 
 
 class TestMemoryIO(object):

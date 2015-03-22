@@ -20,6 +20,8 @@ from .scp_protocol import SCPProtocol
 from rig import routing_table
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 
+from rig.geometry import spinn5_eth_coords, spinn5_local_eth_coord
+
 from rig.utils.contexts import ContextMixin, Required
 from rig.utils.look_blocking import LookBlockingMixin
 from rig.utils.gather_fail import gather_fail
@@ -116,6 +118,11 @@ class MachineController(ContextMixin, LookBlockingMixin):
         self._nn_id = 0  # ID for nearest neighbour packets
         self._scp_data_length = None
 
+        # Internally remember the dimensions of the system (to facilitate
+        # looking up the best connection for a chip). This internal attribute
+        # is set whenever get_dimensions is called.
+        self._dimensions = None
+
         # Load default structs if none provided
         self.structs = structs
         if self.structs is None:
@@ -133,10 +140,31 @@ class MachineController(ContextMixin, LookBlockingMixin):
     def connect_to_hosts(self, hosts):
         """Create connections to the supplied set of hosts.
 
+        When possible, commands are sent to the Ethernet connection on the same
+        board as the target chip.
+
+        Unless using this method to specify the hostname of (0, 0) in a
+        non-blocking manner (instead of using the `zero_zero_host` argument to
+        :py:meth:`.__init__`), most users should use
+        :py:meth:`.discover_connections` to connect to automatically
+        use all available Ethernet connections to the machine.
+
         .. note::
             This function has an all-or-nothing behaviour: if any connection
             cannot be made, all already-successful connections will be closed
             and further connection attempts cancelled.
+
+        .. warning::
+            If multiple Ethernet connections are added, only (0, 0) will be
+            used until :py:meth:`.get_dimensions` is called. This is because
+            the system's dimensions must be known in order to work out which
+            Ethernet connected chip is most appropriate.
+
+            MachineController assumes that if multiple Ethernet connections are
+            used, the connected nodes are arranged in a system made up of
+            SpiNN-5 boards. As a result, adding a host which isn't at a
+            coordinate occupied by a SpiNN-5 board's Ethernet connected chip
+            this call will fail with a :py:exc:`NotImplementedError`.
 
         .. warning::
             If a connection already exists for one of the coordinates/hosts
@@ -147,6 +175,19 @@ class MachineController(ContextMixin, LookBlockingMixin):
         hosts : {coord: hostname, ...}
             The a mapping from (x, y) chip coordinates to hostname/IP.
         """
+        # Check all coordinates are spinn-5 ethernet connected locations
+        for coord in hosts:
+            # Assume that the system is large enough for the specified
+            # cooordinates
+            x, y = coord
+            w = ((x // 12) + 1) * 12
+            h = ((y // 12) + 1) * 12
+            if spinn5_local_eth_coord(x, y, w, h) != coord:  # pragma: no cover
+                raise NotImplementedError(
+                    "Non-SpiNN-5 connections unsupported: chip ({}, {}) is "
+                    "not an ethernet connected chip in a system made up of "
+                    "SpiNN-5 boards.".format(x, y))
+
         # Open connections to all boards in parallel (enforcing the maximum
         # number of outstanding connections to one since BMPs do not handle
         # multiple outstanding connections correctly).
@@ -184,6 +225,109 @@ class MachineController(ContextMixin, LookBlockingMixin):
                 protocol.close()
             raise exc
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
+    def discover_connections(self):
+        """Attempt to discover and use all available connections to a machine.
+
+        After calling this method, MachineController will attempt to use a
+        connection local to the destinations of commands. Additionally,
+        multiple connections may be used simultaneously when possible.
+
+        .. note::
+            A connection to chip (0, 0) must already be established and the
+            system must be booted for this command to succeed.
+
+        .. note::
+            At present this method only discovers Ethernet connections in
+            systems of SpiNN-5 boards.
+
+        Returns
+        -------
+        int
+            The number of new connections established.
+        """
+        w, h = yield From(self.get_dimensions(async=True))
+
+        # Get the set of live chips so we don't bother using Ethernet connected
+        # chips which are dead or isolated from the network.
+        p2p_tables = yield From(self.get_p2p_routing_table(0, 0, async=True))
+        dead_chips = set(coord for (coord, route) in iteritems(p2p_tables)
+                         if route == consts.P2PTableEntry.none)
+
+        # Check which of the potentially Ethernet connected chips have live
+        # Ethernet connections.
+        eth_up_cmds = []
+        for x, y in spinn5_eth_coords(w, h):
+            if (x, y) not in dead_chips:
+                eth_up_cmds.append(
+                    self.read_struct_field("sv", "eth_up", x=x, y=y,
+                                           async=True))
+        eth_ups = yield From(gather_fail(*eth_up_cmds, loop=self.loop))
+
+        # Get IPs of the Ethernet connections which are up
+        ip_addr_cmds = []
+        eth_up_iter = iter(eth_ups)
+        for x, y in spinn5_eth_coords(w, h):
+            if (x, y) not in dead_chips and next(eth_up_iter):
+                ip_addr_cmds.append(
+                    self.read_struct_field("sv", "ip_addr", x=x, y=y,
+                                           async=True))
+        ip_addrs = yield From(gather_fail(*ip_addr_cmds, loop=self.loop))
+
+        # Build a dictionary {coord: ip_addr, ...} of IP addresses of Ethernet
+        # connected chips.
+        hosts = {}
+        eth_up_iter = iter(eth_ups)
+        ip_addr_iter = iter(ip_addrs)
+        for x, y in spinn5_eth_coords(w, h):
+            if (x, y) not in dead_chips and next(eth_up_iter):
+                # Convert IP addresses into string format
+                ip_addr = next(ip_addr_iter)
+                hosts[(x, y)] = ".".join(str((ip_addr >> (i * 8)) & 0xFF)
+                                         for i in reversed(range(4)))
+
+        # Strip out connections which are already present
+        for coord in self.connections:
+            hosts.pop(coord, None)
+
+        # Attempt to open connections to each
+        connect_cmds = []
+        for coord, host in iteritems(hosts):
+            connect_cmds.append(
+                self.connect_to_hosts({coord: host}, async=True))
+        connect_results = yield From(trollius.gather(
+            *connect_cmds, loop=self.loop, return_exceptions=True))
+        connect_results_iter = iter(connect_results)
+        bad_hosts = []
+        for coord, host in iteritems(hosts):
+            if isinstance(next(connect_results_iter), Exception):
+                bad_hosts.append(coord)
+        for bad_host in bad_hosts:
+            hosts.pop(bad_host, None)
+
+        # Make sure we can communicate via each new connection
+        test_cmds = []
+        for coord, host in iteritems(hosts):
+            test_cmds.append(
+                self.get_software_version(coord[0], coord[1], async=True))
+        test_results = yield From(trollius.gather(
+            *test_cmds, loop=self.loop, return_exceptions=True))
+        test_results_iter = iter(test_results)
+        bad_hosts = []
+        for coord, host in iteritems(hosts):
+            test_result = next(test_results_iter)
+            if isinstance(test_result, Exception):
+                bad_hosts.append(coord)
+
+        # Close any connections which turned out bad
+        for bad_host in bad_hosts:
+            hosts.pop(bad_host, None)
+            self.connections.pop(bad_host).close()
+
+        # Return number of new, verified connections
+        raise Return(len(hosts))
+
     def __call__(self, **context_args):
         """For use with `with`: set default argument values.
 
@@ -216,9 +360,11 @@ class MachineController(ContextMixin, LookBlockingMixin):
         This function is a thin wrapper around
         :py:meth:`~rig.machine_control.scp_protocol.SCPProtocol.send_scp`.
 
-        Future versions of this command will automatically choose the most
-        appropriate connection to use for machines with more than one Ethernet
-        connection.
+        .. note::
+            At present, this method returns the Ethernet connection to the
+            board the chip resides on. If there is no connection to this chip,
+            (0, 0) is used instead. Future versions of this method may be more
+            intelligent.
 
         Parameters
         ----------
@@ -249,10 +395,25 @@ class MachineController(ContextMixin, LookBlockingMixin):
         See the arguments for
         :py:meth:`~rig.machine_control.scp_protocol.SCPProtocol.send_scp` for
         details.
+
+        .. note::
+            At present, this method returns the Ethernet connection to the
+            board the chip resides on. If there is no connection to this chip,
+            (0, 0) is used instead. Future versions of this method may be more
+            intelligent.
         """
-        # TODO: Select the most appropriate board to communicate with to reach
-        # the specified chip.
-        connection = self.connections[(0, 0)]
+        # Attempt to select the connection to the board on which the
+        # destination resides. This is not possible if the system's dimensions
+        # are not known (i.e. nobody has called get_dimensions).
+        connection = None
+        if self._dimensions is not None:
+            w, h = self._dimensions
+            connected_chip = spinn5_local_eth_coord(x, y, w, h)
+            connection = self.connections.get(connected_chip, None)
+
+        # Fall-back on using (0, 0)
+        if connection is None:
+            connection = self.connections[(0, 0)]
 
         # Note: returns a coroutine
         return connection.send_scp(x, y, p, *args, **kwargs)
@@ -1214,6 +1375,26 @@ class MachineController(ContextMixin, LookBlockingMixin):
     @LookBlockingMixin.look_blocking
     @trollius.coroutine
     @ContextMixin.use_contextual_arguments
+    def get_dimensions(self, x=0, y=0):
+        """Get the system's reported dimensions.
+
+        Returns
+        -------
+        (width, height)
+            A tuple giving the width and height of the system in chips.
+        """
+        # Get the dimensions of the system
+        p2p_dims = yield From(self.read_struct_field("sv", "p2p_dims", x, y,
+                              async=True))
+        width = (p2p_dims >> 8) & 0xFF
+        height = (p2p_dims >> 0) & 0xFF
+        self._dimensions = (width, height)
+
+        raise Return((width, height))
+
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
+    @ContextMixin.use_contextual_arguments
     def get_p2p_routing_table(self, x=Required, y=Required):
         """Dump the contents of a chip's P2P routing table.
 
@@ -1231,10 +1412,7 @@ class MachineController(ContextMixin, LookBlockingMixin):
         table = {}
 
         # Get the dimensions of the system
-        p2p_dims = yield From(self.read_struct_field("sv", "p2p_dims", x, y,
-                              async=True))
-        width = (p2p_dims >> 8) & 0xFF
-        height = (p2p_dims >> 0) & 0xFF
+        width, height = yield From(self.get_dimensions(x, y, async=True))
 
         col_words = (((height + 7) // 8) * 4)
 
