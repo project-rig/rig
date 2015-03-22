@@ -270,19 +270,7 @@ class SCPProtocol(trollius.DatagramProtocol):
                     out_req.queued_request.data[2:])
                 if not out_req.queued_request.future.cancelled():
                     out_req.queued_request.future.set_exception(
-                        self._error_codes[packet.cmd_rc](
-                            "Error in response to packet with arguments: "
-                            "cmd_rc={}, arg1={}, arg2={}, arg3={}; "
-                            "sent to core ({},{},{}).".format(
-                                orig_packet.cmd_rc,
-                                orig_packet.arg1,
-                                orig_packet.arg2,
-                                orig_packet.arg3,
-                                orig_packet.dest_x, orig_packet.dest_y,
-                                orig_packet.dest_cpu
-                            )
-                        )
-                    )
+                        self._error_codes[packet.cmd_rc](orig_packet))
 
             # Since an outstanding packet has now been serviced, a new packet
             # from the queue can potentially be processed.
@@ -372,12 +360,13 @@ class OutstandingSCPRequest(namedtuple("OutstandingSCPRequest",
 
 
 class SCPError(IOError):
-    """Base Error for SCP return codes."""
+    """Base Error for SCP-related errors."""
     pass
 
 
 class TimeoutError(SCPError):
-    """Raised when an SCP is not acknowledged within the given period of time.
+    """Raised when an SCP is not acknowledged within the given period of
+    time and number of retries.
     """
     pass
 
@@ -388,24 +377,40 @@ class SCPConnectionClosed(SCPError):
     """
 
 
+class SCPResponseError(SCPError):
+    """Base Error for SCP return codes."""
+    def __init__(self, orig_packet):
+        super(SCPResponseError, self).__init__(
+            "Error in response to packet with arguments: "
+            "cmd_rc={}, arg1={}, arg2={}, arg3={}; "
+            "sent to core ({},{},{}).".format(
+                orig_packet.cmd_rc,
+                orig_packet.arg1,
+                orig_packet.arg2,
+                orig_packet.arg3,
+                orig_packet.dest_x, orig_packet.dest_y,
+                orig_packet.dest_cpu)
+        )
+
+
 @SCPProtocol.register_error(0x81)
-class BadPacketLengthError(SCPError):
+class BadPacketLengthError(SCPResponseError):
     """Raised when an SCP packet is an incorrect length."""
     pass
 
 
 @SCPProtocol.register_error(0x83)
-class InvalidCommandError(SCPError):
+class InvalidCommandError(SCPResponseError):
     """Raised when an SCP packet contains an invalid command code."""
     pass
 
 
 @SCPProtocol.register_error(0x84)
-class InvalidArgsError(SCPError):
+class InvalidArgsError(SCPResponseError):
     """Raised when an SCP packet has an invalid argument."""
     pass
 
 
 @SCPProtocol.register_error(0x87)
-class NoRouteError(SCPError):
+class NoRouteError(SCPResponseError):
     """Raised when there is no route to the requested core."""
