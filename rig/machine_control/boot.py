@@ -11,6 +11,9 @@ import socket
 import struct
 import time
 
+import trollius
+from trollius import From, Return
+
 from rig.utils.enum_doc import int_enum_doc
 
 # Specifies the size of packets that should be sent to SpiNNaker to boot the
@@ -59,11 +62,12 @@ spin5_boot_options = {
 """Boot options for :py:func:`.boot` for standalone SpiNN-5 boards."""
 
 
+@trollius.coroutine
 def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
          cpu_frequency=200, hardware_version=0,
          led_config=0x00000001, boot_data=None, structs=None,
-         boot_delay=0.05, post_boot_delay=5.0):
-    """Boot a SpiNNaker machine of the given size.
+         boot_delay=0.05, post_boot_delay=5.0, loop=None):
+    """Coroutine which boots a SpiNNaker machine of the given size.
 
     Parameters
     ----------
@@ -99,6 +103,9 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
         important since after boot it takes some time for P2P routing tables to
         be built by SARK (order 5 seconds). Before these tables have been
         assembled, many useful commands will not function.
+    loop : :py:class:`asyncio.BaseEventLoop)` or None
+        The event loop this coroutine should run in. If None, uses the default
+        event loop.
 
     Notes
     -----
@@ -114,6 +121,8 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
     {struct_name: :py:class:`~rig.machine_control.struct_file.Struct`}
         Layout of structs in memory.
     """
+    loop = trollius.get_event_loop()
+
     # Get the boot data if not specified.
     if boot_data is None:  # pragma: no branch
         boot_data = pkg_resources.resource_string("rig", "boot/scamp.boot")
@@ -141,9 +150,14 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
     assert len(buf) < DTCM_SIZE  # Assert that we fit in DTCM
     boot_data = bytes(buf)
 
-    # Create a socket to communicate with the board
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.connect((hostname, boot_port))
+    # Create a socket to communicate with the board (note: we supply a blank
+    # protocol and from there on use the transport directly since no data is
+    # returned during booting).
+    transport, protocol = yield From(
+        loop.create_datagram_endpoint(
+            trollius.DatagramProtocol,
+            remote_addr=(hostname, boot_port),
+            family=socket.AF_INET))
 
     # Transmit the boot data as a series of SDP packets.  First determine
     # how many blocks must be sent and transmit that, then transmit each
@@ -151,8 +165,8 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
     n_blocks = (len(buf) + BOOT_BYTE_SIZE - 1) // BOOT_BYTE_SIZE
     assert n_blocks <= BOOT_MAX_BLOCKS
 
-    boot_packet(sock, BootCommand.start, arg3=n_blocks - 1)
-    time.sleep(boot_delay)
+    boot_packet(transport, BootCommand.start, arg3=n_blocks - 1)
+    yield From(trollius.sleep(boot_delay, loop=loop))
 
     block = 0
     while len(boot_data) > 0:
@@ -162,27 +176,27 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
 
         # Transmit, delay and increment the block count
         a1 = ((BOOT_WORD_SIZE - 1) << 8) | block
-        boot_packet(sock, BootCommand.send_block, a1, data=data)
-        time.sleep(boot_delay)
+        boot_packet(transport, BootCommand.send_block, a1, data=data)
+        yield From(trollius.sleep(boot_delay, loop=loop))
         block += 1
 
     # Send the END command
-    boot_packet(sock, BootCommand.end, 1)
+    boot_packet(transport, BootCommand.end, 1)
 
     # Close the socket and give time to boot
-    sock.close()
-    time.sleep(post_boot_delay)
+    transport.close()
+    yield From(trollius.sleep(post_boot_delay, loop=loop))
 
-    return structs
+    raise Return(structs)
 
 
-def boot_packet(sock, cmd, arg1=0, arg2=0, arg3=0, data=b""):
+def boot_packet(transport, cmd, arg1=0, arg2=0, arg3=0, data=b""):
     """Create and transmit a packet to boot the machine.
 
     Parameters
     ----------
-    sock : :py:class:`~socket.socket`
-        Connected socket to use to transmit the packet.
+    transport : :py:class:`asyncio.BaseTransport`
+        Connected transport to use to transmit the packet.
     cmd : int
     arg1 : int
     arg2 : int
@@ -204,7 +218,7 @@ def boot_packet(sock, cmd, arg1=0, arg2=0, arg3=0, data=b""):
         fdata += struct.pack("!I", struct.unpack("<I", word)[0])
 
     # Transmit the packet
-    sock.send(header + fdata)
+    transport.sendto(header + fdata)
 
 
 @int_enum_doc

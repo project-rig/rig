@@ -257,6 +257,8 @@ class MachineController(ContextMixin, LookBlockingMixin):
         # Note: returns a coroutine
         return connection.send_scp(x, y, p, *args, **kwargs)
 
+    @LookBlockingMixin.look_blocking
+    @trollius.coroutine
     def boot(self, width, height, **boot_kwargs):
         """Boot a SpiNNaker machine of the given size.
 
@@ -286,9 +288,6 @@ class MachineController(ContextMixin, LookBlockingMixin):
             <https://github.com/project-rig/spinnaker_proxy>`_ may be useful in
             this situation.
 
-        .. warning::
-            This function does not have a non-blocking implementation.
-
         Parameters
         ----------
         width : int
@@ -314,8 +313,9 @@ class MachineController(ContextMixin, LookBlockingMixin):
         scp_transport = self.connections[(0, 0)].transport
         hostname = scp_transport.get_extra_info("sockname")[0]
 
-        self.structs = boot.boot(hostname, width=width, height=height,
-                                 **boot_kwargs)
+        self.structs = yield From(boot.boot(hostname,
+                                            width=width, height=height,
+                                            loop=self.loop, **boot_kwargs))
         assert len(self.structs) > 0
 
     @LookBlockingMixin.look_blocking
