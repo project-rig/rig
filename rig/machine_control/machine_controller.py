@@ -266,10 +266,12 @@ class MachineController(ContextMixin, LookBlockingMixin):
         eth_ups = yield From(gather_fail(*eth_up_cmds, loop=self.loop))
 
         # Get IPs of the Ethernet connections which are up
+        xys = []
         ip_addr_cmds = []
         eth_up_iter = iter(eth_ups)
         for x, y in spinn5_eth_coords(w, h):
             if (x, y) not in dead_chips and next(eth_up_iter):
+                xys.append((x, y))
                 ip_addr_cmds.append(
                     self.read_struct_field("sv", "ip_addr", x=x, y=y,
                                            async=True))
@@ -278,12 +280,9 @@ class MachineController(ContextMixin, LookBlockingMixin):
         # Build a dictionary {coord: ip_addr, ...} of IP addresses of Ethernet
         # connected chips.
         hosts = {}
-        eth_up_iter = iter(eth_ups)
-        ip_addr_iter = iter(ip_addrs)
-        for x, y in spinn5_eth_coords(w, h):
-            if (x, y) not in dead_chips and next(eth_up_iter):
+        for (x, y), eth_up, ip_addr in zip(xys, eth_ups, ip_addrs):
+            if eth_up:
                 # Convert IP addresses into string format
-                ip_addr = next(ip_addr_iter)
                 hosts[(x, y)] = ".".join(str((ip_addr >> (i * 8)) & 0xFF)
                                          for i in reversed(range(4)))
 
@@ -298,10 +297,10 @@ class MachineController(ContextMixin, LookBlockingMixin):
                 self.connect_to_hosts({coord: host}, async=True))
         connect_results = yield From(trollius.gather(
             *connect_cmds, loop=self.loop, return_exceptions=True))
-        connect_results_iter = iter(connect_results)
         bad_hosts = []
-        for coord, host in iteritems(hosts):
-            if isinstance(next(connect_results_iter), Exception):
+        for (coord, host), connect_result in zip(iteritems(hosts),
+                                                 connect_results):
+            if isinstance(connect_result, Exception):
                 bad_hosts.append(coord)
         for bad_host in bad_hosts:
             hosts.pop(bad_host, None)
@@ -313,10 +312,8 @@ class MachineController(ContextMixin, LookBlockingMixin):
                 self.get_software_version(coord[0], coord[1], async=True))
         test_results = yield From(trollius.gather(
             *test_cmds, loop=self.loop, return_exceptions=True))
-        test_results_iter = iter(test_results)
         bad_hosts = []
-        for coord, host in iteritems(hosts):
-            test_result = next(test_results_iter)
+        for (coord, host), test_result in zip(iteritems(hosts), test_results):
             if isinstance(test_result, Exception):
                 bad_hosts.append(coord)
 
@@ -1531,6 +1528,7 @@ class MachineController(ContextMixin, LookBlockingMixin):
         chip_resource_exceptions = {}
 
         # Discover dead links and cores
+        xys = []
         working_core_commands = []
         working_link_commands = []
         for (x, y), p2p_route in iteritems(p2p_tables):
@@ -1538,6 +1536,7 @@ class MachineController(ContextMixin, LookBlockingMixin):
                 if p2p_route == consts.P2PTableEntry.none:
                     dead_chips.add((x, y))
                 else:
+                    xys.append((x, y))
                     working_core_commands.append(
                         self.get_num_working_cores(x, y, async=True))
                     working_link_commands.append(
@@ -1547,24 +1546,18 @@ class MachineController(ContextMixin, LookBlockingMixin):
                                                     loop=self.loop))
         read_working_links = yield From(gather_fail(*working_link_commands,
                                                     loop=self.loop))
-        read_working_cores = iter(read_working_cores)
-        read_working_links = iter(read_working_links)
 
         # Apply discovered dead links/cores
-        for (x, y), p2p_route in iteritems(p2p_tables):
-            if x <= max_x and y <= max_y:
-                if p2p_route != consts.P2PTableEntry.none:
-                    num_working_cores = next(read_working_cores)
-                    working_links = next(read_working_links)
+        for (x, y), num_cores, working_links in zip(xys,
+                                                    read_working_cores,
+                                                    read_working_links):
+            if num_cores < default_num_cores:
+                resource_exception = chip_resources.copy()
+                resource_exception[Cores] = min(default_num_cores, num_cores)
+                chip_resource_exceptions[(x, y)] = resource_exception
 
-                    if num_working_cores < default_num_cores:
-                        resource_exception = chip_resources.copy()
-                        resource_exception[Cores] = min(default_num_cores,
-                                                        num_working_cores)
-                        chip_resource_exceptions[(x, y)] = resource_exception
-
-                    for link in set(Links) - working_links:
-                        dead_links.add((x, y, link))
+            for link in set(Links) - working_links:
+                dead_links.add((x, y, link))
 
         raise Return(Machine(max_x + 1, max_y + 1,
                              chip_resources,
