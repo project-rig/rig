@@ -194,6 +194,7 @@ class MachineController(ContextMixin, LookBlockingMixin):
         connection_requests = [
             self.loop.create_datagram_endpoint(
                 lambda: SCPProtocol(loop=self.loop,
+                                    max_outstanding=1,
                                     n_tries=self.n_tries,
                                     timeout=self.timeout),
                 remote_addr=(remote_addr, self.scp_port),
@@ -284,7 +285,7 @@ class MachineController(ContextMixin, LookBlockingMixin):
             if eth_up:
                 # Convert IP addresses into string format
                 hosts[(x, y)] = ".".join(str((ip_addr >> (i * 8)) & 0xFF)
-                                         for i in reversed(range(4)))
+                                         for i in range(4))
 
         # Strip out connections which are already present
         for coord in self.connections:

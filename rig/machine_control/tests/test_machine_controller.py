@@ -1588,7 +1588,7 @@ class TestMachineController(object):
             if field_name == "eth_up":
                 return int((x, y) != (8, 4))  # (8, 4) is not connected
             elif field_name == "ip_addr":
-                return 192 << 24 | 168 << 16 | x << 8 | y << 0
+                return 192 << 0 | 168 << 8 | x << 16 | y << 24
             else:  # pragma: no cover
                 assert False, "Unexpected field '{}' read.".format(field_name)
         cn.read_struct_field = future_side_effect(read_struct_field)
