@@ -469,7 +469,7 @@ class MachineController(ContextMixin, LookBlockingMixin):
         assert (0, 0) in self.connections, \
             "A connection to chip (0, 0) must be established before booting."
         scp_transport = self.connections[(0, 0)].transport
-        hostname = scp_transport.get_extra_info("sockname")[0]
+        hostname = scp_transport.get_extra_info("peername")[0]
 
         self.structs = yield From(boot.boot(hostname,
                                             width=width, height=height,
