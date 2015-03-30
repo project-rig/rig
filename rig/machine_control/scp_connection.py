@@ -1,10 +1,7 @@
 """A blocking implementation of the SCP protocol.
 """
-import logging
 import socket
 from . import consts, packets
-
-logger = logging.getLogger(__name__)
 
 
 class SCPConnection(object):
@@ -82,15 +79,6 @@ class SCPConnection(object):
             The packet that was received in acknowledgement of the transmitted
             packet.
         """
-        logger.debug(
-            "SCP transmit cmd={}, arg1={}, arg2={}, arg3={} [{}]".format(
-                cmd,
-                "NA" if arg1 is None else hex(arg1),
-                "NA" if arg2 is None else hex(arg2),
-                "NA" if arg3 is None else hex(arg3),
-                len(data)
-            )
-        )
         self.sock.settimeout(self.default_timeout + timeout)
 
         # Construct the packet that will be sent
