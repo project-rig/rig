@@ -1,8 +1,11 @@
 import pytest
 import _pytest
 
+import logging
 from collections import defaultdict
 from toposort import toposort
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 @pytest.fixture(scope='session')
