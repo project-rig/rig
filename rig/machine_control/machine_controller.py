@@ -280,12 +280,17 @@ class MachineController(ContextMixin):
         # While there is still data perform a write: get the block to write
         # this time around, determine the data type, perform the write and
         # increment the address
-        while len(data) > 0:
-            block, data = (data[:self.scp_data_length],
-                           data[self.scp_data_length:])
-            dtype = address_length_dtype[(address % 4, len(block) % 4)]
+        end = len(data)
+        pos = 0
+        while pos < end:
+            block = data[pos:pos + self.scp_data_length]
+            block_size = len(block)
+
+            dtype = address_length_dtype[(address % 4, block_size % 4)]
             self._write(x, y, p, address, block, dtype)
-            address += len(block)
+
+            address += block_size
+            pos += block_size
 
     def _write(self, x, y, p, address, data, data_type=DataType.byte):
         """Write an SCP command's worth of data to an address in memory.
@@ -326,19 +331,22 @@ class MachineController(ContextMixin):
         """
         # Make calls to the lower level read method until we have read
         # sufficient bytes.
-        data = b''
-        while len(data) < length_bytes:
+        data = bytearray(b'\x00' * length_bytes)
+        pos = 0
+
+        while pos < length_bytes:
             # Determine the number of bytes to read
-            reads = min(self.scp_data_length, length_bytes - len(data))
+            reads = min(self.scp_data_length, length_bytes - pos)
 
             # Determine the data type to use
             dtype = address_length_dtype[(address % 4, reads % 4)]
 
             # Perform the read and increment the address
-            data += self._read(x, y, p, address, reads, dtype)
+            data[pos:pos + reads] = self._read(x, y, p, address, reads, dtype)
             address += reads
+            pos += reads
 
-        return data
+        return bytes(data)
 
     def _read(self, x, y, p, address, length_bytes, data_type=DataType.byte):
         """Read an SCP command's worth of data from an address in memory.
@@ -655,12 +663,15 @@ class MachineController(ContextMixin):
     def _send_ffd(self, pid, aplx_data, address):
         """Send flood-fill data packets."""
         block = 0
-        while len(aplx_data) > 0:
+        pos = 0
+        aplx_size = len(aplx_data)
+
+        while pos < aplx_size:
             # Get the next block of data, send and progress the block
             # counter and the address
-            data, aplx_data = (aplx_data[:self.scp_data_length],
-                               aplx_data[self.scp_data_length:])
-            size = len(data) // 4 - 1
+            data = aplx_data[pos:pos + self.scp_data_length]
+            data_size = len(data)
+            size = data_size // 4 - 1
 
             arg1 = (NNConstants.forward << 24 | NNConstants.retry << 16 | pid)
             arg2 = (block << 16) | (size << 8)
@@ -669,7 +680,8 @@ class MachineController(ContextMixin):
 
             # Increment the address and the block counter
             block += 1
-            address += len(data)
+            address += data_size
+            pos += data_size
 
     def _send_ffe(self, pid, app_id, app_flags, cores, fr):
         """Send a flood-fill end packet."""
