@@ -905,6 +905,38 @@ class MachineController(ContextMixin):
         self._send_scp(0, 0, 0, SCPCommands.signal, arg1, arg2, arg3)
 
     @ContextMixin.use_contextual_arguments
+    def count_cores_in_state(self, state, app_id=Required):
+        """Count the number of cores in a given state.
+
+        .. warning::
+            In current implementations of SARK, signals (which are used to
+            determine the state of cores) are highly likely to arrive but this
+            is not guaranteed (especially when the system's network is heavily
+            utilised). Users should treat this mechanism with caution.
+
+        Parameters
+        ----------
+        state : :py:class:`~rig.machine_control.consts.AppState`
+            Count the number of cores currently in this state.
+        """
+        # TODO Determine a way to nicely express a way to use the region data
+        # stored in arg3.
+        region = 0x0000ffff  # Largest possible machine, level 0
+        level = (region >> 16) & 0x3
+        mask = region & 0x0000ffff
+
+        # Construct the packet
+        arg1 = consts.diagnostic_signal_types[consts.AppDiagnosticSignal.count]
+        arg2 = ((level << 26) | (1 << 22) |
+                (consts.AppDiagnosticSignal.count << 20) | (state << 16) |
+                (0xff << 8) | app_id)  # App mask for 1 app_id = 0xff
+        arg3 = mask
+
+        # Transmit and return the count
+        return self._send_scp(
+            0, 0, 0, SCPCommands.signal, arg1, arg2, arg3).arg1
+
+    @ContextMixin.use_contextual_arguments
     def load_routing_tables(self, routing_tables, app_id=Required):
         """Allocate space for an load multicast routing tables.
 

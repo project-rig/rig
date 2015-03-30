@@ -2,7 +2,7 @@ import mock
 import pkg_resources
 import pytest
 import six
-from six import iteritems
+from six import iteritems, itervalues
 import struct
 import tempfile
 import os
@@ -173,6 +173,12 @@ class TestMachineControllerLive(object):
                 for y in range(2):
                     controller.set_led(1, x=x, y=y, action=None)
 
+    def test_count_cores_in_state_idle(self, controller):
+        """Check that we have no idle cores as there are no cores assigned to
+        the application yet.
+        """
+        assert controller.count_cores_in_state(consts.AppState.idle) == 0
+
     @pytest.mark.parametrize(
         "targets",
         [{(1, 1): {3, 4}, (1, 0): {5}},
@@ -207,6 +213,14 @@ class TestMachineControllerLive(object):
                     y = (data & 0x00ff0000) >> 16
                     p = (data & 0x0000ffff)
                     assert p == t_p and x == t_x and y == t_y
+
+    @pytest.mark.parametrize(
+        "all_targets",
+        [{(1, 1): {3, 4}, (1, 0): {5}, (0, 1): {2}}]
+    )
+    def test_count_cores_in_state_run(self, controller, all_targets):
+        expected = sum(len(cs) for cs in itervalues(all_targets))
+        assert expected == controller.count_cores_in_state(consts.AppState.run)
 
     @pytest.mark.parametrize(
         "targets",
@@ -318,6 +332,10 @@ class TestMachineControllerLive(object):
 
         for route in routes:
             assert (route, app_id, 0) in loaded
+
+    def test_app_stop_and_count(self, controller):
+        controller.send_signal(consts.AppSignal.stop)
+        assert controller.count_cores_in_state(consts.AppState.run) == 0
 
 
 class TestMachineController(object):
@@ -1191,6 +1209,42 @@ class TestMachineController(object):
         assert arg2 & 0x000000ff == app_id
         assert arg2 & 0x0000ff00 == 0xff00  # App mask for 1 app_id
         assert arg2 & 0x00ff0000 == signal << 16
+        assert arg3 == 0x0000ffff  # Transmit to all
+
+    @pytest.mark.parametrize("app_id, count", [(16, 3), (30, 68)])
+    @pytest.mark.parametrize("state", [consts.AppState.idle,
+                                       consts.AppState.run])
+    def test_count_cores_in_state(self, app_id, count, state):
+        # Create the controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = mock.Mock(spec_set=SCPPacket)
+        cn._send_scp.return_value.arg1 = count
+
+        # Count the cores
+        with cn(app_id=app_id):
+            assert cn.count_cores_in_state(state) == count
+
+        # Check an appropriate packet was sent
+        assert cn._send_scp.call_count == 1
+        cargs = cn._send_scp.call_args[0]
+        assert cargs[:3] == (0, 0, 0)  # x, y, p
+
+        (cmd, arg1, arg2, arg3) = cargs[3:8]
+        assert cmd == SCPCommands.signal
+        assert (
+            arg1 ==
+            consts.diagnostic_signal_types[consts.AppDiagnosticSignal.count]
+        )
+
+        # level | op | mode | state | app_mask | app_id
+        assert arg2 & 0x000000ff == app_id
+        assert arg2 & 0x0000ff00 == 0xff00  # App mask for 1 app_id
+        assert arg2 & 0x000f0000 == state << 16
+        assert arg2 & 0x00300000 == consts.AppDiagnosticSignal.count << 20
+        assert arg2 & 0x03c00000 == 1 << 22  # op == 1
+        assert arg2 & 0x0c000000 == 0  # level == 0
+
         assert arg3 == 0x0000ffff  # Transmit to all
 
     @pytest.mark.parametrize("x, y, app_id", [(1, 2, 32), (4, 10, 17)])

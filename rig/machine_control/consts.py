@@ -240,9 +240,9 @@ class AppDiagnosticSignal(enum.IntEnum):
 
     Note that a value is returned when any of these signals is sent.
     """
-    OR = 16  # Is ANY core in a given state
-    AND = 17  # Are ALL cores in a given state
-    count = 18  # How many cores are in a state
+    OR = 0  # Is ANY core in a given state
+    AND = 1  # Are ALL cores in a given state
+    count = 2  # How many cores are in a state
 
 
 @int_enum_doc
@@ -269,13 +269,18 @@ signal_types = {
     AppSignal.usr1: MessageType.multicast,
     AppSignal.usr2: MessageType.multicast,
     AppSignal.usr3: MessageType.multicast,
+}
+"""Mapping from an :py:class:`.AppSignal` to the :py:class:`.MessageType`
+used to transmit it.
+"""
 
+diagnostic_signal_types = {
     AppDiagnosticSignal.AND: MessageType.peer_to_peer,
     AppDiagnosticSignal.OR: MessageType.peer_to_peer,
     AppDiagnosticSignal.count: MessageType.peer_to_peer,
 }
-"""Mapping from an :py:class:`.AppSignal` to the :py:class:`.MessageType`
-used to transmit it.
+"""Mapping from an :py:class:`.AppDiagnosticSignal` to the
+:py:class:`.MessageType` used to transmit it.
 """
 
 
