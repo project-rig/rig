@@ -170,7 +170,7 @@ allocated region. For example::
     >>> # Allocate 1024 bytes of SDRAM with tag '3' on chip (0, 0)
     >>> block = mc.sdram_alloc_as_filelike(1024, 3, 0, 0)
     >>> block.write(b"Hello, world!")
-    >>> block.seek(-13)
+    >>> block.seek(0)
     >>> block.read(13)
     b"Hello, world!"
 
