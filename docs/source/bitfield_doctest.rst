@@ -396,8 +396,8 @@ those fields are present.
 You can list the set of tags associated with a particular field using
 :py:meth:`.get_tags` like so:
 
-    >>> b.get_tags("device_id")
-    {'routing'}
+    >>> b.get_tags("device_id") == {'routing'}
+    True
 
 Allowing 3rd party expansion of bit fields
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

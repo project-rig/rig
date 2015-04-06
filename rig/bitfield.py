@@ -348,7 +348,7 @@ class BitField(object):
         ----------
         field : str
             The field whose tag should be read.
-        
+
         Returns
         -------
         set([tag, ...])
