@@ -174,6 +174,12 @@ def test_bitfield_tags():
     ks.add_field("d", length=1, start_at=3, tags=["D"])
     ks.add_field("e", length=1, start_at=4, tags=["E", "E_"])
 
+    assert ks.get_tags("a") == set()
+    assert ks.get_tags("b") == set(["B"])
+    assert ks.get_tags("c") == set(["C", "C_"])
+    assert ks.get_tags("d") == set(["D"])
+    assert ks.get_tags("e") == set(["E", "E_"])
+
     ks_def = ks(a=1, b=1, c=1, d=1, e=1)
     assert ks_def.get_mask() == 0x1F
     assert ks_def.get_mask("B") == 0x02
@@ -203,6 +209,9 @@ def test_bitfield_tags():
     ks_a1.add_field("a1", length=1, start_at=5, tags="A1")
 
     # Test that tags are applied heirachically to parents
+    assert ks.get_tags("a") == set(["A0", "A1"])
+    assert ks.get_tags("a0") == set(["A0"])
+    assert ks.get_tags("a1") == set(["A1"])
     assert ks.get_mask("A0") == 0x01
     assert ks.get_mask("A1") == 0x01
 

@@ -393,6 +393,12 @@ further up the hierarchy have specific values. In other words: when checking tha
 a given set of tagged fields have a certain value, we must equally check that
 those fields are present.
 
+You can list the set of tags associated with a particular field using
+:py:meth:`.get_tags` like so:
+
+    >>> b.get_tags("device_id") == {'routing'}
+    True
+
 Allowing 3rd party expansion of bit fields
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
