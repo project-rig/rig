@@ -341,6 +341,20 @@ class BitField(object):
 
         return mask
 
+    def get_tags(self, field):
+        """Get the set of tags for a given field.
+
+        Parameters
+        ----------
+        field : str
+            The field whose tag should be read.
+        
+        Returns
+        -------
+        set([tag, ...])
+        """
+        return self.fields[field].tags.copy()
+
     def assign_fields(self):
         """Assign a position & length to any fields which do not have one.
 
