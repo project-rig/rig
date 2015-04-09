@@ -48,6 +48,15 @@ Execution control
         control
         control_api
 
+Utilities
+---------
+
+.. toctree::
+        :maxdepth: 2
+
+        type_casts
+
+
 Indices and tables
 ==================
 

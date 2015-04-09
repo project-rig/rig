@@ -88,9 +88,9 @@ class TestFixToFloat(object):
     @pytest.mark.parametrize(
         "bits, signed, n_bits, n_frac, value",
         [(0xff, False, 8, 0, 255.0),
-         (0xff, True, 8, 0, -127.0),
+         (0x81, True, 8, 0, -127.0),
          (0xff, False, 8, 1, 127.5),
-         (0xff, True, 8, 1, -63.5),
+         (0xf8, True, 8, 4, -0.5)
          ])
     def test_fix_to_float(self, bits, signed, n_bits, n_frac, value):
         assert value == fix_to_float(signed, n_bits, n_frac)(bits)
