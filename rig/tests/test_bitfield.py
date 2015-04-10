@@ -10,42 +10,39 @@ import pytest
 from rig.bitfield import BitField
 
 
-def test_bitfield_add_field():
-    # Assert that we can't create a new bit field with fixed fields beyond its
-    # length
-    ks = BitField(64)
-    with pytest.raises(ValueError):
-        ks.add_field("out_of_range", start_at=64)
-    with pytest.raises(ValueError):
-        ks.add_field("out_of_range", start_at=128)
-    with pytest.raises(ValueError):
-        ks.add_field("out_of_range", length=2, start_at=63)
-    with pytest.raises(ValueError):
-        ks.add_field("out_of_range", length=2, start_at=128)
+class TestBitFieldAddField(object):
+    @pytest.fixture
+    def ks(self):
+        return BitField(64)
 
-    # Check fields must have non-zero lengths
-    with pytest.raises(ValueError):
-        ks.add_field("zero_length", length=0, start_at=0)
+    @pytest.mark.parametrize("start_at, length", [(64, None), (128, None),
+                                                  (63, 2), (128, 2)])
+    def test_fixed_fields_beyond_length(self, ks, start_at, length):
+        # Assert that we can't create a new bit field with fixed fields beyond
+        # its length
+        with pytest.raises(ValueError):
+            ks.add_field("out_of_range", start_at=start_at, length=length)
 
-    # Check we can't create overlapping fixed fields
-    ks.add_field("obstruction", length=8, start_at=8)
-    with pytest.raises(ValueError):
-        ks.add_field("obstructed", length=8, start_at=8)
-    with pytest.raises(ValueError):
-        ks.add_field("obstructed", length=16, start_at=0)
-    with pytest.raises(ValueError):
-        ks.add_field("obstructed", length=12, start_at=0)
-    with pytest.raises(ValueError):
-        ks.add_field("obstructed", length=16, start_at=8)
-    with pytest.raises(ValueError):
-        ks.add_field("obstructed", length=12, start_at=12)
-    with pytest.raises(ValueError):
-        ks.add_field("obstructed", length=4, start_at=10)
+    def test_nonzero_lengths(self, ks):
+        # Check fields must have non-zero lengths
+        with pytest.raises(ValueError):
+            ks.add_field("zero_length", length=0, start_at=0)
 
-    # Check we can't create fields with the same name but which otherwise don't
-    # clash
-    with pytest.raises(ValueError):
-        ks.add_field("obstruction", length=1, start_at=0)
+    @pytest.mark.parametrize("length, start_at",
+                             [(8, 8), (16, 0), (12, 0), (16, 8), (12, 12),
+                              (4, 10)])
+    def test_non_overlapping(self, ks, start_at, length):
+        # Check we can't create overlapping fixed fields
+        ks.add_field("obstruction", length=8, start_at=8)
+        with pytest.raises(ValueError):
+            ks.add_field("obstructed", length=length, start_at=start_at)
+
+    def test_unique_identifiers(self, ks):
+        # Check we can't create fields with the same name but which otherwise
+        # don't clash
+        ks.add_field("obstruction", length=8, start_at=8)
+        with pytest.raises(ValueError):
+            ks.add_field("obstruction", length=1, start_at=0)
 
 
 def test_bitfield_masks():
@@ -68,8 +65,8 @@ def test_bitfield_masks():
     assert ks.get_mask(tag="Top") == 0xFF00000000000000
 
     # Test both at once fails
-    with pytest.raises(AssertionError):
-        assert ks.get_mask(tag="All", field="top") == 0xFF000000FFFFFFFF
+    with pytest.raises(TypeError):
+        ks.get_mask(tag="All", field="top")
 
 
 def test_bitfield_keys():
@@ -225,14 +222,14 @@ def test_bitfield_tags():
     assert ks.get_mask("A0") == 0x01
 
 
-def test_bitfield_hierachy():
+def test_bitfield_hierarchy():
     ks = BitField(8)
     ks.add_field("always", length=1, start_at=7)
     ks.add_field("split", length=1, start_at=6)
 
     # Add different fields dependent on the split-bit. This checks that
-    # creating fields in different branches of the heirachy doesn't result in
-    # clashes.  Additionally creates multiple levels of heirarchy.
+    # creating fields in different branches of the hierarchy doesn't result in
+    # clashes.  Additionally creates multiple levels of hierarchy.
     ks_s0 = ks(split=0)
     ks_s0.add_field("s0_btm", length=3, start_at=0)
     ks_s0.add_field("s0_top", length=3, start_at=3)
@@ -306,6 +303,8 @@ def test_bitfield_hierachy():
     with pytest.raises(AttributeError):
         ks(s0_btm=3, s0_top=5)
 
+
+def test_hierarchy_subfield_obstructions():
     # Test that if a subfield blocks a space, another field cannot be added
     # there at a higher level in the hierarchy
     ks_obst = BitField(32)
@@ -318,7 +317,9 @@ def test_bitfield_hierachy():
     # And that such a field does not get auto-positioned there
     ks_obst.add_field("obstructed")
     ks_obst.assign_fields()
-    assert ks_obst.get_mask(field="obstructed") == 0x00000002
+    assert ks_obst_s1.get_mask(field="obstruction") == 0x00000001
+    assert ks_obst.get_mask(field="split") == 0x00000002
+    assert ks_obst.get_mask(field="obstructed") == 0x00000004
 
 
 def test_auto_length():
@@ -451,12 +452,14 @@ def test_auto_start_at():
     with pytest.raises(ValueError):
         ks.assign_fields()
 
-    # Test that auto-placed fields can be created heirachically
+
+def test_auto_start_at_hierarchy():
+    # Test that auto-placed fields can be created hierarchically
     ks_h = BitField(32)
     ks_h.add_field("split", length=4)
 
-    # Ensure that additional top-level fields are placed before all split
-    # fields when defined before
+    # Ensure that additional top-level fields are placed after all split
+    # fields.
     ks_h.add_field("always_before", length=4)
 
     ks_h_s0 = ks_h(split=0)
@@ -466,54 +469,111 @@ def test_auto_start_at():
 
     # Check that assigning fields on one side of the split fixes all fields
     ks_h(split=0).assign_fields()
-    assert ks_h(split=0).get_mask(field="split") == 0x0000000F
-    assert ks_h(split=0).get_mask(field="always_before") == 0x000000F0
-    assert ks_h(split=0).get_mask(field="s0") == 0x00000F00
-    assert ks_h(split=0).get_mask() == 0x00000FFF
+    assert ks_h(split=0).get_mask(field="s0") == 0x0000000F
+    assert ks_h(split=0).get_mask(field="split") == 0x00000F00
+    assert ks_h(split=0).get_mask(field="always_before") == 0x0000F000
+    assert ks_h(split=0).get_mask() == 0x0000FF0F
     with pytest.raises(ValueError):
         ks_h_s0.add_field("obstructed", start_at=8)
 
-    assert ks_h(split=1).get_mask(field="split") == 0x0000000F
-    assert ks_h(split=1).get_mask(field="always_before") == 0x000000F0
-    assert ks_h(split=1).get_mask(field="s1") == 0x0000FF00
+    assert (ks_h(split=1).get_mask(field="split") ==
+            ks_h(split=0).get_mask(field="split"))
+    assert (ks_h(split=1).get_mask(field="always_before") ==
+            ks_h(split=0).get_mask(field="always_before"))
+    assert ks_h(split=1).get_mask(field="s1") == 0x000000FF
     assert ks_h(split=1).get_mask() == 0x0000FFFF
     with pytest.raises(ValueError):
         ks_h_s1.add_field("obstructed", length=4, start_at=8)
 
 
-def test_full_auto():
-    # Brief test that automatic placement and length assignment can happen
-    # simultaneously
+def test_mix_auto_length_fixed_start():
+    """Test that we can specify a field with no set length and a fixed start
+    position and that this can't be overwritten by another fully auto field.
+    """
     ks = BitField(32)
     ks.add_field("a")
-    ks.add_field("b")
+    ks.add_field("b", start_at=0)
 
     # Give the fields values to force their sizes
     ks(a=0xFF, b=0xFFF)
 
     # Check the masks come out correctly
     ks.assign_fields()
-    assert ks.get_mask(field="a") == 0x000000FF
-    assert ks.get_mask(field="b") == 0x000FFF00
+    assert ks.get_mask(field="a") == 0x000FF000
+    assert ks.get_mask(field="b") == 0x00000FFF
     assert ks.get_mask() == 0x000FFFFF
 
-    # Also test that assignment of fields works at multiple levels of heirarchy
-    ks_h = BitField(32)
-    ks_h.add_field("s")
-    ks_h(s=0).add_field("s0")
-    ks_h(s=0, s0=0).add_field("s00")
-    ks_h(s=0, s0=1).add_field("s01")
-    ks_h(s=1).add_field("s1")
-    ks_h(s=1, s1=0).add_field("s10")
-    ks_h(s=1, s1=1).add_field("s11")
-    ks_h.assign_fields()
-    assert ks_h.get_mask(field="s") == 0x00000001
-    assert ks_h(s=0).get_mask(field="s0") == 0x00000002
-    assert ks_h(s=1).get_mask(field="s1") == 0x00000002
-    assert ks_h(s=0, s0=0).get_mask(field="s00") == 0x00000004
-    assert ks_h(s=0, s0=1).get_mask(field="s01") == 0x00000004
-    assert ks_h(s=1, s1=0).get_mask(field="s10") == 0x00000004
-    assert ks_h(s=1, s1=1).get_mask(field="s11") == 0x00000004
+
+def test_mix_auto_length_fixed_start_hierarchy():
+    ks = BitField(32)
+    ks.add_field("s")
+
+    ks_0 = ks(s=0)
+    ks_0.add_field("s0", length=4, start_at=0)
+
+    ks_1 = ks(s=1)
+    ks_1.add_field("s1", length=8, start_at=0)
+
+    ks.assign_fields()
+    assert ks_0.get_mask(field="s0") == 0x0000000f
+    assert ks_1.get_mask(field="s1") == 0x000000ff
+    assert ks.get_mask(field="s") == 0x00000100
+
+
+def test_mix_auto_length_fixed_start_impossible():
+    """Test that overlapping fixed starts with auto lengths fail."""
+    ks = BitField(32)
+    ks.add_field("a", start_at=0)
+    ks.add_field("b", start_at=1)
+
+    # Give the fields values to force their sizes, a and b now overlap
+    ks(a=0xFF, b=0xFFF)
+
+    # Check that this is impossible
+    with pytest.raises(ValueError):
+        ks.assign_fields()
+
+
+class TestFullAuto(object):
+    def test_placement_and_length(self):
+        # Brief test that automatic placement and length assignment can happen
+        # simultaneously
+        ks = BitField(32)
+        ks.add_field("a")
+        ks.add_field("b")
+
+        # Give the fields values to force their sizes
+        ks(a=0xFF, b=0xFFF)
+
+        # Check the masks come out correctly
+        ks.assign_fields()
+        assert ks.get_mask(field="a") == 0x000000FF
+        assert ks.get_mask(field="b") == 0x000FFF00
+        assert ks.get_mask() == 0x000FFFFF
+
+    def test_with_hierarchy(self):
+        # Also test that assignment of fields works at multiple levels of
+        # hierarchy
+        ks_h = BitField(32)
+        ks_h.add_field("s")
+
+        ks_h(s=0).add_field("s0")
+        ks_h(s=0, s0=0).add_field("s00")
+        ks_h(s=0, s0=1).add_field("s01")
+
+        ks_h(s=1).add_field("s1")
+        ks_h(s=1, s1=0).add_field("s10")
+        ks_h(s=1, s1=1).add_field("s11")
+
+        ks_h.assign_fields()
+
+        assert ks_h.get_mask(field="s") == 0x00000004
+        assert ks_h(s=0).get_mask(field="s0") == 0x00000002
+        assert ks_h(s=1).get_mask(field="s1") == 0x00000002
+        assert ks_h(s=0, s0=0).get_mask(field="s00") == 0x00000001
+        assert ks_h(s=0, s0=1).get_mask(field="s01") == 0x00000001
+        assert ks_h(s=1, s1=0).get_mask(field="s10") == 0x00000001
+        assert ks_h(s=1, s1=1).get_mask(field="s11") == 0x00000001
 
 
 def test_eq():
@@ -601,3 +661,17 @@ def test_repr():
     assert "'s1'" not in repr(ks_s0)
     assert "'s0'" not in repr(ks_s1)
     assert "'s1'" in repr(ks_s1)
+
+
+def test_subclass():
+    """It should be possible to inherit from BitField and still have __call__
+    work.
+    """
+    class MyBitField(BitField):
+        pass
+
+    x = MyBitField()
+    x.add_field("spam")
+
+    y = x(spam=0)
+    assert isinstance(y, MyBitField)
