@@ -112,6 +112,21 @@ _link_direction_lookup = {
 }
 _direction_link_lookup = {l: v for (v, l) in iteritems(_link_direction_lookup)}
 
+# Special case: Lets assume we've got a 2xN or Nx2 system (N >= 2) where we can
+# "spiral" around the Z axis to reach places which normally wouldn't be
+# accessible.
+#
+# (x+1, 0) <-> (x+0, 1)        (1, y+0) <-> (0, y+1)
+#           /                        |   |   |
+#     --+--/+---+--                  +---+---+
+#       | . |   |                    | . |   |/
+#     --+---+---+--                  /---+---/
+#       |   | . |                   /|   | . |
+#     --+---+/--+--                  +---+---+
+#           /                        |   |   |
+_link_direction_lookup[(+1, -1)] = Links.south_west
+_link_direction_lookup[(-1, +1)] = Links.north_east
+
 
 class Machine(object):
     """Defines the resources available in a SpiNNaker machine.
