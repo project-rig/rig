@@ -134,7 +134,8 @@ class TestMachine(object):
 
 
 def test_links_from_vector():
-    # In all these tests we assume we're in a 4x8 system.
+    # In all but the last of the following tests we assume we're in a 4x8
+    # system.
 
     # Direct neighbours without wrapping
     assert Links.from_vector((+1, +0)) == Links.east
@@ -161,6 +162,10 @@ def test_links_from_vector():
 
     assert Links.from_vector((-3, -7)) == Links.north_east
     assert Links.from_vector((+3, +7)) == Links.south_west
+
+    # Special case: 2xN or Nx2 system (N >= 2) "spiraing" around the Z axis
+    assert Links.from_vector((1, -1)) == Links.south_west
+    assert Links.from_vector((-1, 1)) == Links.north_east
 
 
 def test_links_to_vector():
