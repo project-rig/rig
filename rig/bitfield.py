@@ -377,7 +377,7 @@ class BitField(object):
                 for cond_ident, cond_value in field.conditions.items():
                     # Fail if not a child
                     if cond_ident not in enabled_field_idents:
-                        self.set_fields = {}
+                        set_fields = {}
                         break
                     # Accumulate fields which must be set
                     if getattr(ks, cond_ident) is None:
