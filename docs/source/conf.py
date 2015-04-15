@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Allow the docs to be built by ReadTheDocs without building numpy.
+# Allow the docs to be built by ReadTheDocs without building numpy (and other
+# expensive to install modules). This is achieved by swapping out missing
+# modules for mocks.
 import sys
 from mock import Mock as MagicMock
 
@@ -10,7 +12,11 @@ class Mock(MagicMock):
             return Mock()
 
 MOCK_MODULES = ['pygtk', 'gtk', 'gobject', 'argparse', 'numpy', 'pandas']
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+for mod_name in MOCK_MODULES:
+    try:
+        __import__(mod_name)
+    except ImportError:
+        sys.modules.update({mod_name: Mock()})
 
 AUTHORS = u'Project Rig'
 
