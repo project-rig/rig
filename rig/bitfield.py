@@ -6,7 +6,7 @@ hierarchical bit-fields.
 See the :py:class:`.BitField` class.
 """
 
-from collections import OrderedDict
+from collections import namedtuple, OrderedDict
 
 from math import log
 
@@ -142,14 +142,15 @@ class BitField(object):
                 if other_field.start_at is not None:
                     other_start_at = other_field.start_at
                     other_end_at = other_start_at + (other_field.length or 1)
+
                     if end_at > other_start_at and other_end_at > start_at:
-                            raise ValueError(
-                                "Field '{}' (range {}-{}) "
-                                "overlaps field '{}' (range {}-{})".format(
-                                    identifier,
-                                    start_at, end_at,
-                                    other_identifier,
-                                    other_start_at, other_end_at))
+                        raise ValueError(
+                            "Field '{}' (range {}-{}) "
+                            "overlaps field '{}' (range {}-{})".format(
+                                identifier,
+                                start_at, end_at,
+                                other_identifier,
+                                other_start_at, other_end_at))
 
         # Normalise tags type
         if type(tags) is str:
@@ -221,7 +222,7 @@ class BitField(object):
             self.fields[identifier].max_value = max(
                 self.fields[identifier].max_value, value)
 
-        return BitField(self.length, self.fields, field_values)
+        return type(self)(self.length, self.fields, field_values)
 
     def __getattr__(self, identifier):
         """Get the value of a field.
@@ -315,7 +316,9 @@ class BitField(object):
             `assign_fields()` has not been called when a field's size/position
             has not been fixed.
         """
-        assert not (tag is not None and field is not None)
+        if tag is not None and field is not None:
+            raise TypeError("get_mask() takes exactly one keyword argument, "
+                            "either 'field' or 'tag' (both given)")
 
         # Build a filtered list of fields to be used in the mask
         if field is not None:
@@ -361,19 +364,55 @@ class BitField(object):
         Users should typically call this method after all field values have
         been assigned, otherwise fields may be fixed at an inadequate size.
         """
-        # We must fix fields at every level of the heirarchy sepeartely
+        # We must fix fields at every level of the hierarchy separately
         # (otherwise fields of children won't be allowed to overlap). Here we
-        # do a breadth-first iteration over the heirarchy, fixing the fields at
-        # each level.
-        unsearched_heirarchy = [BitField(self.length, self.fields)]
-        while unsearched_heirarchy:
-            ks = unsearched_heirarchy.pop(0)
-            ks._assign_enabled_fields()
-            # Look for potential children in the herarchy
+        # do a breadth-first iteration over the hierarchy to fix fields with
+        # given starting positions; then we do depth-first to fix other fields.
+        #
+        # The breadth-first ensures that children's fixed position fields must
+        # fit around the fixed position fields of their parents.  The depth
+        # first search for variable position fields ensures that parents don't
+        # allocate fields in positions which would collide with fixed and
+        # variable position fields their children have already allocated.
+
+        class Node(namedtuple("Node", "bitfield children")):
+            """Node used in depth-first search of bitfields."""
+            def recurse_assign_unfixed_fields(self, assigned_bits=0,
+                                              excluded_fields=set()):
+                # Call this for the children first
+                excludes = set(i for (i, f) in self.bitfield._enabled_fields())
+                new_assigned_bits = assigned_bits
+                for child in self.children:
+                    # Children can assign bits independently
+                    new_assigned_bits |= child.recurse_assign_unfixed_fields(
+                        assigned_bits, excludes)
+
+                # Now assign locally
+                assigned_bits =\
+                    self.bitfield._assign_enabled_fields_without_fixed_start(
+                        new_assigned_bits, excluded_fields
+                    )
+
+                return assigned_bits
+
+        root = Node(BitField(self.length, self.fields), list())
+        unsearched_hierarchy = [root]
+
+        # Build a tree of Node describing the bitfield hierarchy and assign all
+        # fields with a fixed starting position.
+        while unsearched_hierarchy:
+            parent = unsearched_hierarchy.pop(0)
+            ks = parent.bitfield
+
+            # Assign all fields with a fixed starting position
+            ks._assign_enabled_fields_with_fixed_start()
+
+            # Look for potential children in the hierarchy
             for identifier, field in ks._potential_fields():
                 enabled_field_idents = set(i for (i, f) in
                                            ks._enabled_fields())
                 set_fields = {}
+
                 for cond_ident, cond_value in field.conditions.items():
                     # Fail if not a child
                     if cond_ident not in enabled_field_idents:
@@ -382,8 +421,14 @@ class BitField(object):
                     # Accumulate fields which must be set
                     if getattr(ks, cond_ident) is None:
                         set_fields[cond_ident] = cond_value
+
                 if set_fields:
-                    unsearched_heirarchy.append(ks(**set_fields))
+                    child = Node(ks(**set_fields), list())
+                    parent.children.append(child)
+                    unsearched_hierarchy.append(child)
+
+        # Assign all fields with variables starting positions
+        root.recurse_assign_unfixed_fields()
 
     def __eq__(self, other):
         """Test that this :py:class:`.BitField` is equivalent to another.
@@ -536,43 +581,101 @@ class BitField(object):
             else:
                 blocked.add(identifier)
 
-    def _assign_enabled_fields(self):
-        """For internal use only. Assign a position & length to any enabled
-        fields which do not have one.
+    def _assign_enabled_fields_with_fixed_start(self):
+        """For internal use only. Assign a length to any enabled fields which
+        do not have one but do have a fixed position.
         """
         assigned_bits = 0
-        unassigned_fields = []
+        unassigned_fields = list()
         for identifier, field in self._enabled_fields():
             if field.length is not None and field.start_at is not None:
                 assigned_bits |= ((1 << field.length) - 1) << field.start_at
-            else:
+            elif field.start_at is not None:
                 unassigned_fields.append((identifier, field))
 
         for identifier, field in unassigned_fields:
-            length = field.length
-            if length is None:
-                # Assign lengths based on values
-                length = int(log(field.max_value, 2)) + 1
+            assigned_bits = self._assign_enabled_field(
+                assigned_bits, identifier, field)
 
-            start_at = field.start_at
-            if start_at is None:
-                # Force a failure if no better space is found
-                start_at = self.length
+    def _assign_enabled_fields_without_fixed_start(self, assigned_bits,
+                                                   exclude_fields=set()):
+        """For internal use only. Assign a length and position to any enabled
+        fields which do not have a fixed position.
 
-                # Try every position until a space is found
-                for bit in range(0, self.length - length):
-                    field_bits = ((1 << length) - 1) << bit
-                    if not (assigned_bits & field_bits):
-                        start_at = bit
-                        assigned_bits |= field_bits
-                        break
+        Parameters
+        ----------
+        exclude_fields : {identifier, ...}
+            Exclude fields which will be assigned later, for example those
+            which will be assigned by bitfields higher up the hierarchy.
 
-            # Check that the calculated field is within the bit field
-            if start_at + length <= self.length:
-                field.length = length
-                field.start_at = start_at
+        Returns
+        -------
+        int
+            Mask of which bits have been assigned to fields.
+        """
+        unassigned_fields = list()
+        for identifier, field in self._enabled_fields():
+            if field.length is None or field.start_at is None:
+                if identifier not in exclude_fields:
+                    unassigned_fields.append((identifier, field))
             else:
+                assigned_bits |= ((1 << field.length) - 1) << field.start_at
+
+        for identifier, field in unassigned_fields:
+            assert identifier not in exclude_fields
+            assigned_bits |= self._assign_enabled_field(
+                assigned_bits, identifier, field)
+
+        return assigned_bits
+
+    def _assign_enabled_field(self, assigned_bits, identifier, field):
+        """For internal use only.  Assign a length and position to a field
+        which may have either one of these values missing.
+
+        Returns
+        -------
+        int
+            Mask of which bits have been assigned to fields.
+        """
+        length = field.length
+        if length is None:
+            # Assign lengths based on values
+            length = int(log(field.max_value, 2)) + 1
+
+        start_at = field.start_at
+        if start_at is None:
+            # Force a failure if no better space is found
+            start_at = self.length
+
+            # Try every position until a space is found
+            for bit in range(0, self.length - length):
+                field_bits = ((1 << length) - 1) << bit
+                if not (assigned_bits & field_bits):
+                    start_at = bit
+                    assigned_bits |= field_bits
+                    break
+        else:
+            # A start position has been forced, ensure that it can be fulfilled
+            field_bits = ((1 << length) - 1) << start_at
+
+            if assigned_bits & field_bits:
                 raise ValueError(
-                    "{}-bit field '{}' "
-                    "does not fit in bit field.".format(
-                        field.length, identifier))
+                    "{}-bit field '{}' with fixed position does not fit in "
+                    "bit field.".format(
+                        field.length, identifier)
+                )
+
+            # Mark these bits as assigned
+            assigned_bits |= field_bits
+
+        # Check that the calculated field is within the bit field
+        if start_at + length <= self.length:
+            field.length = length
+            field.start_at = start_at
+        else:
+            raise ValueError(
+                "{}-bit field '{}' does not fit in bit field.".format(
+                    field.length, identifier)
+            )
+
+        return assigned_bits
