@@ -178,7 +178,7 @@ class BitField(object):
             tags = set(tags)
 
         # Add the field (checking that the identifier is unique in the process)
-        field = BitField._Field(length, start_at, tags)
+        field = type(self)._Field(length, start_at, tags)
         self.fields.add_field(field, identifier, self.field_values)
 
         # Add tags to all parents of this field
@@ -579,7 +579,7 @@ class BitField(object):
                     if i in field_values
                 )
                 child = self.children.setdefault(meetable_requirements,
-                                                 BitField._Tree())
+                                                 type(self)())
                 child.add_field(field, identifier,
                                 {i: v for (i, v) in iteritems(field_values)
                                  if i not in dict(meetable_requirements)})

@@ -7,6 +7,8 @@ Space` (or variants thereof).
 
 import pytest
 
+from six import next, itervalues
+
 from mock import Mock
 
 from rig.bitfield import BitField, UnavailableFieldError, UnknownTagError
@@ -936,13 +938,29 @@ def test_repr():
 
 def test_subclass():
     """It should be possible to inherit from BitField and still have __call__
-    work.
+    and internal type-overriding work.
     """
     class MyBitField(BitField):
+
+        class _Tree(BitField._Tree):
+            pass
+
+        class _Field(BitField._Field):
+            pass
+
         pass
 
     x = MyBitField()
     x.add_field("spam")
+    x(spam=1).add_field("eggs")
 
+    # Make sure __call__ works
     y = x(spam=0)
     assert isinstance(y, MyBitField)
+
+    # Make sure tree type is overridden
+    assert type(x.fields) is MyBitField._Tree
+    assert type(next(itervalues(x.fields.children))) is MyBitField._Tree
+
+    # Make sure field type is overridden
+    assert type(x.fields.get_field("eggs", {"spam": 1})) is MyBitField._Field
