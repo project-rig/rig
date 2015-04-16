@@ -7,7 +7,244 @@ Space` (or variants thereof).
 
 import pytest
 
-from rig.bitfield import BitField
+from mock import Mock
+
+from rig.bitfield import BitField, UnavailableFieldError, UnknownTagError
+
+
+class TestBitField_Tree(object):
+
+    @pytest.fixture
+    def tree(self):
+        return BitField._Tree()
+
+    def test_basic_add_remove(self, tree):
+        # Should be able to add an arbitrary field to the root and get it back
+        # out again
+        a = Mock()
+        b = Mock()
+        tree.add_field(a, "a", {})
+        tree.add_field(b, "b", {})
+        assert tree.get_field("a", {}) is a
+        assert tree.get_field("b", {}) is b
+
+        # Should be able to get values out when values are set too
+        assert tree.get_field("a", {"b": 1}) is a
+        assert tree.get_field("a", {"a": 0, "b": 1}) is a
+
+        # Shouldn't be able to get non-existant fields
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("nonexistant", {})
+
+        # Should be able to add dependencies
+        aa = Mock()
+        ab = Mock()
+        tree.add_field(aa, "aa", {"a": 0})
+        tree.add_field(ab, "ab", {"a": 0})
+        assert tree.get_field("aa", {"a": 0}) is aa
+        assert tree.get_field("ab", {"a": 0}) is ab
+
+        # Should not be able to get out fields when dependencies not met
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("aa", {})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("ab", {"a": 1})
+
+        # Should support sharing the same name in different contexts
+        aa_ = Mock()
+        tree.add_field(aa_, "aa", {"a": 1})
+        assert tree.get_field("aa", {"a": 0}) is aa
+        assert tree.get_field("aa", {"a": 1}) is aa_
+
+        # Should support multiple dependencies
+        a_and_b = Mock()
+        tree.add_field(a_and_b, "a_and_b", {"a": 2, "b": 3})
+        assert tree.get_field("a_and_b", {"a": 2, "b": 3}) is a_and_b
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("a_and_b", {"a": 1})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("a_and_b", {"a": 2})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("a_and_b", {"b": 3})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("a_and_b", {"a": 1, "b": 3})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("a_and_b", {"a": 2, "b": 2})
+
+        # Should support multiple levels of dependencies
+        abc = Mock()
+        tree.add_field(abc, "abc", {"a": 0, "aa": 1})
+        assert tree.get_field("abc", {"a": 0, "aa": 1}) is abc
+        assert tree.get_field("abc", {"a": 0, "aa": 1, "ab": 0}) is abc
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("abc", {"a": 0})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("abc", {"aa": 1})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("abc", {"a": 1, "aa": 1})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field("abc", {"a": 0, "aa": 0})
+
+    def test_namespace(self, tree):
+        # Make sure two things can share the same name when hidden by the
+        # hierarchy
+        a = Mock()
+        b = Mock()
+        tree.add_field(a, "a", {})
+        tree.add_field(b, "b", {})
+
+        # Should work fine!
+        both_a0 = Mock()
+        both_a1 = Mock()
+        tree.add_field(both_a0, "both", {"a": 0})
+        tree.add_field(both_a1, "both", {"a": 1})
+        assert tree.get_field("both", {"a": 0}) is both_a0
+        assert tree.get_field("both", {"a": 1}) is both_a1
+
+        # Should fail when we re-use a name
+        with pytest.raises(ValueError):
+            tree.add_field(Mock(), "both", {"a": 1})
+
+        # Should fail if we *could* collide higher up the hierarchy
+        with pytest.raises(ValueError):
+            tree.add_field(Mock(), "both", {})
+
+    def test_get_field_requirements(self, tree):
+        a = Mock()
+        b = Mock()
+        c = Mock()
+        _ = Mock()
+        __ = Mock()
+        tree.add_field(_, "_", {})
+        tree.add_field(__, "__", {"_": 0})
+        tree.add_field(a, "a", {})
+        tree.add_field(b, "b", {"a": 0})
+        tree.add_field(c, "c", {"a": 0, "b": 1})
+
+        # Should report back only relevent fields, even when others are
+        # included
+        assert tree.get_field_requirements("a", {}) == {}
+        assert tree.get_field_requirements("a", {"_": 0}) == {}
+
+        assert tree.get_field_requirements("b", {"a": 0}) == {"a": 0}
+        assert tree.get_field_requirements("b", {"a": 0, "_": 0}) == {"a": 0}
+
+        assert tree.get_field_requirements("c", {"a": 0, "b": 1}) ==\
+            {"a": 0, "b": 1}
+        assert tree.get_field_requirements("c", {"a": 0, "b": 1, "_": 0}) ==\
+            {"a": 0, "b": 1}
+
+        # Should fail if a field is blocked/does not exist
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field_requirements("b", {"a": 1})
+        with pytest.raises(UnavailableFieldError):
+            tree.get_field_requirements("nonexistant", {})
+
+    def test_get_field_candidates(self, tree):
+        a = Mock()
+        b = Mock()
+        tree.add_field(a, "a", {})
+        tree.add_field(b, "b", {})
+
+        # Simple case: should be a single null suggestion
+        assert tree.get_field_candidates("a", {}) == [{}]
+
+        both_a0 = Mock()
+        both_a1 = Mock()
+        tree.add_field(both_a0, "both", {"a": 0})
+        tree.add_field(both_a1, "both", {"a": 1})
+
+        # Ambiguous case: should be two suggestions
+        assert tree.get_field_candidates("both", {}) == [{"a": 0}, {"a": 1}]
+
+        ab = Mock()
+        tree.add_field(ab, "ab", {"a": 0, "b": 1})
+
+        # Nested case
+        assert tree.get_field_candidates("ab", {}) == [{"a": 0, "b": 1}]
+
+        # Partially specified cases
+        assert tree.get_field_candidates("ab", {"a": 0}) == [{"b": 1}]
+        assert tree.get_field_candidates("ab", {"b": 1}) == [{"a": 0}]
+
+        # Conflicted candidates blocks suggestion
+        assert tree.get_field_candidates("ab", {"a": 2}) == []
+
+    def test_get_field_human_readable(self, tree):
+        tree.add_field(Mock(), "a", {})
+        tree.add_field(Mock(), "b", {})
+        tree.add_field(Mock(), "c", {"a": 0})
+        tree.add_field(Mock(), "d", {"a": 0, "b": 1})
+
+        # Just reports the name of fields which don't have any field
+        # value requirements.
+        assert tree.get_field_human_readable("a", {}) == "'a'"
+        assert tree.get_field_human_readable("a", {"a": 0, "b": 1}) == "'a'"
+
+        # Prints field value requirements when present
+        assert tree.get_field_human_readable("c", {"a": 0}) == "'c' ('a':0)"
+        assert tree.get_field_human_readable("c", {"a": 0, "b": 1}) ==\
+            "'c' ('a':0)"
+
+        # Prints field value with multiple requirements (in creation order)
+        # when present
+        assert tree.get_field_human_readable("d", {"a": 0, "b": 1}) ==\
+            "'d' ('a':0, 'b':1)"
+
+    def test_enabled_fields(self, tree):
+        a = Mock()
+        aa = Mock()
+        b = Mock()
+        bb = Mock()
+        tree.add_field(a, "a", {})
+        tree.add_field(aa, "aa", {"a": 0})
+        tree.add_field(b, "b", {})
+        tree.add_field(bb, "bb", {"b": 1})
+
+        assert list(tree.enabled_fields({})) == [("a", a), ("b", b)]
+
+        assert list(tree.enabled_fields({"a": 0})) ==\
+            [("a", a), ("b", b), ("aa", aa)]
+        assert list(tree.enabled_fields({"a": 1})) == [("a", a), ("b", b)]
+
+        assert list(tree.enabled_fields({"b": 1})) ==\
+            [("a", a), ("b", b), ("bb", bb)]
+        assert list(tree.enabled_fields({"b": 0})) == [("a", a), ("b", b)]
+
+        assert list(tree.enabled_fields({"a": 0, "b": 1})) ==\
+            [("a", a), ("b", b), ("aa", aa), ("bb", bb)]
+
+    def test_potential_fields(self, tree):
+        a = Mock()
+        aa = Mock()
+        aaa = Mock()
+        b = Mock()
+        bb = Mock()
+        tree.add_field(a, "a", {})
+        tree.add_field(aa, "aa", {"a": 0})
+        tree.add_field(aaa, "aaa", {"a": 0, "aa": 1})
+        tree.add_field(b, "b", {})
+        tree.add_field(bb, "bb", {"b": 2})
+
+        # All fields initially visible
+        assert list(tree.potential_fields({})) ==\
+            [("a", a), ("b", b), ("aa", aa), ("aaa", aaa), ("bb", bb)]
+
+        # Selecting things doesn't remove anything
+        assert list(tree.potential_fields({"a": 0})) ==\
+            [("a", a), ("b", b), ("aa", aa), ("aaa", aaa), ("bb", bb)]
+        assert list(tree.potential_fields({"b": 2})) ==\
+            [("a", a), ("b", b), ("aa", aa), ("aaa", aaa), ("bb", bb)]
+        assert list(tree.potential_fields({"a": 0, "b": 2})) ==\
+            [("a", a), ("b", b), ("aa", aa), ("aaa", aaa), ("bb", bb)]
+        assert list(tree.potential_fields({"a": 0, "aa": 1, "b": 2})) ==\
+            [("a", a), ("b", b), ("aa", aa), ("aaa", aaa), ("bb", bb)]
+
+        # Blocking things removes the offending elements, recursively
+        assert list(tree.potential_fields({"a": 1})) ==\
+            [("a", a), ("b", b), ("bb", bb)]
+        assert list(tree.potential_fields({"b": 3})) ==\
+            [("a", a), ("b", b), ("aa", aa), ("aaa", aaa)]
 
 
 class TestBitFieldAddField(object):
@@ -44,6 +281,40 @@ class TestBitFieldAddField(object):
         with pytest.raises(ValueError):
             ks.add_field("obstruction", length=1, start_at=0)
 
+    def test_namespaces(self, ks):
+        ks.add_field("top")
+        ks_top0 = ks(top=0)
+        ks_top1 = ks(top=1)
+
+        # Should not be able to blatently re-use names.
+        with pytest.raises(ValueError):
+            ks.add_field("top")
+
+        # Should be able to re-use names further down the hierarchy
+        ks_top0.add_field("a")
+        ks_top1.add_field("a")
+
+        # Should not be able to re-use names of parents.
+        with pytest.raises(ValueError):
+            ks_top0.add_field("top")
+
+        # Should not be able to re-use names of indirect parents.
+        ks_top0_a0 = ks_top0(a=1)
+        with pytest.raises(ValueError):
+            ks_top0_a0.add_field("top")
+
+        # Should be blocked from using names which are used further down the
+        # hierarchy.
+        with pytest.raises(ValueError):
+            ks.add_field("a")
+
+        # Should be blocked even when further down some other part of the
+        # hierarchy (which requires searching higher up the hierarchy)
+        ks.add_field("other")
+        ks_other0 = ks(other=0)
+        with pytest.raises(ValueError):
+            ks_other0.add_field("a")
+
 
 def test_bitfield_masks():
     # Create a new bit field and check that appropriate masks can be retrieved
@@ -77,11 +348,11 @@ def test_bitfield_keys():
     ks.add_field("c", length=8, start_at=16, tags="C All")
 
     # Shouldn't be able to access a field which isn't defined
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks.d
 
     # Shouldn't be able to set a field which isn't defined
-    with pytest.raises(ValueError):
+    with pytest.raises(UnavailableFieldError):
         ks(d=123)
 
     # Shouldn't be able to get values before they're assigned
@@ -186,6 +457,12 @@ def test_bitfield_tags():
     assert ks_def.get_mask("E") == 0x10
     assert ks_def.get_mask("E_") == 0x10
 
+    # Test that non-existant tags cause an error
+    with pytest.raises(UnknownTagError):
+        ks.get_mask("Non-existant")
+    with pytest.raises(UnknownTagError):
+        ks.get_value("Non-existant")
+
     assert ks_def.get_value() == 0x1F
     assert ks_def.get_value("B") == 0x02
     assert ks_def.get_value("C") == 0x04
@@ -194,12 +471,6 @@ def test_bitfield_tags():
     assert ks_def.get_value("E") == 0x10
     assert ks_def.get_value("E_") == 0x10
 
-    # Test that non-existant tags cause an error
-    with pytest.raises(ValueError):
-        ks.get_mask("Non-existant")
-    with pytest.raises(ValueError):
-        ks.get_value("Non-existant")
-
     ks_a0 = ks(a=0)
     ks_a0.add_field("a0", length=1, start_at=5, tags="A0")
     ks_a1 = ks(a=1)
@@ -207,8 +478,8 @@ def test_bitfield_tags():
 
     # Test that tags are applied heirachically to parents
     assert ks.get_tags("a") == set(["A0", "A1"])
-    assert ks.get_tags("a0") == set(["A0"])
-    assert ks.get_tags("a1") == set(["A1"])
+    assert ks_a0.get_tags("a0") == set(["A0"])
+    assert ks_a1.get_tags("a1") == set(["A1"])
     assert ks.get_mask("A0") == 0x01
     assert ks.get_mask("A1") == 0x01
 
@@ -241,15 +512,15 @@ def test_bitfield_hierarchy():
     ks_s1s.add_field("split2", length=2, start_at=4)
 
     # Shouldn't be able to access child-fields of split before it is defined
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks.s0_top
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks.s0_btm
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks.s1_top
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks.s1_btm
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks.split2
 
     # Should be able to define a new key from scratch
@@ -266,11 +537,11 @@ def test_bitfield_hierarchy():
     ks(s0_btm=3, s0_top=5, always=1, split=0)
 
     # Accessing fields from the other side of the split should fail
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks_s0_defined.s1_btm
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks_s0_defined.s1_top
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks_s0_defined.split2
 
     # Shouldn't have to define all top-level fields in order to get at split
@@ -282,13 +553,13 @@ def test_bitfield_hierarchy():
     assert ks_s1_selected.s1_top is None
 
     # Accessing fields from the other side of the split should still fail
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks_s1_selected.s0_btm
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks_s1_selected.s0_top
 
     # Accessing fields in a split lower in the hierarchy should still fail
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks_s1_selected.split2
 
     # Should be able to access the second-level of split
@@ -300,7 +571,7 @@ def test_bitfield_hierarchy():
     assert ks_s1s_selected.split2 == 3
 
     # Should not be able to set child fields before parent field is set
-    with pytest.raises(AttributeError):
+    with pytest.raises(UnavailableFieldError):
         ks(s0_btm=3, s0_top=5)
 
 

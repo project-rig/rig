@@ -29,7 +29,7 @@ We'll start by defining a 32-bit bit field:
     >>> from rig.bitfield import BitField
     >>> b = BitField(32)
     >>> b
-    <32-bit BitField >
+    <32-bit BitField>
 
 Initially no fields are defined and so we must define some. Lets define the
 following fields:
@@ -171,7 +171,6 @@ we must assign all fields a length and position using :py:meth:`.assign_fields`:
     >>> # Oops: Fields haven't been assigned lengths and positions yet!
     >>> hex(start_master.get_value())
     Traceback (most recent call last):
-      File "<stdin>", line 2, in ?
     ValueError: Field 'chip' does not have a fixed size/position.
 
     >>> b.assign_fields()
@@ -396,7 +395,7 @@ those fields are present.
 You can list the set of tags associated with a particular field using
 :py:meth:`.get_tags` like so:
 
-    >>> b.get_tags("device_id") == {'routing'}
+    >>> b_external.get_tags("device_id") == {'routing'}
     True
 
 Allowing 3rd party expansion of bit fields
@@ -411,7 +410,7 @@ like so:
 
 .. doctest::
 
-    >>> # One final example...
+    >>> # Starting yet another additional new example...
     >>> b = BitField(32)
     >>> b.add_field("user")
     >>> app_bitfield = b(user=0)
@@ -425,10 +424,58 @@ instance (e.g. `app_bitfield`, `plugin_1_bitfield` etc.) to which new fields
 may be assigned independently. These separate cases will never suffer any
 collisions since each user's bit fields are distinguished by the `user` field.
 
-.. note::
-    The only care that need be taken is that field names must be unique within
-    the bit field. As a result, users may name-space their fields by adopting a
-    simple prefix.
+Note that field names need not be unique as long as fields which share the same
+name are never present at the same time. For example we can define:
+
+.. doctest::
+
+    >>> app_bitfield.add_field("command", length=8, start_at=0)
+    >>> plugin_1_bitfield.add_field("command", length=2, start_at=4)
+
+In the above example, two completely independent fields, both named 'command',
+are created which exist only when ``user=0`` and ``user=1`` respectively. This
+has two useful side-effects:
+
+* Users need not worry about field name collisions with fields defined by
+  plugins.
+* A common set of fields can be defined with different bit field layouts
+  depending on the value of a particular field.
+
+To more clearly demonstrate the utility of this, consider the (slightly
+contrived) case where we have two silicon retina devices, retina A and retina B
+with slightly different key formats. Retina A generates packets in response to
+light level changes whose key has the X coordinate of the pixel which changed in
+the bottom 8 bits of the key, and the Y coordinate in the next 8 bits. Retina B,
+however, has these two fields in the opposite order (Y is in the bottom 8 bits
+and X in the next 8).
+
+.. doctest::
+
+    >>> # One final example...
+    >>> b = BitField(32)
+    >>> RETINA_A = 1
+    >>> RETINA_B = 2
+    >>> b.add_field("retina", length=4, start_at=28)
+    >>> b_ra = b(retina=RETINA_A)
+    >>> b_rb = b(retina=RETINA_B)
+    
+    >>> # We can define "x" and "y" fields for each retina
+    >>> b_ra.add_field("x", length=8, start_at=0)
+    >>> b_ra.add_field("y", length=8, start_at=8)
+    
+    >>> b_rb.add_field("x", length=8, start_at=8)
+    >>> b_rb.add_field("y", length=8, start_at=0)
+    
+    >>> # We can then generate keys the same way with either BitField
+    >>> for b_r in [b_ra, b_rb]:
+    ...     print(hex(b_r(x=0x11, y=0x22).get_value()))
+    0x10002211
+    0x20001122
+
+.. warning::
+    Though field names are namespaced as shown above making reusing field names
+    safe and unambiguous (when allowed), tags are not. *This is a feature* since
+    it allows the behaviours outlined in the section above on tags.
 
 
 :py:class:`.BitField` API
@@ -437,4 +484,8 @@ collisions since each user's bit fields are distinguished by the `user` field.
 .. autoclass:: rig.bitfield.BitField
     :members:
     :special-members:
+
+.. autoclass:: rig.bitfield.UnknownTagError
+
+.. autoclass:: rig.bitfield.UnavailableFieldError
 
