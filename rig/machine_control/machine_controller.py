@@ -1009,15 +1009,15 @@ class MachineController(ContextMixin):
         buf = self.read_struct_field("sv", "sdram_sys", x, y)
 
         # Build the data to write in, then perform the write
-        data = b""
+        data = bytearray(16 * len(entries))
         for i, entry in enumerate(entries):
             # Build the route as a 32-bit value
             route = 0x00000000
             for r in entry.route:
                 route |= 1 << r
 
-            data += struct.pack(
-                consts.RTE_PACK_STRING, i, 0, route, entry.key, entry.mask)
+            struct.pack_into(consts.RTE_PACK_STRING, data, i*16,
+                             i, 0, route, entry.key, entry.mask)
         self.write(buf, data, x, y)
 
         # Perform the load of the data into the router

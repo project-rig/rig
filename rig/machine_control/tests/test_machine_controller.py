@@ -314,15 +314,13 @@ class TestMachineControllerLive(object):
             assert mem.read(len(data)) == data
 
     @pytest.mark.parametrize(
-        "routes, app_id",
+        "routes",
         [([RoutingTableEntry({Routes.east}, 0x0000ffff, 0xffffffff),
-           RoutingTableEntry({Routes.west}, 0xffff0000, 0xffff0000)],
-          67),
+           RoutingTableEntry({Routes.west}, 0xffff0000, 0xffff0000)])
          ]
     )
-    def test_load_and_retrieve_routing_tables(self, controller, routes,
-                                              app_id):
-        with controller(x=0, y=0, app_id=app_id):
+    def test_load_and_retrieve_routing_tables(self, controller, routes):
+        with controller(x=1, y=1):
             # Load the routing table entries
             controller.load_routing_table_entries(routes)
 
@@ -330,12 +328,24 @@ class TestMachineControllerLive(object):
             # loaded are present.
             loaded = controller.get_routing_table_entries()
 
-        for route in routes:
-            assert (route, app_id, 0) in loaded
+        for entry in loaded:
+            if entry is not None:
+                (route, app_id, _) = entry
+                assert app_id == 0 or route in routes
 
     def test_app_stop_and_count(self, controller):
         controller.send_signal(consts.AppSignal.stop)
         assert controller.count_cores_in_state(consts.AppState.run) == 0
+
+        # All the routing tables should have gone as well
+        with controller(x=1, y=1):
+            controller.send_signal(consts.AppSignal.stop)
+            loaded = controller.get_routing_table_entries()
+
+        for entry in loaded:
+            if entry is not None:
+                (_, app_id, _) = entry
+                assert app_id == 0
 
 
 class TestMachineController(object):
