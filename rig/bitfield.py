@@ -216,7 +216,7 @@ class BitField(object):
         field_values.update(self.field_values)
 
         for identifier, value in field_values.items():
-            # All fields specified must exist
+            # All fields specified must exist (and be enabled)
             field = self.fields.get_field(identifier, field_values)
 
             # All field values must be within range
@@ -831,13 +831,13 @@ class BitField(object):
             The values held by various fields (used to access the correct
             identifiers)
         assign_positions : bool
-            If False, will only assign fields whose length is unknown (leaving
-            those with undefined positions as they are). If True, will assign
-            positions and lengths as required.
+            If False, will only assign lengths to fields whose positions are
+            already known. Otherwise lengths and positions will be assigned to
+            all fields as necessary.
         assigned_bits : int
             A bit mask of bits which are already allocated. (Note that this
             will automatically be extended with any already-assigned potential
-            fields' bits.
+            fields' bits.)
 
         Returns
         -------
