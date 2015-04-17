@@ -3,7 +3,7 @@ import sys
 
 setup(
     name="rig",
-    version="0.0.1-dev",
+    version="0.0.2.dev",
     packages=find_packages(),
 
     # Metadata for PyPi
@@ -14,7 +14,7 @@ setup(
     # Requirements
     install_requires=["numpy>1.6", "six", "enum34", "sentinel"],
     tests_require=["pytest>=2.6", "pytest-cov", "mock", "toposort"],
-    
+
     # Scripts
     entry_points={
         "console_scripts": [
