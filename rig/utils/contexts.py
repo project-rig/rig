@@ -174,16 +174,26 @@ class Context(object):
         """
         self.context_arguments = dict(context_arguments)
         self.stack = stack
+        self._before_close = list()
 
     def update(self, updates):
         """Update the arguments contained within this context."""
         self.context_arguments.update(updates)
+
+    def before_close(self, *args):
+        """Call the given function(s) before this context is exited."""
+        for fn in args:
+            self._before_close.append(fn)
 
     def __enter__(self):
         # Add this context object to the stack
         self.stack.append(self)
 
     def __exit__(self, exception_type, exception_value, traceback):
-        # Remove self from the stack
-        removed = self.stack.pop()
-        assert removed is self
+        try:
+            # Call all the passed functions before closing the context
+            for fn in self._before_close:
+                fn()
+        finally:
+            # Remove self from the stack
+            assert self.stack.pop() is self

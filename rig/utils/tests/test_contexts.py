@@ -10,6 +10,7 @@ def object_to_test():
     class ObjectWithContext(contexts.ContextMixin):
         def __init__(self):
             contexts.ContextMixin.__init__(self)
+            self.closed = False
 
         @contexts.ContextMixin.use_contextual_arguments
         def method_a(self, arg0, arg1=contexts.Required, arg2=30):
@@ -23,6 +24,10 @@ def object_to_test():
             arg1 = kwargs.pop("arg1")
             arg2 = kwargs.pop("arg2")
             return (arg0, arg1, arg2, args, kwargs)
+
+        @contexts.ContextMixin.use_contextual_arguments
+        def close(self, arg1=contexts.Required):
+            self.closed = arg1
 
     return ObjectWithContext
 
@@ -159,3 +164,40 @@ def test_nested(object_to_test):
                 assert obj.method_a(1) == (1, 2, 3)
 
         assert obj.method_a(1) == (1, 1, 30)
+
+
+@pytest.mark.parametrize("arg1", [33, "Hello"])
+def test_before_close(object_to_test, arg1):
+    obj = object_to_test()
+
+    context = obj.get_new_context(arg1=arg1)
+    context.before_close(obj.close)
+    assert not obj.closed
+    with context:
+        pass
+
+    assert obj.closed == arg1
+
+
+def test_before_close_with_exception(object_to_test):
+    """Check that the context is still removed from the stack even if one of
+    the closing functions raises an exception.
+    """
+    obj = object_to_test()
+
+    class MySpecificException(Exception):
+        pass
+
+    def close_function():
+        raise MySpecificException()
+
+    context = obj.get_new_context(arg1=333)
+    context.before_close(close_function)
+
+    with pytest.raises(MySpecificException):
+        with context:
+            pass
+
+    with pytest.raises(TypeError) as excinfo:
+        obj.method_a(4)
+    assert "arg1" in str(excinfo.value)
