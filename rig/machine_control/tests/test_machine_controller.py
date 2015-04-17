@@ -179,6 +179,7 @@ class TestMachineControllerLive(object):
         """
         assert controller.count_cores_in_state(consts.AppState.idle) == 0
 
+    @pytest.mark.order_id("live_test_load_application")
     @pytest.mark.parametrize(
         "targets",
         [{(1, 1): {3, 4}, (1, 0): {5}},
@@ -214,6 +215,7 @@ class TestMachineControllerLive(object):
                     p = (data & 0x0000ffff)
                     assert p == t_p and x == t_x and y == t_y
 
+    @pytest.mark.order_after("live_test_load_application")
     @pytest.mark.parametrize(
         "all_targets",
         [{(1, 1): {3, 4}, (1, 0): {5}, (0, 1): {2}}]
@@ -222,6 +224,7 @@ class TestMachineControllerLive(object):
         expected = sum(len(cs) for cs in itervalues(all_targets))
         assert expected == controller.count_cores_in_state(consts.AppState.run)
 
+    @pytest.mark.order_after("live_test_load_application")
     @pytest.mark.parametrize(
         "targets",
         [{(1, 1): {3, 4}, (1, 0): {5}},
@@ -313,6 +316,8 @@ class TestMachineControllerLive(object):
             mem.seek(0)
             assert mem.read(len(data)) == data
 
+    @pytest.mark.order_id("live_test_load_routes")
+    @pytest.mark.order_after("live_test_load_application")
     @pytest.mark.parametrize(
         "routes",
         [([RoutingTableEntry({Routes.east}, 0x0000ffff, 0xffffffff),
@@ -333,13 +338,14 @@ class TestMachineControllerLive(object):
                 (route, app_id, _) = entry
                 assert app_id == 0 or route in routes
 
+    @pytest.mark.order_after("live_test_load_application",
+                             "live_test_load_routes")
     def test_app_stop_and_count(self, controller):
         controller.send_signal(consts.AppSignal.stop)
         assert controller.count_cores_in_state(consts.AppState.run) == 0
 
         # All the routing tables should have gone as well
         with controller(x=1, y=1):
-            controller.send_signal(consts.AppSignal.stop)
             loaded = controller.get_routing_table_entries()
 
         for entry in loaded:
