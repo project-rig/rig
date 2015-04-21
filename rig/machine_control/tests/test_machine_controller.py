@@ -772,14 +772,11 @@ class TestMachineController(object):
     @pytest.mark.parametrize("size", [8, 200])
     @pytest.mark.parametrize("tag", [0, 2])
     @pytest.mark.parametrize("addr", [0x67000000, 0x61000000])
-    def test_sdram_alloc_and_open(self, app_id, size, tag, addr, x, y):
+    def test_sdram_alloc_as_filelike(self, app_id, size, tag, addr, x, y):
         """Test allocing and getting a file-like object returned."""
         # Create the mock controller
         cn = MachineController("localhost")
-
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                                              0x80, 0, addr, None, None, b"")
+        cn.sdram_alloc = mock.Mock(return_value=addr)
 
         # Try the allocation
         fp = cn.sdram_alloc_as_filelike(size, tag, x, y, app_id=app_id)

@@ -16,6 +16,9 @@ SpiNNaker Control API
     :members: CoreInfo, ProcessorStatus, IPTag, MemoryIO
     :special-members:
 
+.. automodule:: rig.machine_control.utils
+    :members: sdram_alloc_for_vertices
+
 BMP Control API
 ---------------
 

@@ -163,7 +163,8 @@ to and from memory in SpiNNaker::
     >>> mc.read(block_addr, 13)
     b"Hello, world!"
 
-Rig also provides a file-like I/O wrapper which may prove easier to integrate
+Rig also provides a file-like I/O wrapper
+(:py:class:`~rig.machine_control.MemoryIO`) which may prove easier to integrate
 into applications and also ensures reads and writes are constrained only to the
 allocated region. For example::
 
@@ -173,6 +174,21 @@ allocated region. For example::
     >>> block.seek(0)
     >>> block.read(13)
     b"Hello, world!"
+
+The :py:func:`~rig.machine_control.utils.sdram_alloc_for_vertices` utility
+function is provided to allocate multiple SDRAM blocks simultaneously.  This
+will be especially useful if you're using Rig's :doc:`place and route
+tools<place_and_route>`, since the utility accepts the place-and-route tools'
+output format. For example::
+
+    >>> placements, allocations, application_map, routing_tables = \
+    ...     rig.place_and_route.wrapper(...)
+    >>> from rig.machine_control.utils import sdram_alloc_for_vertices
+    >>> vertex_memory = sdram_alloc_for_vertices(mc, placements, allocations)
+    
+    >>> # The returned dictionary maps from vertex to file-like wrappers
+    >>> vertex_memory[vertex].write(b"Hello, world!")
+
 
 Context Managers
 ^^^^^^^^^^^^^^^^
