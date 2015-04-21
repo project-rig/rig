@@ -1680,6 +1680,97 @@ class TestMemoryIO(object):
         with pytest.raises(ValueError):
             sdram_file.seek(1, from_what=3)
 
+    def test_slice_new_file_like(self, mock_controller):
+        """Test getting a new file-like by slicing an existing one."""
+        sdram_file = MemoryIO(mock_controller, 1, 4, 0x0000, 0x1000)
+
+        # Perform a slice
+        new_file = sdram_file[:100]
+        assert isinstance(new_file, MemoryIO)
+        assert new_file._machine_controller is mock_controller
+        assert new_file._x == sdram_file._x
+        assert new_file._y == sdram_file._y
+        assert new_file._start_address == 0
+        assert new_file._end_address == 100
+        assert len(new_file) == 100
+
+        # Perform a slice using part slices
+        new_file = sdram_file[500:]
+        assert isinstance(new_file, MemoryIO)
+        assert new_file._machine_controller is mock_controller
+        assert new_file._x == sdram_file._x
+        assert new_file._y == sdram_file._y
+        assert new_file._start_address == 500
+        assert new_file._end_address == sdram_file._end_address
+        assert len(new_file) == 0x1000 - 500
+
+        # Perform a slice using negative slices
+        new_file = sdram_file[-100:-25]
+        assert isinstance(new_file, MemoryIO)
+        assert new_file._machine_controller is mock_controller
+        assert new_file._x == sdram_file._x
+        assert new_file._y == sdram_file._y
+        assert new_file._start_address == sdram_file._end_address - 100
+        assert new_file._end_address == sdram_file._end_address - 25
+        assert len(new_file) == 75
+
+    @pytest.mark.parametrize("start, stop", [(-11, None), (0, 11)])
+    def test_slice_saturates_new_file_like(self, mock_controller, start, stop):
+        sdram_file = MemoryIO(mock_controller, 1, 4, 0, 10)
+
+        # Perform a slice which extends beyond the end of the file
+        new_file = sdram_file[start:stop]
+        assert isinstance(new_file, MemoryIO)
+        assert new_file._machine_controller is mock_controller
+        assert new_file._x == sdram_file._x
+        assert new_file._y == sdram_file._y
+        assert new_file._start_address == sdram_file._start_address
+        assert new_file._end_address == sdram_file._end_address
+
+    def test_invalid_slices(self, mock_controller):
+        sdram_file = MemoryIO(mock_controller, 1, 4, 0, 10)
+
+        with pytest.raises(ValueError):
+            sdram_file[0:1, 1:2]
+
+        with pytest.raises(ValueError):
+            sdram_file[10:0:-1]
+
+        with pytest.raises(ValueError):
+            sdram_file[0]
+
+    def test_zero_length_filelike(self, mock_controller):
+        sdram_file = MemoryIO(mock_controller, 0, 0, 0x100, 0x99)
+
+        # Length should be reported as zero
+        assert len(sdram_file) == 0
+
+        # No reads should occur
+        assert sdram_file.read() == b''
+        assert not mock_controller.read.called
+
+        # No writes should occur
+        assert sdram_file.write(b"Hello, world!") == 0
+        assert not mock_controller.write.called
+
+        # Slicing should achieve the same thing
+        new_file = sdram_file[100:-100]
+        assert len(new_file) == 0
+
+        # Now test creating an empty file from a non-empty one
+        sdram_file = MemoryIO(mock_controller, 0, 0, 100, 110)
+        new_file = sdram_file[5:-7]
+        assert len(new_file) == 0
+        assert new_file._start_address == 105
+        assert new_file._end_address == 105
+
+        # Now test creating an empty file from a non-empty one
+        sdram_file = MemoryIO(mock_controller, 0, 0, 100, 110)
+        new_file = sdram_file[100:]
+        assert len(new_file) == 0
+        assert new_file._start_address == 110
+        assert new_file._end_address == 110
+
 
 @pytest.mark.parametrize(
     "entry, unpacked",

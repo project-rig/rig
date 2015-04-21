@@ -175,6 +175,13 @@ allocated region. For example::
     >>> block.read(13)
     b"Hello, world!"
 
+This file-like wrapper is sliceable so that new smaller file-like views of
+memory may be constructed::
+
+    >>> hello = block[0:5]
+    >>> hello.read()
+    b"Hello"
+
 The :py:func:`~rig.machine_control.utils.sdram_alloc_for_vertices` utility
 function is provided to allocate multiple SDRAM blocks simultaneously.  This
 will be especially useful if you're using Rig's :doc:`place and route
@@ -188,7 +195,6 @@ output format. For example::
     
     >>> # The returned dictionary maps from vertex to file-like wrappers
     >>> vertex_memory[vertex].write(b"Hello, world!")
-
 
 Context Managers
 ^^^^^^^^^^^^^^^^
