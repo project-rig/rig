@@ -24,7 +24,6 @@ SpiNNaker.  Tools exist for:
         :maxdepth: 2
 
         bitfield_doctest
-        regions
 
 Problem mapping
 ---------------

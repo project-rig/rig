@@ -1,2 +1,0 @@
-Representing regions of memory
-==============================
