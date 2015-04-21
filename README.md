@@ -22,9 +22,8 @@ Rig is split into three primary groups of tools and utilities:
 Allows specification of the sets of executables that are to be simulated on
 SpiNNaker.  Tools exist for:
 
- - Specifying regions of memory.
  - Generating "keyspaces" for routing multicast packets.
- - Converting from Numpy arrays and floats to fix-point values and vice-versa.
+ - Converting to and from fix-point values (with support for Numpy types).
  - Specifying a problem for SpiNNaker in terms of computational nodes and their
    communication.
 
