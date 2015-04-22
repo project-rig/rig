@@ -1,6 +1,6 @@
 """Generic correctness tests applicable to all allocation algorithms."""
 
-from rig.place_and_route.allocate.util import slices_overlap, align
+from rig.place_and_route.allocate.utils import slices_overlap, align
 
 
 def test_slices_overlap():

@@ -14,7 +14,7 @@ from ...geometry import concentric_hexagons, to_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \
     shortest_torus_path_length, shortest_torus_path
 
-from .util import longest_dimension_first, links_between
+from .utils import longest_dimension_first, links_between
 
 from ..exceptions import MachineHasDisconnectedSubregion
 
