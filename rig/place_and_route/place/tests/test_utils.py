@@ -4,7 +4,7 @@ from rig.machine import Cores
 
 from rig.place_and_route.constraints import ReserveResourceConstraint
 
-from rig.place_and_route.place.util import \
+from rig.place_and_route.place.utils import \
     subtract_resources, overallocated, resources_after_reservation
 
 

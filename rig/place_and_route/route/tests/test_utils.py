@@ -1,4 +1,4 @@
-from rig.place_and_route.route.util import \
+from rig.place_and_route.route.utils import \
     longest_dimension_first, links_between
 
 from rig.machine import Machine, Links

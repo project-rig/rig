@@ -5,7 +5,7 @@ from ..machine import Cores, SDRAM
 
 from .constraints import ReserveResourceConstraint, AlignResourceConstraint
 
-from .util import build_application_map, build_routing_tables
+from .utils import build_application_map, build_routing_tables
 
 from . import place as default_place
 from . import allocate as default_allocate

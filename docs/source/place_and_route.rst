@@ -312,6 +312,6 @@ Constraints (:py:mod:`rig.place_and_route.constraints`)
 Utility functions
 -----------------
 
-.. automodule:: rig.place_and_route.util
+.. automodule:: rig.place_and_route.utils
     :members:
 

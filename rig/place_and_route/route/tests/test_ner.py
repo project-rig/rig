@@ -6,7 +6,7 @@ from rig.machine import Machine, Links
 
 from rig.place_and_route.routing_tree import RoutingTree
 
-from rig.place_and_route.route.util import links_between
+from rig.place_and_route.route.utils import links_between
 
 from rig.place_and_route.route.ner import ner_net, \
     copy_and_disconnect_tree, a_star, avoid_dead_links
