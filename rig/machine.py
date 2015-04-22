@@ -5,7 +5,7 @@ from six import iteritems
 
 from enum import IntEnum
 
-from rig.utils.enum_doc import int_enum_doc
+from rig.utils.docstrings import add_int_enums_to_docstring
 
 import sentinel
 
@@ -34,7 +34,7 @@ in library functions. Users are free to define their own alternatives.
 """
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class Links(IntEnum):
     """Enumeration of links from a SpiNNaker chip.
 

@@ -2,7 +2,7 @@
 """
 import enum
 
-from rig.utils.enum_doc import int_enum_doc
+from rig.utils.docstrings import add_int_enums_to_docstring
 
 BOOT_PORT = 54321  # TODO Reference spec
 """Port used to boot a SpiNNaker machine."""
@@ -59,7 +59,7 @@ route, key, mask).
 """
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class SCPCommands(enum.IntEnum):
     """Command codes used in SCP packets."""
     sver = 0
@@ -85,7 +85,7 @@ class SCPCommands(enum.IntEnum):
     power = 57  # BMP main board power control
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class DataType(enum.IntEnum):
     """Used to specify the size of data being read to/from a SpiNNaker machine
     over SCP.
@@ -95,7 +95,7 @@ class DataType(enum.IntEnum):
     word = 2
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class LEDAction(enum.IntEnum):
     """Indicate the action that should be applied to a given LED."""
     on = 3
@@ -113,7 +113,7 @@ class LEDAction(enum.IntEnum):
             return cls.off
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class IPTagCommands(enum.IntEnum):
     """Indicate the action that should be performed to the given IPTag."""
     set = 1
@@ -121,7 +121,7 @@ class IPTagCommands(enum.IntEnum):
     clear = 3
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class AllocOperations(enum.IntEnum):
     """Used to allocate or free regions of SDRAM and routing table entries."""
     alloc_sdram = 0  # Allocate a region of SDRAM
@@ -133,7 +133,7 @@ class AllocOperations(enum.IntEnum):
     free_rtr_by_app = 5  # Free routing table entries by app_id
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class RouterOperations(enum.IntEnum):
     """Operations that may be performed to the router."""
     init = 0
@@ -142,27 +142,27 @@ class RouterOperations(enum.IntEnum):
     fixed_route_set_get = 3
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class NNCommands(enum.IntEnum):
     """Nearest Neighbour operations."""
     flood_fill_start = 6
     flood_fill_end = 15
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class NNConstants(enum.IntEnum):
     """Constants for use with nearest neighbour commands."""
     forward = 0x3f  # Forwarding configuration
     retry = 0x18  # Retry configuration
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class AppFlags(enum.IntEnum):
     """Flags for application loading."""
     wait = 0x01
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class AppState(enum.IntEnum):
     """States that an application may be in."""
     # Error states - further information may be available
@@ -185,7 +185,7 @@ class AppState(enum.IntEnum):
     sync1 = 9
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class RuntimeException(enum.IntEnum):
     """Runtime exceptions as reported by SARK."""
     none = 0  # No error
@@ -210,7 +210,7 @@ class RuntimeException(enum.IntEnum):
     api_startup_failure = 19  # API startup failure
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class AppSignal(enum.IntEnum):
     """Signals that may be transmitted to applications."""
     # General purpose signals
@@ -234,7 +234,7 @@ class AppSignal(enum.IntEnum):
     usr3 = 13
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class AppDiagnosticSignal(enum.IntEnum):
     """Signals which interrogate the state of a machine.
 
@@ -245,7 +245,7 @@ class AppDiagnosticSignal(enum.IntEnum):
     count = 2  # How many cores are in a state
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class MessageType(enum.IntEnum):
     """Internally used to specify the type of a message."""
     multicast = 0
@@ -284,7 +284,7 @@ diagnostic_signal_types = {
 """
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class P2PTableEntry(enum.IntEnum):
     """Routing table entry in the point-to-point SpiNNaker routing table."""
     east = 0b000
@@ -297,7 +297,7 @@ class P2PTableEntry(enum.IntEnum):
     monitor = 0b111  # Route to the monitor on this chip
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class BMPInfoType(enum.IntEnum):
     """Type of information to return from a bmp_info SCP command."""
     serial = 0  # Board serial number

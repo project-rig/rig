@@ -11,7 +11,7 @@ import socket
 import struct
 import time
 
-from rig.utils.enum_doc import int_enum_doc
+from rig.utils.docstrings import add_int_enums_to_docstring
 
 # Specifies the size of packets that should be sent to SpiNNaker to boot the
 # board.
@@ -207,7 +207,7 @@ def boot_packet(sock, cmd, arg1=0, arg2=0, arg3=0, data=b""):
     sock.send(header + fdata)
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class BootCommand(enum.IntEnum):
     """Boot packet command numbers"""
 

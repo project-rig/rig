@@ -138,7 +138,7 @@ class MachineController(ContextMixin):
         """Transmit an SCP Packet and return the response.
 
         This function is a thin wrapper around
-        :py:meth:`~rig.machine_control.scp_connection.SCPConnection`.
+        :py:meth:`rig.machine_control.scp_connection.SCPConnection.send_scp`.
 
         Future versions of this command will automatically choose the most
         appropriate connection to use for machines with more than one Ethernet
@@ -985,7 +985,7 @@ class MachineController(ContextMixin):
 
         Parameters
         ----------
-        entries : [:py:class:`~rig.routing_table.RoutingTableEntry`(...), ...]
+        entries : [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
             List of :py:class:`rig.routing_table.RoutingTableEntry`\ s.
 
         Raises

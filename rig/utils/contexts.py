@@ -35,6 +35,8 @@ import functools
 import sentinel
 from six import iteritems
 
+from rig.utils.docstrings import add_signature_to_docstring
+
 
 Required = sentinel.create('Required')
 """Allow specifying keyword arguments as required, i.e., they must be satisfied
@@ -84,10 +86,13 @@ class ContextMixin(object):
         from the call or from the current context.
         """
         # Build a list of keywords to get from the context
-        arg_names, _, _, defaults = inspect.getargspec(f)
+        arg_names, varargs, keywords, defaults = inspect.getargspec(f)
         kwargs = arg_names[-len(defaults):]  # names of the keyword arguments
         default_call = dict(zip(kwargs, defaults))
 
+        # The signature-adding decorator is a work around sphinx autodoc +
+        # Python 2 missing funcation signatures when functions are wrapped
+        @add_signature_to_docstring(f)
         @functools.wraps(f)
         def f_(*args, **kwargs):
             self = args[0]
@@ -125,6 +130,8 @@ class ContextMixin(object):
             All named arguments are given along with their default value.
         """
         def decorator(f):
+            # Update the docstring signature to include the specified arguments
+            @add_signature_to_docstring(f, kw_only_args=named_arguments)
             @functools.wraps(f)
             def f_(self, *args, **kwargs):
                 # Construct the list of required arguments, update using the
