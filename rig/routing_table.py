@@ -3,7 +3,7 @@
 
 from enum import IntEnum
 
-from rig.utils.enum_doc import int_enum_doc
+from rig.utils.docstrings import add_int_enums_to_docstring
 
 from collections import namedtuple
 
@@ -26,7 +26,7 @@ class RoutingTableEntry(namedtuple("RoutingTableEntry", "route key mask")):
     """
 
 
-@int_enum_doc
+@add_int_enums_to_docstring
 class Routes(IntEnum):
     """Enumeration of routes which a SpiNNaker packet can take after arriving
     at a router.
