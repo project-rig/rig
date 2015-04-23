@@ -44,8 +44,15 @@ by either the context OR by the caller.
 
 This is useful when a method has optional parameters and contextual arguments::
 
-    @ContextMixin.use_contextual_arguments
+    @ContextMixin.use_contextual_arguments()
     def sdram_alloc(self, size, tag=0, x=Required, y=Required):
+        # ...
+
+And also when using non-default keyword-only are required::
+
+    @ContextMixin.use_contextual_arguments(app_id=Required)
+    def example(*args, **kwargs):
+        app_id = kwargs.pop(app_id)  # Must always be given
         # ...
 """
 
@@ -81,68 +88,79 @@ class ContextMixin(object):
         return cargs
 
     @staticmethod
-    def use_contextual_arguments(f):
-        """Decorator which modifies a function so that it is passed arguments
-        from the call or from the current context.
-        """
-        # Build a list of keywords to get from the context
-        arg_names, varargs, keywords, defaults = inspect.getargspec(f)
-        kwargs = arg_names[-len(defaults):]  # names of the keyword arguments
-        default_call = dict(zip(kwargs, defaults))
+    def use_contextual_arguments(**kw_only_args_defaults):
+        """Decorator function which allows the wrapped function to accept
+        arguments not specified in the call from the context.
 
-        # The signature-adding decorator is a work around sphinx autodoc +
-        # Python 2 missing funcation signatures when functions are wrapped
-        @add_signature_to_docstring(f)
-        @functools.wraps(f)
-        def f_(*args, **kwargs):
-            self = args[0]
-            # Bind all arguments with their names
-            kwargs.update(dict(zip(arg_names[1:], args[1:])))
+        Arguments whose default value is set to the Required sentinel must be
+        supplied either by the context or the caller and a TypeError is raised
+        if not.
 
-            # Update the arguments using values from the context
-            cargs = self.get_context_arguments()
-            calls = {k: cargs.get(k, v) for (k, v) in iteritems(default_call)}
+        .. warning::
+            Due to a limitation in the Python 2 version of the introspection
+            library, this decorator only works with functions which do not have
+            any keyword-only arguments. For example this function cannot be
+            handled::
 
-            # Update the arguments using values from the call
-            calls = {k: kwargs.get(k, v) for (k, v) in iteritems(calls)}
+                def f(*args, kw_only_arg=123)
 
-            # Raise a TypeError if any `Required` sentinels remain
-            for k, v in iteritems(calls):
-                if v is Required:
-                    raise TypeError(
-                        "{!s}: missing argument {}".format(f.__name__, k))
-
-            # Update the keyword arguments
-            kwargs.update(calls)
-            return f(self, **kwargs)
-
-        return f_
-
-    @staticmethod
-    def use_named_contextual_arguments(**named_arguments):
-        """Decorator which modifies a function such that it is passed arguments
-        given by the call and named arguments from the call or from the
-        context.
+            Note, however, that the decorated function *can* accept and pass-on
+            keyword-only arguments specified via `**kw_only_args_defaults`.
 
         Parameters
         ----------
-        **named_arguments : {name: default, ...}
-            All named arguments are given along with their default value.
+        **kw_only_args_defaults : {name: default, ...}
+            Specifies the set of keyword-only arguments (and their default
+            values) accepted by the underlying function. These will be passed
+            via the kwargs to the underlying function, e.g.::
+
+                @ContextMixin.use_contextual_arguments(kw_only_arg=123)
+                def f(self, **kwargs):
+                    kw_only_arg = kwargs.pop("kw_only_arg")
+
+                # Wrapped function can be called with keyword-only-arguments:
+                spam.f(*[], kw_only_arg=12)
+
+            Keyword-only arguments can be made mandatory by setting their
+            default value to the Required sentinel.
         """
         def decorator(f):
+            # Extract any positional and positional-and-key-word arguments
+            # which may be set.
+            arg_names, varargs, keywords, defaults = inspect.getargspec(f)
+
+            # Sanity check: non-keyword-only arguments should't be present in
+            # the keyword-only-arguments list.
+            assert set(keywords or {}).isdisjoint(set(kw_only_args_defaults))
+
+            # Fully populate the default argument values list, setting the
+            # default for mandatory arguments to the 'Required' sentinel.
+            if defaults is None:
+                defaults = []
+            defaults = (([Required] * (len(arg_names) - len(defaults))) +
+                        list(defaults))
+
             # Update the docstring signature to include the specified arguments
-            @add_signature_to_docstring(f, kw_only_args=named_arguments)
+            @add_signature_to_docstring(f, kw_only_args=kw_only_args_defaults)
             @functools.wraps(f)
             def f_(self, *args, **kwargs):
-                # Construct the list of required arguments, update using the
-                # context arguments and the kwargs passed to the method.
-                new_kwargs = named_arguments.copy()
+                # Construct a dictionary of arguments (and their default
+                # values) which may potentially be set by the context. This
+                # includes any non-supplied positional arguments and any
+                # keyword-only arguments.
+                new_kwargs = dict(zip(arg_names[1 + len(args):],
+                                      defaults[1 + len(args):]))
+                new_kwargs.update(kw_only_args_defaults)
 
-                cargs = self.get_context_arguments()
-                for name, val in iteritems(cargs):
+                # Values from the context take priority over default argument
+                # values.
+                context = self.get_context_arguments()
+                for name, val in iteritems(context):
                     if name in new_kwargs:
                         new_kwargs[name] = val
 
+                # Finally, the values actually pased to the function call take
+                # ultimate priority.
                 new_kwargs.update(kwargs)
 
                 # Raise a TypeError if any `Required` sentinels remain

@@ -116,7 +116,7 @@ class BMPController(ContextMixin):
         """Create a new context for use with `with`."""
         return self.get_new_context(**context_args)
 
-    @ContextMixin.use_named_contextual_arguments(
+    @ContextMixin.use_contextual_arguments(
         cabinet=Required, frame=Required, board=Required)
     def send_scp(self, *args, **kwargs):
         """Transmit an SCP Packet to a specific board.
@@ -168,9 +168,8 @@ class BMPController(ContextMixin):
 
         return connection.send_scp(length, 0, 0, board, *args, **kwargs)
 
-    @ContextMixin.use_contextual_arguments
-    def get_software_version(self, cabinet=Required, frame=Required,
-                             board=Required):
+    @ContextMixin.use_contextual_arguments()
+    def get_software_version(self, cabinet, frame, board):
         """Get the software version for a given BMP.
 
         Returns
@@ -194,9 +193,9 @@ class BMPController(ContextMixin):
         return BMPInfo(code_block, frame_id, can_id, board_id, version,
                        buffer_size, sver.arg3, sver.data.decode("utf-8"))
 
-    @ContextMixin.use_contextual_arguments
-    def set_power(self, state, cabinet=Required, frame=Required,
-                  board=Required, delay=0.0, post_power_on_delay=5.0):
+    @ContextMixin.use_contextual_arguments()
+    def set_power(self, state, cabinet, frame, board,
+                  delay=0.0, post_power_on_delay=5.0):
         """Control power to the SpiNNaker chips and FPGAs on a board.
 
         Returns
@@ -234,9 +233,9 @@ class BMPController(ContextMixin):
         if state:
             time.sleep(post_power_on_delay)
 
-    @ContextMixin.use_contextual_arguments
-    def set_led(self, led, action=None, cabinet=Required, frame=Required,
-                board=Required):
+    @ContextMixin.use_contextual_arguments()
+    def set_led(self, led, action=None,
+                cabinet=Required, frame=Required, board=Required):
         """Set or toggle the state of an LED.
 
         .. note::
@@ -275,9 +274,8 @@ class BMPController(ContextMixin):
         self._send_scp(cabinet, frame, board, SCPCommands.led, arg1=arg1,
                        arg2=arg2, expected_args=0)
 
-    @ContextMixin.use_contextual_arguments
-    def read_fpga_reg(self, fpga_num, addr, cabinet=Required, frame=Required,
-                      board=Required):
+    @ContextMixin.use_contextual_arguments()
+    def read_fpga_reg(self, fpga_num, addr, cabinet, frame, board):
         """Read the value of an FPGA (SPI) register.
 
         See the SpI/O project's spinnaker_fpga design's `README`_ for a listing
@@ -308,9 +306,8 @@ class BMPController(ContextMixin):
                                   expected_args=0)
         return struct.unpack("<I", response.data)[0]
 
-    @ContextMixin.use_contextual_arguments
-    def write_fpga_reg(self, fpga_num, addr, value, cabinet=Required,
-                       frame=Required, board=Required):
+    @ContextMixin.use_contextual_arguments()
+    def write_fpga_reg(self, fpga_num, addr, value, cabinet, frame, board):
         """Write the value of an FPGA (SPI) register.
 
         See the SpI/O project's spinnaker_fpga design's `README`_ for a listing
@@ -337,8 +334,8 @@ class BMPController(ContextMixin):
                        arg1=arg1, arg2=arg2, arg3=arg3,
                        data=struct.pack("<I", value), expected_args=0)
 
-    @ContextMixin.use_contextual_arguments
-    def read_adc(self, cabinet=Required, frame=Required, board=Required):
+    @ContextMixin.use_contextual_arguments()
+    def read_adc(self, cabinet, frame, board):
         """Read ADC data from the BMP including voltages and temperature.
 
         Returns

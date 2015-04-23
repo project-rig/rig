@@ -132,7 +132,7 @@ class MachineController(ContextMixin):
             self._scp_data_length = data.buffer_size
         return self._scp_data_length
 
-    @ContextMixin.use_named_contextual_arguments(
+    @ContextMixin.use_contextual_arguments(
         x=Required, y=Required, p=Required)
     def send_scp(self, *args, **kwargs):
         """Transmit an SCP Packet and return the response.
@@ -232,8 +232,8 @@ class MachineController(ContextMixin):
                                  **boot_kwargs)
         assert len(self.structs) > 0
 
-    @ContextMixin.use_contextual_arguments
-    def application(self, app_id=Required):
+    @ContextMixin.use_contextual_arguments()
+    def application(self, app_id):
         """Update the context to use the given application ID and stop the
         application when done.
 
@@ -250,8 +250,8 @@ class MachineController(ContextMixin):
         context.before_close(lambda: self.send_signal("stop"))
         return context
 
-    @ContextMixin.use_contextual_arguments
-    def get_software_version(self, x=Required, y=Required, processor=0):
+    @ContextMixin.use_contextual_arguments()
+    def get_software_version(self, x, y, processor=0):
         """Get the software version for a given SpiNNaker core.
 
         Returns
@@ -275,8 +275,8 @@ class MachineController(ContextMixin):
         return CoreInfo(p2p_address, pcpu, vcpu, version, buffer_size,
                         sver.arg3, sver.data.decode("utf-8"))
 
-    @ContextMixin.use_contextual_arguments
-    def write(self, address, data, x=Required, y=Required, p=0):
+    @ContextMixin.use_contextual_arguments()
+    def write(self, address, data, x, y, p=0):
         """Write a bytestring to an address in memory.
 
         It is strongly encouraged to only read and write to blocks of memory
@@ -330,8 +330,8 @@ class MachineController(ContextMixin):
         self._send_scp(x, y, p, SCPCommands.write, address, length_bytes,
                        int(data_type), data, expected_args=0)
 
-    @ContextMixin.use_contextual_arguments
-    def read(self, address, length_bytes, x=Required, y=Required, p=0):
+    @ContextMixin.use_contextual_arguments()
+    def read(self, address, length_bytes, x, y, p=0):
         """Read a bytestring from an address in memory.
 
         Parameters
@@ -392,9 +392,8 @@ class MachineController(ContextMixin):
                                   expected_args=0)
         return read_scp.data
 
-    @ContextMixin.use_contextual_arguments
-    def read_struct_field(self, struct_name, field_name,
-                          x=Required, y=Required, p=0):
+    @ContextMixin.use_contextual_arguments()
+    def read_struct_field(self, struct_name, field_name, x, y, p=0):
         """Read the value out of a struct maintained by SARK.
 
         This method is particularly useful for reading fields from the ``sv``
@@ -440,9 +439,8 @@ class MachineController(ContextMixin):
         else:
             return unpacked
 
-    @ContextMixin.use_contextual_arguments
-    def read_vcpu_struct_field(self, field_name, x=Required, y=Required,
-                               p=Required):
+    @ContextMixin.use_contextual_arguments()
+    def read_vcpu_struct_field(self, field_name, x, y, p):
         """Read a value out of the VCPU struct for a specific core.
 
         Similar to :py:meth:`.read_struct_field` except this method accesses
@@ -486,8 +484,8 @@ class MachineController(ContextMixin):
             # in the VCPU struct are of this form.)
             return unpacked  # pragma: no cover
 
-    @ContextMixin.use_contextual_arguments
-    def get_processor_status(self, p=Required, x=Required, y=Required):
+    @ContextMixin.use_contextual_arguments()
+    def get_processor_status(self, p, x, y):
         """Get the status of a given core and the application executing on it.
 
         Returns
@@ -523,8 +521,8 @@ class MachineController(ContextMixin):
         state.pop("__PAD")
         return ProcessorStatus(**state)
 
-    @ContextMixin.use_contextual_arguments
-    def iptag_set(self, iptag, addr, port, x=Required, y=Required):
+    @ContextMixin.use_contextual_arguments()
+    def iptag_set(self, iptag, addr, port, x, y):
         """Set the value of an IPTag.
 
         Forward SDP packets with the specified IP tag sent by a SpiNNaker
@@ -546,8 +544,8 @@ class MachineController(ContextMixin):
                        int(consts.IPTagCommands.set) << 16 | iptag,
                        port, struct.unpack('<I', ip_addr)[0])
 
-    @ContextMixin.use_contextual_arguments
-    def iptag_get(self, iptag, x=Required, y=Required):
+    @ContextMixin.use_contextual_arguments()
+    def iptag_get(self, iptag, x, y):
         """Get the value of an IPTag.
 
         Parameters
@@ -565,8 +563,8 @@ class MachineController(ContextMixin):
                              expected_args=0)
         return IPTag.from_bytestring(ack.data)
 
-    @ContextMixin.use_contextual_arguments
-    def iptag_clear(self, iptag, x=Required, y=Required):
+    @ContextMixin.use_contextual_arguments()
+    def iptag_clear(self, iptag, x, y):
         """Clear an IPTag.
 
         Parameters
@@ -577,7 +575,7 @@ class MachineController(ContextMixin):
         self._send_scp(x, y, 0, SCPCommands.iptag,
                        int(consts.IPTagCommands.clear) << 16 | iptag)
 
-    @ContextMixin.use_contextual_arguments
+    @ContextMixin.use_contextual_arguments()
     def set_led(self, led, action=None, x=Required, y=Required):
         """Set or toggle the state of an LED.
 
@@ -600,7 +598,7 @@ class MachineController(ContextMixin):
         arg1 = sum(LEDAction.from_bool(action) << (led * 2) for led in leds)
         self._send_scp(x, y, 0, SCPCommands.led, arg1=arg1, expected_args=0)
 
-    @ContextMixin.use_contextual_arguments
+    @ContextMixin.use_contextual_arguments()
     def sdram_alloc(self, size, tag=0, x=Required, y=Required,
                     app_id=Required):
         """Allocate a region of SDRAM for an application.
@@ -640,7 +638,7 @@ class MachineController(ContextMixin):
             raise SpiNNakerMemoryError(size, x, y)
         return rv.arg1
 
-    @ContextMixin.use_contextual_arguments
+    @ContextMixin.use_contextual_arguments()
     def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
                                 app_id=Required):
         """Like :py:meth:`.sdram_alloc` but returns a file-like object which
@@ -708,7 +706,7 @@ class MachineController(ContextMixin):
         self._send_scp(0, 0, 0, SCPCommands.nearest_neighbour_packet,
                        arg1, arg2, fr)
 
-    @ContextMixin.use_named_contextual_arguments(app_id=Required, wait=True)
+    @ContextMixin.use_contextual_arguments(app_id=Required, wait=True)
     def flood_fill_aplx(self, *args, **kwargs):
         """Unreliably flood-fill APLX to a set of application cores.
 
@@ -810,9 +808,9 @@ class MachineController(ContextMixin):
                 # Send the flood-fill END packet
                 self._send_ffe(pid, app_id, flags, cores, fr)
 
-    @ContextMixin.use_named_contextual_arguments(app_id=Required, n_tries=2,
-                                                 wait=False,
-                                                 app_start_delay=0.1)
+    @ContextMixin.use_contextual_arguments(app_id=Required, n_tries=2,
+                                           wait=False,
+                                           app_start_delay=0.1)
     def load_application(self, *args, **kwargs):
         """Load an application to a set of application cores.
 
@@ -908,8 +906,8 @@ class MachineController(ContextMixin):
         if not wait:
             self.send_signal("start", app_id)
 
-    @ContextMixin.use_contextual_arguments
-    def send_signal(self, signal, app_id=Required):
+    @ContextMixin.use_contextual_arguments()
+    def send_signal(self, signal, app_id):
         """Transmit a signal to applications.
 
         .. warning::
@@ -945,8 +943,8 @@ class MachineController(ContextMixin):
         arg3 = 0x0000ffff  # Meaning "transmit to all"
         self._send_scp(0, 0, 0, SCPCommands.signal, arg1, arg2, arg3)
 
-    @ContextMixin.use_contextual_arguments
-    def count_cores_in_state(self, state, app_id=Required):
+    @ContextMixin.use_contextual_arguments()
+    def count_cores_in_state(self, state, app_id):
         """Count the number of cores in a given state.
 
         .. warning::
@@ -995,8 +993,8 @@ class MachineController(ContextMixin):
         return self._send_scp(
             0, 0, 0, SCPCommands.signal, arg1, arg2, arg3).arg1
 
-    @ContextMixin.use_contextual_arguments
-    def wait_for_cores_to_reach_state(self, state, count, app_id=Required,
+    @ContextMixin.use_contextual_arguments()
+    def wait_for_cores_to_reach_state(self, state, count, app_id,
                                       poll_interval=0.1, timeout=None):
         """Block until the specified number of cores reach the specified state.
 
@@ -1054,8 +1052,8 @@ class MachineController(ContextMixin):
 
         return cur_count
 
-    @ContextMixin.use_contextual_arguments
-    def load_routing_tables(self, routing_tables, app_id=Required):
+    @ContextMixin.use_contextual_arguments()
+    def load_routing_tables(self, routing_tables, app_id):
         """Allocate space for an load multicast routing tables.
 
         The routing table entries will be removed automatically when the
@@ -1078,9 +1076,8 @@ class MachineController(ContextMixin):
         for (x, y), table in iteritems(routing_tables):
             self.load_routing_table_entries(table, x=x, y=y, app_id=app_id)
 
-    @ContextMixin.use_contextual_arguments
-    def load_routing_table_entries(self, entries, x=Required, y=Required,
-                                   app_id=Required):
+    @ContextMixin.use_contextual_arguments()
+    def load_routing_table_entries(self, entries, x, y, app_id):
         """Allocate space for and load multicast routing table entries into the
         router of a SpiNNaker chip.
 
@@ -1133,8 +1130,8 @@ class MachineController(ContextMixin):
             buf, rtr_base
         )
 
-    @ContextMixin.use_contextual_arguments
-    def get_routing_table_entries(self, x=Required, y=Required):
+    @ContextMixin.use_contextual_arguments()
+    def get_routing_table_entries(self, x, y):
         """Dump the multicast routing table of a given chip.
 
         Returns
@@ -1156,8 +1153,8 @@ class MachineController(ContextMixin):
             table.append(unpack_routing_table_entry(entry))
         return table
 
-    @ContextMixin.use_contextual_arguments
-    def get_p2p_routing_table(self, x=Required, y=Required):
+    @ContextMixin.use_contextual_arguments()
+    def get_p2p_routing_table(self, x, y):
         """Dump the contents of a chip's P2P routing table.
 
         This method can be indirectly used to get a list of functioning chips.
@@ -1200,8 +1197,8 @@ class MachineController(ContextMixin):
 
         return table
 
-    @ContextMixin.use_contextual_arguments
-    def get_working_links(self, x=Required, y=Required):
+    @ContextMixin.use_contextual_arguments()
+    def get_working_links(self, x, y):
         """Return the set of links reported as working.
 
         The returned set lists only links over-which nearest neighbour
@@ -1215,8 +1212,8 @@ class MachineController(ContextMixin):
         link_up = self.read_struct_field("sv", "link_up", x, y)
         return set(link for link in Links if link_up & (1 << link))
 
-    @ContextMixin.use_contextual_arguments
-    def get_num_working_cores(self, x=Required, y=Required):
+    @ContextMixin.use_contextual_arguments()
+    def get_num_working_cores(self, x, y):
         """Return the number of working cores, including the monitor."""
         return self.read_struct_field("sv", "num_cpus", x, y)
 
