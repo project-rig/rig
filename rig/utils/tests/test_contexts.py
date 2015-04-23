@@ -12,24 +12,34 @@ def object_to_test():
             contexts.ContextMixin.__init__(self)
             self.closed = False
 
-        @contexts.ContextMixin.use_contextual_arguments
+        @contexts.ContextMixin.use_contextual_arguments()
         def method_a(self, arg0, arg1=contexts.Required, arg2=30):
             return (arg0, arg1, arg2)
 
-        # NOTE The following method can ONLY be called in a context or with
-        # named arguments, i.e., "arg1" is NEVER a positional argument.
-        @contexts.ContextMixin.use_named_contextual_arguments(
+        # This function notably has no default positional arguments and two
+        # keyword-only arguments: arg1 and arg2.
+        @contexts.ContextMixin.use_contextual_arguments(
             arg1=contexts.Required, arg2=None)
         def method_b(self, arg0, *args, **kwargs):
             arg1 = kwargs.pop("arg1")
             arg2 = kwargs.pop("arg2")
             return (arg0, arg1, arg2, args, kwargs)
 
-        @contexts.ContextMixin.use_contextual_arguments
-        def close(self, arg1=contexts.Required):
+        @contexts.ContextMixin.use_contextual_arguments()
+        def close(self, arg1):
             self.closed = arg1
 
     return ObjectWithContext
+
+
+def test_contextmixin_not_required(object_to_test):
+    obj = object_to_test()
+
+    # Make sure that arguments without the "Required" sentinel can still be set
+    # via the context.
+    with obj.get_new_context(arg0=0, arg1=1, arg2=2):
+        assert obj.method_a() == (0, 1, 2)
+        assert obj.method_b() == (0, 1, 2, (), {})
 
 
 @pytest.mark.parametrize("arg1", [1, None, 5])
