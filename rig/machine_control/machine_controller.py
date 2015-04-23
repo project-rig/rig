@@ -233,6 +233,24 @@ class MachineController(ContextMixin):
         assert len(self.structs) > 0
 
     @ContextMixin.use_contextual_arguments
+    def application(self, app_id=Required):
+        """Update the context to use the given application ID and stop the
+        application when done.
+
+        For example::
+
+            with cn.application(54):
+                # All commands in this block will use app_id=54.
+                # On leaving the block `cn.send_signal("stop", 54)` is
+                # automatically called.
+        """
+        # Get a new context and add a method that will be called before the
+        # context is removed from the stack.
+        context = self(app_id=app_id)
+        context.before_close(lambda: self.send_signal("stop"))
+        return context
+
+    @ContextMixin.use_contextual_arguments
     def get_software_version(self, x=Required, y=Required, processor=0):
         """Get the software version for a given SpiNNaker core.
 
@@ -888,7 +906,7 @@ class MachineController(ContextMixin):
 
         # If not waiting then send the start signal
         if not wait:
-            self.send_signal(consts.AppSignal.start, app_id)
+            self.send_signal("start", app_id)
 
     @ContextMixin.use_contextual_arguments
     def send_signal(self, signal, app_id=Required):
@@ -898,17 +916,28 @@ class MachineController(ContextMixin):
             In current implementations of SARK, signals are highly likely to
             arrive but this is not guaranteed (especially when the system's
             network is heavily utilised). Users should treat this mechanism
-            with caution.
+            with caution. Future versions of SARK may resolve this issue.
 
         Parameters
         ----------
-        signal : :py:class:`~rig.machine_control.consts.AppSignal`
-            Signal to transmit.
+        signal : string or :py:class:`~rig.machine_control.consts.AppSignal`
+            Signal to transmit. This may be either an entry of the
+            :py:class:`~rig.machine_control.consts.AppSignal` enum or, for
+            convenience, the name of a signal (defined in
+            :py:class:`~rig.machine_control.consts.AppSignal`) as a string.
         """
+        if isinstance(signal, str):
+            try:
+                signal = getattr(consts.AppSignal, signal)
+            except AttributeError:
+                # The signal name is not present in consts.AppSignal! The next
+                # test will throw an appropriate exception since no string can
+                # be "in" an IntEnum.
+                pass
         if signal not in consts.AppSignal:
             raise ValueError(
-                "send_signal: Cannot transmit signal of type {}".format(signal)
-            )
+                "send_signal: Cannot transmit signal of type {}".format(
+                    repr(signal)))
 
         # Construct the packet for transmission
         arg1 = consts.signal_types[signal]
@@ -924,13 +953,31 @@ class MachineController(ContextMixin):
             In current implementations of SARK, signals (which are used to
             determine the state of cores) are highly likely to arrive but this
             is not guaranteed (especially when the system's network is heavily
-            utilised). Users should treat this mechanism with caution.
+            utilised). Users should treat this mechanism with caution. Future
+            versions of SARK may resolve this issue.
 
         Parameters
         ----------
-        state : :py:class:`~rig.machine_control.consts.AppState`
-            Count the number of cores currently in this state.
+        state : string or :py:class:`~rig.machine_control.consts.AppState`
+            Count the number of cores currently in this state. This may be
+            either an entry of the
+            :py:class:`~rig.machine_control.consts.AppState` enum or, for
+            convenience, the name of a state (defined in
+            :py:class:`~rig.machine_control.consts.AppState`) as a string.
         """
+        if isinstance(state, str):
+            try:
+                state = getattr(consts.AppState, state)
+            except AttributeError:
+                # The state name is not present in consts.AppSignal! The next
+                # test will throw an appropriate exception since no string can
+                # be "in" an IntEnum.
+                pass
+        if state not in consts.AppState:
+            raise ValueError(
+                "count_cores_in_state: Unknown state {}".format(
+                    repr(state)))
+
         # TODO Determine a way to nicely express a way to use the region data
         # stored in arg3.
         region = 0x0000ffff  # Largest possible machine, level 0
@@ -947,6 +994,65 @@ class MachineController(ContextMixin):
         # Transmit and return the count
         return self._send_scp(
             0, 0, 0, SCPCommands.signal, arg1, arg2, arg3).arg1
+
+    @ContextMixin.use_contextual_arguments
+    def wait_for_cores_to_reach_state(self, state, count, app_id=Required,
+                                      poll_interval=0.1, timeout=None):
+        """Block until the specified number of cores reach the specified state.
+
+        This is a simple utility-wrapper around the
+        :py:meth:`.count_cores_in_state` method which polls the machine until
+        (at least) the supplied number of cores has reached the specified
+        state.
+
+        .. warning::
+            In current implementations of SARK, signals (which are used to
+            determine the state of cores) are highly likely to arrive but this
+            is not guaranteed (especially when the system's network is heavily
+            utilised). As a result, in uncommon-but-possible circumstances,
+            this function may never exit. Users should treat this function with
+            caution. Future versions of SARK may resolve this issue.
+
+        Parameters
+        ----------
+        state : string or :py:class:`~rig.machine_control.consts.AppState`
+            The state to wait for cores to enter. This may be
+            either an entry of the
+            :py:class:`~rig.machine_control.consts.AppState` enum or, for
+            convenience, the name of a state (defined in
+            :py:class:`~rig.machine_control.consts.AppState`) as a string.
+        count : int
+            The (minimum) number of cores reach the specified state before this
+            method terminates.
+        poll_interval : float
+            Number of seconds between state counting requests sent to the
+            machine.
+        timeout : float or Null
+            Maximum number of seconds which may elapse before giving up. If
+            None, keep trying forever.
+
+        Returns
+        -------
+        int
+            The number of cores in the given state (which will be less than the
+            number required if the method timed out).
+        """
+        if timeout is not None:
+            timeout_time = time.time() + timeout
+
+        while True:
+            cur_count = self.count_cores_in_state(state, app_id)
+            if cur_count >= count:
+                break
+
+            # Stop if timeout elapsed
+            if timeout is not None and time.time() > timeout_time:
+                break
+
+            # Pause before retrying
+            time.sleep(poll_interval)
+
+        return cur_count
 
     @ContextMixin.use_contextual_arguments
     def load_routing_tables(self, routing_tables, app_id=Required):

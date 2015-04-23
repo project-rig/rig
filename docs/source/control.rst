@@ -111,19 +111,39 @@ necessary). If not all applications could be loaded, a
 exception is raised.
 
 Many applications require the `sync0` signal to be sent to start the
-application's event handler after loading. This can be done using
-:py:class:`~.MachineController.send_signal`::
+application's event handler after loading. We can wait for all cores to reach
+the `sync0` barrier using
+:py:class:`~.MachineController.wait_for_cores_to_reach_state` and then send the
+`sync0` signal using :py:class:`~.MachineController.send_signal`::
 
-    >>> from rig.machine_control.consts import AppSignal
-    >>> mc.send_signal(AppSignal.sync0)
+    >>> # In the example above we loaded 5 cores so we expect 5 cores to reach
+    >>> # sync0.
+    >>> mc.wait_for_cores_to_reach_state("sync0", 5)
+    5
+    >>> mc.send_signal("sync0")
 
-Similarly, after execution, the application can be killed with::
+Similarly, after application execution, the application can be killed with::
 
-    >>> mc.send_signal(AppSignal.stop)
+    >>> mc.send_signal("stop")
+
+Since the stop signal also cleans up allocated resources in a SpiNNaker machine
+(e.g. stray processes, routing entries and allocated SDRAM), it is desireable
+for this signal to reliably get sent, even if something crashes in the host
+application. To facilitate this, you can use the
+:py:meth:`~.MachineController.application` context manager::
+
+    >>> with mc.application():
+    ...     # Main application code goes here, e.g. loading applications,
+    ...     # routing tables and SDRAM.
+    >>> # When the above block exits (even if due to an exception), the stop
+    >>> # signal will be sent to the application.
 
 .. note::
     Many application-oriented methods accept an `app_id` argument which is given
-    a sensible default value.
+    a sensible default value. If the :py:meth:`.MachineController.application`
+    context manager is given an app ID as its argument, this app ID will become
+    the default `app_id` within the `with` block. See the section on context
+    managers below for more details.
 
 Loading Routing Tables
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -201,13 +221,6 @@ reduce the repetition, Python's ``with`` statement can be used::
     >>> with mc(x = 1, y = 2):
     ...     block_addr = mc.sdram_alloc(1024, 3)
     ...     mc.write(block_addr, b"Hello, world!")
-
-Alternatively, the current context can be modified by calling
-:py:meth:`~.MachineController.update_current_context`::
-
-    >>> # Following this call all commands will use app_id=56
-    >>> mc.update_current_context(app_id=56)
-
 
 :py:class:`.BMPController` Tutorial
 -----------------------------------
