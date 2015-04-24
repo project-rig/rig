@@ -1,8 +1,9 @@
 .. py:module::rig.bitfield
+
 .. py:class::rig.bitfield.BitField
 
-Defining bit fields with :py:class:`.BitField`
-==============================================
+:py:mod:`rig.bitfield`: routing key construction made easy
+==========================================================
 
 In many applications there is a need to define bit fields, for example when
 defining SpiNNaker routing keys. Rig provides the class
@@ -10,8 +11,8 @@ defining SpiNNaker routing keys. Rig provides the class
 bit fields. A tutorial introduction to this class is provided below and is
 followed by the full API documentation.
 
-Tutorial
---------
+Routing keys tutorial
+---------------------
 
 In this tutorial we will tackle the commonly faced challenge of defining the
 SpiNNaker routing keys. In SpiNNaker, routing keys are 32-bit values which are
@@ -478,8 +479,8 @@ and X in the next 8).
     it allows the behaviours outlined in the section above on tags.
 
 
-:py:class:`.BitField` API
--------------------------
+:py:class:`~rig.bitfield.BitField` API reference
+------------------------------------------------
 
 .. autoclass:: rig.bitfield.BitField
     :members:

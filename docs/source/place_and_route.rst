@@ -1,5 +1,7 @@
-Place and Route
-===============
+.. py:module:: rig.place_and_route
+
+:py:mod:`rig.place_and_route`: Place applications, allocate on-chip resources, create routing tables
+====================================================================================================
 
 Rig provides a set of algorithms and utilities for mapping graph-like
 applications onto specific cores in a SpiNNaker machine and defining routes
@@ -88,13 +90,14 @@ Constraint
     behaviour, users must perform this step in an application-defined process
     prior to placement.
 
-Common case wrapper
--------------------
+:py:func:`~rig.place_and_route.wrapper`: common case wrapper
+------------------------------------------------------------
 
 Most applications simply require their application graph be translated into a
 set of data structures describing where binaries need to be loaded and a set of
-routing tables. For most users the :py:func:`rig.place_and_route.wrapper`
-will do exactly this with a minimum of fuss.
+routing tables. For most users the :py:func:`rig.place_and_route.wrapper` will
+do exactly this with a minimum of fuss. For more advanced users, this function
+can be used as an example of the complete place-and-route process.
 
 .. autofunction:: rig.place_and_route.wrapper
 
@@ -103,11 +106,12 @@ Placement, allocation and routing algorithms
 --------------------------------------------
 
 The three key steps of the place-and-route process (placement, allocation and
-routing) are broken into three functions:
+routing) are broken into three functions with a common API exposed by all
+algorithm implementations.
 
-* :py:func:`place`
-* :py:func:`allocate`
-* :py:func:`route`
+* :py:func:`~rig.place_and_route.place`
+* :py:func:`~rig.place_and_route.allocate`
+* :py:func:`~rig.place_and_route.route`
 
 Since these tasks are largely NP-complete, rig attempts to include a selection
 of complimentary algorithms whose function prototypes are shared (and defined
@@ -119,20 +123,8 @@ Sensible default implementations for each function are aliased as:
 * :py:func:`rig.place_and_route.allocate`
 * :py:func:`rig.place_and_route.route`
 
-The details of the available algorithms are described separately:
-
-.. toctree::
-    :maxdepth: 2
-    
-    place_and_route/placement_algorithms
-    place_and_route/allocation_algorithms
-    place_and_route/routing_algorithms
-
-Function Prototypes
-^^^^^^^^^^^^^^^^^^^
-
-The function prototypes shared by all placement, allocation and routing
-functions are described below.
+:py:func:`.place` prototype
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. py:function:: place(vertices_resources, nets, machine, constraints, **kwargs)
     
@@ -177,6 +169,8 @@ functions are described below.
         The placer could not find a placement where sufficient resources are
         available on each core.
 
+:py:func:`.allocate` prototype
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. py:function:: allocate(vertices_resources, nets, machine, constraints, placements, **kwargs)
     
@@ -230,6 +224,8 @@ functions are described below.
         The allocator could not allocate all desired resources to those
         available.
 
+:py:func:`.route` prototype
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. py:function:: route(vertices_resources, nets, machine, constraints, placements, allocations, core_resource=Cores, **kwargs)
     
@@ -296,8 +292,20 @@ functions are described below.
         If any pair of vertices in a net have no path between them (i.e.
         the system is impossible to route).
 
-Constraints (:py:mod:`rig.place_and_route.constraints`)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Available algorithms
+^^^^^^^^^^^^^^^^^^^^
+
+For more details on the available algorithms, see:
+
+.. toctree::
+    :maxdepth: 2
+    
+    place_and_route/placement_algorithms
+    place_and_route/allocation_algorithms
+    place_and_route/routing_algorithms
+
+:py:mod:`~rig.place_and_route.constraints`: place and route constraints
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. automodule:: rig.place_and_route.constraints
     :members:
@@ -309,9 +317,18 @@ Constraints (:py:mod:`rig.place_and_route.constraints`)
     :members:
     :special-members:
 
-Utility functions
------------------
+:py:mod:`~rig.place_and_route.utils`: Utility functions
+-------------------------------------------------------
 
 .. automodule:: rig.place_and_route.utils
     :members:
 
+Data structures
+---------------
+
+.. toctree::
+        :maxdepth: 2
+        
+        machine
+        routing_table
+        netlist

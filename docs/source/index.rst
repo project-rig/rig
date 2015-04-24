@@ -1,63 +1,57 @@
-.. Rig documentation master file, created by
-   sphinx-quickstart on Tue Jan 20 15:22:07 2015.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 Rig - libraries for SpiNNaker application support
 =================================================
 
 .. image:: logo.png
 
-Rig is a set of Python and C libraries for mapping computational problems to
-SpiNNaker and interacting with them.  Above all it aims to be light weight and
-to present common and well-documented interfaces to all of its parts.
+Rig is a Python library which contains a collection of complementary tools for
+developing applications for the massively-parallel SpiNNaker_ architecture.
+First and foremost, Rig aims to present a light-weight, well tested and well
+documented interface for SpiNNaker application developers.
 
-Rig is split into three primary groups of tools and utilities:
+.. _SpiNNaker: http://apt.cs.manchester.ac.uk/projects/SpiNNaker/
 
-Execution specification
------------------------
+The following documentation aims to provide new users with a high-level
+introduction to all of the key parts of Rig and also present a formal API
+reference which is also available via Python's ``help()`` system.
 
-Allows specification of the sets of executables that are to be simulated on
-SpiNNaker.  Tools exist for:
-
-.. toctree::
-        :maxdepth: 2
-
-        bitfield_doctest
-
-Problem mapping
----------------
-
-.. toctree::
-        :maxdepth: 2
-        
-        place_and_route
-        machine
-        routing_table
-        netlist
-        geometry
-
-
-Execution control
------------------
-
-.. toctree::
-        :maxdepth: 2
-
-        control
-        control_api
-
-Utilities
----------
+Data packaging for SpiNNaker
+----------------------------
 
 .. toctree::
         :maxdepth: 2
 
         type_casts
+        bitfield_doctest
+
+Graph-to-machine mapping
+------------------------
+
+.. toctree::
+        :maxdepth: 3
+        
+        place_and_route
+        geometry
 
 
-Indices and tables
-==================
+Execution control and machine management
+----------------------------------------
+
+.. toctree::
+        :maxdepth: 2
+
+        control
+
+
+Standalone utility applications
+-------------------------------
+
+.. toctree::
+        :maxdepth: 2
+
+        utility_apps
+
+Indicies and Tables
+-------------------
 
 * :ref:`genindex`
 * :ref:`modindex`

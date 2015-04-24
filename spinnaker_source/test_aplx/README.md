@@ -13,7 +13,7 @@ Making the test APLX
 --------------------
 
 This should be unnecessary unless you change the source.  With the
-(spinnaker_tools)[https://github.com/SpiNNakerManchester/spinnaker_tools] set
+[spinnaker_tools](https://github.com/SpiNNakerManchester/spinnaker_tools) set
 up and initialised simply run:
 
     make

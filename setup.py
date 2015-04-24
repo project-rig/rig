@@ -3,13 +3,35 @@ import sys
 
 setup(
     name="rig",
-    version="0.1.1.dev",
+    version="0.1.1",
     packages=find_packages(),
 
     # Metadata for PyPi
-    author="Jonathan Heathcote, Andrew Mundy",
-    description="A set of libraries for mapping problems to SpiNNaker",
+    url="https://github.com/project-rig/rig",
+    author="The Rig Authors",
+    description="A collection of tools for developing SpiNNaker applications",
     license="GPLv2",
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+
+        "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+
+        "Operating System :: POSIX :: Linux",
+        "Operating System :: Microsoft :: Windows",
+        "Operating System :: MacOS",
+
+        "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.3",
+        "Programming Language :: Python :: 3.4",
+
+        "Topic :: Software Development :: Libraries",
+    ],
+    keywords="spinnaker placement routing graph fixed-point",
 
     # Requirements
     install_requires=["numpy>1.6", "six", "enum34", "sentinel"],
