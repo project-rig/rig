@@ -9,13 +9,14 @@ import os
 import time
 from .test_scp_connection import SendReceive, mock_conn  # noqa
 
-from ..consts import DataType, SCPCommands, LEDAction, NNCommands, NNConstants
+from ..consts import SCPCommands, LEDAction, NNCommands, NNConstants
 from ..machine_controller import (
     MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError,
     SpiNNakerLoadingError, CoreInfo, ProcessorStatus,
     unpack_routing_table_entry
 )
 from ..packets import SCPPacket
+from ..scp_connection import SCPConnection
 from .. import regions, consts, struct_file
 
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
@@ -37,22 +38,6 @@ def live_machine(controller):
 def cn():
     cn = MachineController("localhost")
     cn._scp_data_length = 256
-    return cn
-
-
-@pytest.fixture
-def controller_rw_mock():
-    """Create a controller with mock _read and _write methods."""
-    cn = MachineController("localhost")
-    cn._read = mock.Mock(spec_set=[])
-    cn._write = mock.Mock(spec_set=[])
-    cn._scp_data_length = 256
-
-    def read_mock(x, y, p, address, length_bytes, data_type=DataType.byte):
-        return b'\x00' * length_bytes
-
-    cn._read.side_effect = read_mock
-
     return cn
 
 
@@ -459,155 +444,45 @@ class TestMachineController(object):
         assert cn.scp_data_length == size
         cn.get_software_version.assert_called_once_with(0, 0)
 
-    @pytest.mark.parametrize(  # noqa
-        "address, data, dtype",
-        [(0x60000000, b"Hello, World", DataType.byte),
-         (0x60000002, b"Hello, World", DataType.short),
-         (0x60000004, b"Hello, World", DataType.word)])
-    def test__write(self, mock_conn, address, data, dtype):
-        """Check writing data can be performed correctly.
-
-        SCP Layout
-        ----------
-        Outgoing:
-            cmd_rc : 3
-            arg_1 : address to write to
-            arg_2 : number of bytes to write
-            arg_3 : Type of data to write:
-                        - 0 : byte
-                        - 1 : short
-                        - 2 : word
-                    This only affects the speed of the operation on SpiNNaker.
-
-        Return:
-            cmd_rc : 0x80 -- success
-        """
+    @pytest.mark.parametrize(
+        "buffer_size, x, y, p, start_address, data",
+        [(128, 0, 1, 2, 0x67800000, b"\x00" * 100),
+         (256, 1, 4, 5, 0x67801000, b"\x10\x23"),
+         ]
+    )
+    def test_write(self, buffer_size, x, y, p, start_address, data):
         # Create the mock controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
+        cn._scp_data_length = buffer_size
+        cn.connections[0] = mock.Mock(spec_set=SCPConnection)
 
-        # Try the write
-        cn._write(0, 1, 2, address, data, dtype)
+        # Perform the read and ensure that values are passed on as appropriate
+        with cn(x=x, y=y, p=p):
+            cn.write(start_address, data)
 
-        # Assert that there was 1 packet sent and that it was sane
-        call = cn._send_scp.call_args[0]
-        assert call == (0, 1, 2, SCPCommands.write, address, len(data),
-                        int(dtype), data)
-
-    @pytest.mark.parametrize(
-        "start_address,data,data_type",
-        [(0x60000000, b'\x00', DataType.byte),
-         (0x60000001, b'\x00', DataType.byte),
-         (0x60000001, b'\x00\x00', DataType.byte),
-         (0x60000001, b'\x00\x00\x00\x00', DataType.byte),
-         (0x60000000, b'\x00\x00', DataType.short),
-         (0x60000002, b'\x00\x00\x00\x00', DataType.short),
-         (0x60000004, b'\x00\x00\x00\x00', DataType.word),
-         (0x60000001, 512*b'\x00\x00\x00\x00', DataType.byte),
-         (0x60000002, 512*b'\x00\x00\x00\x00', DataType.short),
-         (0x60000000, 512*b'\x00\x00\x00\x00', DataType.word),
-         ])
-    def test_write(self, controller_rw_mock, start_address, data, data_type):
-        # Write the data
-        controller_rw_mock.write(start_address, data, x=0, y=1, p=2)
-
-        # Check that the correct calls to write were made
-        segments = []
-        address = start_address
-        addresses = []
-        while len(data) > 0:
-            addresses.append(address)
-            segments.append(data[0:controller_rw_mock._scp_data_length])
-
-            data = data[controller_rw_mock._scp_data_length:]
-            address += len(segments[-1])
-
-        controller_rw_mock._write.assert_has_calls(
-            [mock.call(0, 1, 2, a, d, data_type) for (a, d) in
-             zip(addresses, segments)]
+        cn.connections[0].write.assert_called_once_with(
+            buffer_size, x, y, p, start_address, data
         )
 
     @pytest.mark.parametrize(
-        "address, data, dtype",
-        [(0x60000000, b"Hello, World", DataType.byte),
-         (0x60000002, b"Hello, World", DataType.short),
-         (0x60000004, b"Hello, World", DataType.word)])
-    def test__read(self, address, data, dtype):
-        """Check reading data can be performed correctly.
-
-        SCP Layout
-        ----------
-        Outgoing:
-            cmd_rc : 2
-            arg_1 : address to read from
-            arg_2 : number of bytes to read
-            arg_3 : Type of data to read:
-                        - 0 : byte
-                        - 1 : short
-                        - 2 : word
-                    This only affects the speed of the operation on SpiNNaker.
-
-        Return:
-            cmd_rc : 0x80 -- success
-            data : data read from memory
-        """
+        "buffer_size, x, y, p, start_address, length, data",
+        [(128, 0, 1, 2, 0x67800000, 100, b"\x00" * 100),
+         (256, 1, 4, 5, 0x67801000, 2, b"\x10\x23"),
+         ]
+    )
+    def test_read(self, buffer_size, x, y, p, start_address, length, data):
         # Create the mock controller
         cn = MachineController("localhost")
-        cn._send_scp = mock.Mock()
-        cn._send_scp.return_value = mock.Mock(spec_set=SCPPacket)
-        cn._send_scp.return_value.data = data
+        cn._scp_data_length = buffer_size
+        cn.connections[0] = mock.Mock(spec_set=SCPConnection)
+        cn.connections[0].read.return_value = data
 
-        # Try the read
-        read = cn._read(0, 1, 2, address, len(data), dtype)
+        # Perform the read and ensure that values are passed on as appropriate
+        with cn(x=x, y=y, p=p):
+            assert data == cn.read(start_address, length)
 
-        # Assert that there was 1 packet sent and that it was sane
-        assert cn._send_scp.call_count == 1
-        call = cn._send_scp.call_args[0]
-        assert call == (0, 1, 2, SCPCommands.read, address, len(data),
-                        int(dtype))
-        assert read == data
-
-    @pytest.mark.parametrize(
-        "n_bytes, data_type, start_address, n_packets",
-        [(1, DataType.byte, 0x60000000, 1),   # Only reading a byte
-         (3, DataType.byte, 0x60000000, 1),   # Can only read bytes
-         (2, DataType.byte, 0x60000001, 1),   # Offset from short
-         (4, DataType.byte, 0x60000001, 1),   # Offset from word
-         (2, DataType.short, 0x60000002, 1),  # Reading a short
-         (6, DataType.short, 0x60000002, 1),  # Can read shorts
-         (4, DataType.short, 0x60000002, 1),  # Offset from word
-         (4, DataType.word, 0x60000004, 1),   # Reading a word
-         (257, DataType.byte, 0x60000001, 2),
-         (511, DataType.byte, 0x60000001, 2),
-         (258, DataType.byte, 0x60000001, 2),
-         (256, DataType.byte, 0x60000001, 1),
-         (258, DataType.short, 0x60000002, 2),
-         (514, DataType.short, 0x60000002, 3),
-         (516, DataType.short, 0x60000002, 3),
-         (256, DataType.word, 0x60000004, 1)
-         ])
-    def test_read(self, controller_rw_mock, n_bytes, data_type, start_address,
-                  n_packets):
-        # Read an amount of memory specified by the size.
-        data = controller_rw_mock.read(start_address, n_bytes, x=0, y=0, p=0)
-        assert len(data) == n_bytes
-
-        # Assert that n calls were made to the communicator with the correct
-        # parameters.
-        offset = start_address
-        offsets = []
-        lens = []
-        while n_bytes > 0:
-            offsets += [offset]
-            lens += [min((controller_rw_mock._scp_data_length, n_bytes))]
-            offset += lens[-1]
-            n_bytes -= controller_rw_mock._scp_data_length
-
-        assert len(lens) == len(offsets) == n_packets, "Test is broken"
-
-        controller_rw_mock._read.assert_has_calls(
-            [mock.call(0, 0, 0, o, l, data_type) for (o, l) in
-             zip(offsets, lens)]
+        cn.connections[0].read.assert_called_once_with(
+            buffer_size, x, y, p, start_address, length
         )
 
     @pytest.mark.parametrize(

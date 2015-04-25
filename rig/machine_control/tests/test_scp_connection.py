@@ -2,6 +2,7 @@ import mock
 from mock import call
 import pytest
 
+from ..consts import SCPCommands, DataType
 from ..packets import SCPPacket
 from ..scp_connection import SCPConnection
 from .. import scp_connection
@@ -13,10 +14,10 @@ class SendReceive(object):
         self.return_packet = return_packet
 
     def send(self, packet, *args):
-        self.last_seen = packet[2:]
+        self.last_seen = packet[:]
 
     def recv(self, *args, **kwargs):
-        return b"\x00\x00" + self.return_packet(self.last_seen)
+        return self.return_packet(self.last_seen)
 
 
 @pytest.fixture
@@ -117,3 +118,101 @@ def test_errors(mock_conn, rc, error):
 
     assert mock_conn.sock.send.call_count == 1
     assert mock_conn.sock.recv.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "buffer_size, x, y, p", [(128, 0, 0, 1), (256, 1, 2, 3)]
+)
+@pytest.mark.parametrize(
+    "n_bytes, data_type, start_address",
+    [(1, DataType.byte, 0x60000000),   # Only reading a byte
+     (3, DataType.byte, 0x60000000),   # Can only read bytes
+     (2, DataType.byte, 0x60000001),   # Offset from short
+     (4, DataType.byte, 0x60000001),   # Offset from word
+     (2, DataType.short, 0x60000002),  # Reading a short
+     (6, DataType.short, 0x60000002),  # Can read shorts
+     (4, DataType.short, 0x60000002),  # Offset from word
+     (4, DataType.word, 0x60000004),   # Reading a word
+     (257, DataType.byte, 0x60000001),
+     (511, DataType.byte, 0x60000001),
+     (258, DataType.byte, 0x60000001),
+     (256, DataType.byte, 0x60000001),
+     (258, DataType.short, 0x60000002),
+     (514, DataType.short, 0x60000002),
+     (516, DataType.short, 0x60000002),
+     (256, DataType.word, 0x60000004)
+     ])
+def test_read(buffer_size, x, y, p, n_bytes, data_type, start_address):
+    mock_conn = SCPConnection("localhost")
+
+    # Construct the expected calls, and hence the expected return packets
+    offset = start_address
+    offsets = []
+    lens = []
+    length_bytes = n_bytes
+    while length_bytes > 0:
+        offsets += [offset]
+        lens += [min((buffer_size, length_bytes))]
+        offset += lens[-1]
+        length_bytes -= lens[-1]
+
+    assert len(lens) == len(offsets), "Test is broken"
+
+    with mock.patch.object(mock_conn, "send_scp") as send_scp:
+        send_scp.side_effect = [SCPPacket(
+            False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, None, None, None,
+            l * b"\x00"
+        ) for l in lens]
+
+        # Read an amount of memory specified by the size.
+        data = mock_conn.read(buffer_size, x, y, p, start_address, n_bytes)
+        assert len(data) == n_bytes
+
+    # Assert that n calls were made to the communicator with the correct
+    # parameters.
+    send_scp.assert_has_calls(
+        [mock.call(buffer_size, x, y, p, SCPCommands.read,
+                   o, l, data_type, expected_args=0)
+         for o, l in zip(offsets, lens)]
+    )
+
+
+@pytest.mark.parametrize(
+    "buffer_size, x, y, p", [(128, 0, 0, 1), (256, 1, 2, 3)]
+)
+@pytest.mark.parametrize(
+    "start_address,data,data_type",
+    [(0x60000000, b'\x00', DataType.byte),
+     (0x60000001, b'\x00', DataType.byte),
+     (0x60000001, b'\x00\x00', DataType.byte),
+     (0x60000001, b'\x00\x00\x00\x00', DataType.byte),
+     (0x60000000, b'\x00\x00', DataType.short),
+     (0x60000002, b'\x00\x00\x00\x00', DataType.short),
+     (0x60000004, b'\x00\x00\x00\x00', DataType.word),
+     (0x60000001, 512*b'\x00\x00\x00\x00', DataType.byte),
+     (0x60000002, 512*b'\x00\x00\x00\x00', DataType.short),
+     (0x60000000, 512*b'\x00\x00\x00\x00', DataType.word),
+     ])
+def test_write(buffer_size, x, y, p, start_address, data, data_type):
+    mock_conn = SCPConnection("localhost")
+
+    # Write the data
+    with mock.patch.object(mock_conn, "send_scp") as send_scp:
+        mock_conn.write(buffer_size, x, y, p, start_address, data)
+
+    # Check that the correct calls to send_scp were made
+    segments = []
+    address = start_address
+    addresses = []
+    while len(data) > 0:
+        addresses.append(address)
+        segments.append(data[0:buffer_size])
+
+        data = data[buffer_size:]
+        address += len(segments[-1])
+
+    send_scp.assert_has_calls([
+        mock.call(buffer_size, x, y, p, SCPCommands.write,
+                  addr, len(block), data_type, block)
+        for addr, block in zip(addresses, segments)
+    ])

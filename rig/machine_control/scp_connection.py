@@ -101,7 +101,7 @@ class SCPConnection(object):
         n_tries = 0
         while n_tries < self.n_tries:
             # Transit the packet
-            self.sock.send(b'\x00\x00' + packet.bytestring)
+            self.sock.send(packet.bytestring)
             n_tries += 1
 
             try:
@@ -114,8 +114,7 @@ class SCPConnection(object):
             # Convert the possible returned packet into an SCP packet. If
             # the sequence number matches the expected sequence number then
             # the acknowledgement has been received.
-            scp = packets.SCPPacket.from_bytestring(ack[2:],
-                                                    n_args=expected_args)
+            scp = packets.SCPPacket.from_bytestring(ack, n_args=expected_args)
 
             # Check that the CMD_RC isn't an error
             if scp.cmd_rc in self.error_codes:
@@ -137,6 +136,102 @@ class SCPConnection(object):
             "Exceeded {} tries when trying to transmit packet.".format(
                 self.n_tries)
         )
+
+    def read(self, buffer_size, x, y, p, address, length_bytes):
+        """Read a bytestring from an address in memory.
+
+        ..note::
+            This method is included here to maintain API compatibility with an
+            `alternative implementation of SCP
+            <https://github.com/project-rig/rig-scp>`_.
+
+        Parameters
+        ----------
+        buffer_size : int
+            Number of bytes held in an SCP buffer by SARK, determines how many
+            bytes will be expected in a socket and how many bytes of data will
+            be read back in each packet.
+        x : int
+        y : int
+        p : int
+        address : int
+            The address at which to start reading the data.
+        length_bytes : int
+            The number of bytes to read from memory. Large reads are
+            transparently broken into multiple SCP read commands.
+
+        Returns
+        -------
+        :py:class:`bytes`
+            The data is read back from memory as a bytestring.
+        """
+        # Prepare the buffer to receive the incoming data
+        data = bytearray(length_bytes)
+
+        # Request data until all data has been received
+        offset = 0
+        while length_bytes > 0:
+            # Get the next block of data
+            block_size = min((length_bytes, buffer_size))
+            read_address = address + offset
+            dtype = consts.address_length_dtype[(read_address % 4,
+                                                 block_size % 4)]
+
+            # Send the SCP packet to request the data
+            block_data = self.send_scp(
+                buffer_size, x, y, p, consts.SCPCommands.read,
+                read_address, block_size, dtype, expected_args=0
+            )
+
+            # Save the data to the buffer, update the number of bytes remaining
+            # and the offset
+            data[offset:offset + block_size] = block_data.data
+            offset += block_size
+            length_bytes -= block_size
+
+        return bytes(data)
+
+    def write(self, buffer_size, x, y, p, address, data):
+        """Write a bytestring to an address in memory.
+
+        ..note::
+            This method is included here to maintain API compatibility with an
+            `alternative implementation of SCP
+            <https://github.com/project-rig/rig-scp>`_.
+
+        Parameters
+        ----------
+        buffer_size : int
+            Number of bytes held in an SCP buffer by SARK, determines how many
+            bytes will be expected in a socket and how many bytes will be
+            written in each packet.
+        x : int
+        y : int
+        p : int
+        address : int
+            The address at which to start writing the data. Addresses are given
+            within the address space of a SpiNNaker core. See the SpiNNaker
+            datasheet for more information.
+        data : :py:class:`bytes`
+            Data to write into memory. Writes are automatically broken into a
+            sequence of SCP write commands.
+        """
+        # While there is still data perform a write: get the block to write
+        # this time around, determine the data type, perform the write and
+        # increment the address
+        end = len(data)
+        pos = 0
+        while pos < end:
+            block = data[pos:pos + buffer_size]
+            block_size = len(block)
+
+            dtype = consts.address_length_dtype[(address % 4, block_size % 4)]
+
+            self.send_scp(buffer_size, x, y, p, consts.SCPCommands.write,
+                          address, block_size, dtype, block)
+
+            address += block_size
+            pos += block_size
 
 
 class SCPError(IOError):

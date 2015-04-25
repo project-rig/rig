@@ -304,3 +304,12 @@ class BMPInfoType(enum.IntEnum):
     can_status = 2  # Status of all CAN devices on the bus
     adc = 3  # ADC (e.g. voltage + temperature)
     ip_addr = 4  # IP Address
+
+
+# Dictionary of (address % 4, n_bytes % 4) to data type
+address_length_dtype = {
+    (i, j): (DataType.word if (i == j == 0) else
+             (DataType.short if (i % 2 == j % 2 == 0) else
+              DataType.byte))
+    for i in range(4) for j in range(4)
+}

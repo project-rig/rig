@@ -10,8 +10,7 @@ import time
 import pkg_resources
 
 from . import struct_file
-from .consts import SCPCommands, DataType, NNCommands, NNConstants, \
-    AppFlags, LEDAction
+from .consts import SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
 from . import boot, consts, regions
 from .scp_connection import SCPConnection
 
@@ -159,6 +158,10 @@ class MachineController(ContextMixin):
         p = kwargs.pop("p")
         return self._send_scp(x, y, p, *args, **kwargs)
 
+    def _get_connection(self, x, y):
+        """Get the appropriate connection for a chip."""
+        return self.connections[0]
+
     def _send_scp(self, x, y, p, *args, **kwargs):
         """Determine the best connection to use to send an SCP packet and use
         it to transmit.
@@ -178,7 +181,8 @@ class MachineController(ContextMixin):
         else:
             length = self._scp_data_length
 
-        return self.connections[0].send_scp(length, x, y, p, *args, **kwargs)
+        connection = self._get_connection(x, y)
+        return connection.send_scp(length, x, y, p, *args, **kwargs)
 
     def boot(self, width, height, **boot_kwargs):
         """Boot a SpiNNaker machine of the given size.
@@ -295,40 +299,9 @@ class MachineController(ContextMixin):
             Data to write into memory. Writes are automatically broken into a
             sequence of SCP write commands.
         """
-        # While there is still data perform a write: get the block to write
-        # this time around, determine the data type, perform the write and
-        # increment the address
-        end = len(data)
-        pos = 0
-        while pos < end:
-            block = data[pos:pos + self.scp_data_length]
-            block_size = len(block)
-
-            dtype = address_length_dtype[(address % 4, block_size % 4)]
-            self._write(x, y, p, address, block, dtype)
-
-            address += block_size
-            pos += block_size
-
-    def _write(self, x, y, p, address, data, data_type=DataType.byte):
-        """Write an SCP command's worth of data to an address in memory.
-
-        It is better to use :py:func:`~.write` which wraps this method and
-        allows writing bytestrings of arbitrary length.
-
-        Parameters
-        ----------
-        address : int
-            The address at which to start writing the data.
-        data : :py:class:`bytes`
-            Data to write into memory.  Must be <= the amount accepted by the
-            receiving core.
-        data_type : :py:class:`~rig.machine_control.consts.DataType`
-            The size of the data to write into memory.
-        """
-        length_bytes = len(data)
-        self._send_scp(x, y, p, SCPCommands.write, address, length_bytes,
-                       int(data_type), data, expected_args=0)
+        # Call the SCPConnection to perform the write on our behalf
+        connection = self._get_connection(x, y)
+        return connection.write(self.scp_data_length, x, y, p, address, data)
 
     @ContextMixin.use_contextual_arguments()
     def read(self, address, length_bytes, x, y, p=0):
@@ -347,50 +320,10 @@ class MachineController(ContextMixin):
         :py:class:`bytes`
             The data is read back from memory as a bytestring.
         """
-        # Make calls to the lower level read method until we have read
-        # sufficient bytes.
-        data = bytearray(b'\x00' * length_bytes)
-        pos = 0
-
-        while pos < length_bytes:
-            # Determine the number of bytes to read
-            reads = min(self.scp_data_length, length_bytes - pos)
-
-            # Determine the data type to use
-            dtype = address_length_dtype[(address % 4, reads % 4)]
-
-            # Perform the read and increment the address
-            data[pos:pos + reads] = self._read(x, y, p, address, reads, dtype)
-            address += reads
-            pos += reads
-
-        return bytes(data)
-
-    def _read(self, x, y, p, address, length_bytes, data_type=DataType.byte):
-        """Read an SCP command's worth of data from an address in memory.
-
-        It is better to use :py:func:`~.read` which wraps this method and
-        allows reading bytestrings of arbitrary length.
-
-        Parameters
-        ----------
-        address : int
-            The address at which to start reading the data.
-        length_bytes : int
-            The number of bytes to read from memory, must be <=
-            :py:attr:`.scp_data_length`
-        data_type : DataType
-            The size of the data to write into memory.
-
-        Returns
-        -------
-        :py:class:`bytes`
-            The data is read back from memory as a bytestring.
-        """
-        read_scp = self._send_scp(x, y, p, SCPCommands.read, address,
-                                  length_bytes, int(data_type),
-                                  expected_args=0)
-        return read_scp.data
+        # Call the SCPConnection to perform the read on our behalf
+        connection = self._get_connection(x, y)
+        return connection.read(self.scp_data_length, x, y, p,
+                               address, length_bytes)
 
     @ContextMixin.use_contextual_arguments()
     def read_struct_field(self, struct_name, field_name, x, y, p=0):
@@ -1402,15 +1335,6 @@ class IPTag(collections.namedtuple("IPTag",
 
         return cls(ip_addr, mac, port, timeout, flags, count, rx_port,
                    spin_addr, spin_port)
-
-
-# Dictionary of (address % 4, n_bytes % 4) to data type
-address_length_dtype = {
-    (i, j): (DataType.word if (i == j == 0) else
-             (DataType.short if (i % 2 == j % 2 == 0) else
-              DataType.byte))
-    for i in range(4) for j in range(4)
-}
 
 
 class SpiNNakerMemoryError(Exception):
