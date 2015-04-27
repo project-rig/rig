@@ -7,17 +7,18 @@ import struct
 import tempfile
 import os
 import time
-from .test_scp_connection import SendReceive, mock_conn  # noqa
+from test_scp_connection import SendReceive, mock_conn  # noqa
 
-from ..consts import SCPCommands, LEDAction, NNCommands, NNConstants
-from ..machine_controller import (
+from rig.machine_control.consts import (
+    SCPCommands, LEDAction, NNCommands, NNConstants)
+from rig.machine_control.machine_controller import (
     MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError,
     SpiNNakerLoadingError, CoreInfo, ProcessorStatus,
     unpack_routing_table_entry
 )
-from ..packets import SCPPacket
-from ..scp_connection import SCPConnection
-from .. import regions, consts, struct_file
+from rig.machine_control.packets import SCPPacket
+from rig.machine_control.scp_connection import SCPConnection
+from rig.machine_control import regions, consts, struct_file
 
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 

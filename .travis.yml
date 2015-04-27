@@ -5,8 +5,7 @@ python:
         - 3.3
         - 3.4
 install:
-        - if [[ $TRAVIS_PYTHON_VERSION != 3.4 ]]; then pip install -r requirements-2.7.txt; fi
-        - pip install -r requirements.txt
+        - python setup.py install
         - pip install -r requirements-test.txt
         - pip install python-coveralls
         - pip install spinnaker_proxy
@@ -14,7 +13,22 @@ before_script:
         - spinnaker_proxy.py -qct cspc276.cs.man.ac.uk &
         - export SPINNAKER_PROXY_PID=$!
 script:
-        - py.test rig docs --spinn5 --spinnaker localhost 8 8 --bmp spinn-4c.cs.man.ac.uk --cov rig --durations=10
+        # Run the main test suite against real hardware and against the
+        # installed codebase. Note: since we're testing an installed version,
+        # the code coverage must be checked against this version, not the one in
+        # './rig/'.
+        - >
+            py.test tests/ \
+                    --spinnaker localhost 8 8 --spinn5 \
+                    --bmp spinn-4c.cs.man.ac.uk \
+                    --cov "$(./utils/rig_path.py)" \
+                    --cov tests \
+                    --durations=10
+        # Run doctests in code
+        - py.test rig/
+        # Run doctests in documentation
+        - py.test docs/
+        # Code quality check
         - flake8 rig
 after_success:
         - coveralls
