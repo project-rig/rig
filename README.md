@@ -72,7 +72,6 @@ Python Version Support
 Rig is tested against the following versions of Python:
 
 * 2.7
-* 3.3
 * 3.4
 
 Other versions may or may not work.
