@@ -1,4 +1,4 @@
-from ..packets import SDPPacket, SCPPacket
+from rig.machine_control.packets import SDPPacket, SCPPacket
 
 
 class TestSDPPacket(object):

@@ -1,10 +1,12 @@
 from setuptools import setup, find_packages
-import sys
 
 setup(
     name="rig",
     version="0.1.2",
     packages=find_packages(),
+    package_data={'rig': ['boot/sark.struct', 'boot/scamp.boot',
+                          'binaries/*.aplx']
+                  },
 
     # Metadata for PyPi
     url="https://github.com/project-rig/rig",
@@ -35,7 +37,6 @@ setup(
 
     # Requirements
     install_requires=["numpy>1.6", "six", "enum34", "sentinel"],
-    tests_require=["pytest>=2.6", "pytest-cov", "mock", "toposort"],
 
     # Scripts
     entry_points={

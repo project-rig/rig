@@ -69,40 +69,53 @@ bug in the test suite.
   does not indicate comprehensive tests.
 * [flake8](https://pypi.python.org/pypi/flake8) to enforce a [consistent code
   style](https://www.python.org/dev/peps/pep-0008/).
+* [Tox](https://pypi.python.org/pypi/tox/1.8.1) can be used to run tests against
+  all supported versions of Python.
 
 The test suite requires a number of additional Python packages to run which can
 be installed using::
 
     pip install -r requirements-test.txt
 
+The test suite also requires that Rig itself be installed. Though a development
+install is sufficient for running the tests, testing against a full installation
+will also detect packaging faults (e.g. omitted binaries & support files).
+
 ### Running tests
 
-The test suite can be run against the source code and documentation using the
-following command:
+Rigs tests are broken up into three groups which can be run as follows:
 
-    py.test rig docs
+    $ py.test tests  # The Rig test-suite
+    $ py.test rig    # Doctests in rig source code
+    $ py.test docs   # Doctests in Sphinx documentation whose
+                     # filename ends with '_doctest.rst'.
 
-This runs a subset of the full test suite which does not require an attached
-SpiNNaker board. The test suite automatically includes all doctest blocks in
-docstrings as well as doctest blocks in documentation files ending in
-`_doctest.rst`.
+Note: The first command only runs a subset of the full test suite which does not
+require an attached SpiNNaker board.
+
+Warning: Due to py.test modifying the Python module path, calling `py.test tests
+rig docs` (i.e. with the test suite at the same time as the module source) will
+fail for non-development installations. This is because the local 'rig' module
+gets added to the Python path and so py.test complains about ambiguity when the
+test-suite attempts to `import rig` and finds both a system version and a local
+version.
 
 #### Testing against local hardware
 
-Some tests require a connected SpiNNaker system.
+Some tests in the test suite require a connected SpiNNaker system.
 
 **For a minimal live-hardware test,** the attached SpiNNaker system must not be
 booted and have at least 2x2 SpiNNaker chips with the majority of cores
 operational. To include tests which can operate against a generic SpiNNaker
 system, run:
 
-    py.test rig docs --spinnaker SPINN_HOSTNAME WIDTH HEIGHT
+    py.test tests --spinnaker SPINN_HOSTNAME WIDTH HEIGHT
 
 **For a comprehensive live-hardware test,** the test suite should be run
 against a system consisting of a single SpiNN-5 board like so:
 
-    py.test rig docs \
-            --spinnaker SPINN_HOSTNAME 8 8 --spinn5
+    py.test tests \
+            --spinnaker SPINN_HOSTNAME 8 8 --spinn5 \
             --bmp BMP_HOSTNAME
 
 ### Test suite command line option reference
@@ -129,21 +142,33 @@ server must be used to communicate with the board. A utility such as
 [`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy) can be used
 alongside the test suite for this purpose.
 
+See the [Travis setup](.travis.yml) for an example of this in use.
+
 ### Test coverage checking
 
-To get a test coverage report run one of the following:
+If you're using a development install, to get a test coverage report run one of
+the following:
 
     # Summary printed on the commandline
-    py.test rig docs --cov rig
+    py.test tests --cov rig --cov tests
     
     # Generate a full HTML report (in the htmlcov directory)
-    py.test rig docs --cov rig --cov-report html
+    py.test tests --cov rig --cov tests --cov-report html
+
+Note: The test suite should be included in coverage reporting. This has, amongst
+other things, helped find numerous tests which inadvertently never got run.
+
+If you're using a system-wide install, you must tell coverage where to find the
+Rig module's source. A simple utility is included in `utils/rig_path.py` which
+prints the path of the installed Rig library. Tests can thus be run as follows:
+
+    py.test tests --cov "$(./utils/rig_path.py)" --cov tests
 
 ### Code standards checking
 
 To test for coding standards problems run:
 
-    flake8 rig
+    flake8 rig tests
 
 ### Using Tox
 
@@ -151,6 +176,18 @@ We also use [Tox](https://pypi.python.org/pypi/tox/1.8.1) to run tests against
 multiple versions of Python. To do this just execute `tox` in the root
 directory of the repository. Note that the included tox file requires all
 supported Python versions to be installed.
+
+To run against just a particular Python version use, for example:
+
+    $ tox -e py27  # Runs against Python 2.7
+
+Note that the first run of tox will be slow while the virtualenv is set up and
+all dependencies downloaded and installed. Subsequent runs will reuse any
+previously installed packages (when possible). When changing Rig's dependencies,
+you should recreate the tox environment to ensure that all dependencies are
+still fetched correctly:
+
+    $ tox --recreate
 
 ### Continuous integration
 
@@ -163,14 +200,12 @@ the test-coverage of tests executed by TravisCI does not drop below 100%.
 
 ### Test suite novelties
 
-* By convention, tests are kept in the `tests` directory within the same
-  directory as the code under test.
 * To assist some live board test functions, a simple SpiNNaker test program is
   loaded onto the machine. Its source can be found in
   [spinnaker_source/test_aplx](spinnaker_source/test_aplx). Note that a
   [precompiled binary](rig/binaries) is included with the repository to avoid
   the need to install a cross-compiler for most users.
-* See the [conftest.py](rig/tests/conftest.py) file for details of how the
+* See the [conftest.py](tests/conftest.py) file for details of how the
   order in which tests are executed is constrained using `pytest.mark.order`
   and friends.
 

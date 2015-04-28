@@ -1,7 +1,7 @@
 """Tests for the contextual-aware function module.
 """
 import pytest
-from .. import contexts
+from rig.utils import contexts
 
 
 @pytest.fixture

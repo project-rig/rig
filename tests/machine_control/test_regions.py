@@ -1,7 +1,8 @@
 import pytest
 
-from ..regions import (get_region_for_chip, compress_flood_fill_regions,
-                       minimise_regions, RegionTree)
+from rig.machine_control.regions import (
+    get_region_for_chip, compress_flood_fill_regions, minimise_regions,
+    RegionTree)
 
 
 # NOTE: Test vectors taken from C implementation
