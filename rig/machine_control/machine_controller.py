@@ -1379,7 +1379,21 @@ class SpiNNakerLoadingError(Exception):
 
 
 class MemoryIO(object):
-    """A file-like view into a subspace of the memory-space of a chip."""
+    """A file-like view into a subspace of the memory-space of a chip.
+
+    A `MemoryIO` is sliceable to allow construction of new, more specific,
+    file-like views of memory.
+
+    For example::
+
+        >>> f = MemoryIO(mc, 0, 1, 0x67800000, 0x6780000c)  # doctest: +SKIP
+        >>> f.write(b"Hello, world")                        # doctest: +SKIP
+        >>> f.read()                                        # doctest: +SKIP
+        b"Hello, world"
+        >>> g = f[0:5]                                      # doctest: +SKIP
+        >>> g.read()                                        # doctest: +SKIP
+        b"Hello"
+    """
 
     def __init__(self, machine_controller, x, y, start_address, end_address):
         """Create a file-like view onto a subset of the memory-space of a chip.
@@ -1397,16 +1411,73 @@ class MemoryIO(object):
             Starting address in memory.
         end_address : int
             End address in memory.
+
+        If `start_address` is greater or equal to `end_address` then
+        `end_address` is ignored and `start_address` is used instead.
         """
         # Store parameters
         self._x = x
         self._y = y
         self._machine_controller = machine_controller
+
+        # Store and clip the addresses
         self._start_address = start_address
-        self._end_address = end_address
+        self._end_address = max(start_address, end_address)
 
         # Current offset from start address
         self._offset = 0
+
+    def __getitem__(self, sl):
+        """Get a new file-like view of SDRAM covering the range indicated by
+        the slice.
+
+        For example, if `f` is a `MemoryIO` covering a 100 byte region of SDRAM
+        then::
+
+            >>> g = f[0:10]  # doctest: +SKIP
+
+        Creates a new `MemoryIO` referring to just the first 10 bytes of `f`,
+        the new file-like will be positioned at the start of the given block::
+
+            >>> g.tell()  # doctest: +SKIP
+            0
+
+        Raises
+        ------
+        ValueError
+            If the slice is not contiguous.
+        """
+        if isinstance(sl, slice) and (sl.step is None or sl.step == 1):
+            # Get the start and end addresses
+            if sl.start is None:
+                start_address = self._start_address
+            elif sl.start < 0:
+                start_address = max(self._start_address,
+                                    self._end_address + sl.start)
+            else:
+                start_address = min(self._end_address,
+                                    self._start_address + sl.start)
+
+            if sl.stop is None:
+                end_address = self._end_address
+            elif sl.stop < 0:
+                end_address = max(start_address,
+                                  self._end_address + sl.stop)
+            else:
+                end_address = min(self._end_address,
+                                  self._start_address + sl.stop)
+
+            # Construct the new file-like
+            return type(self)(
+                self._machine_controller, self._x, self._y,
+                start_address, end_address
+            )
+        else:
+            raise ValueError("Can only make contiguous slices of MemoryIO")
+
+    def __len__(self):
+        """Return the number of bytes in the file-like view of SDRAM."""
+        return self._end_address - self._start_address
 
     def read(self, n_bytes=-1):
         """Read a number of bytes from the memory.
@@ -1433,8 +1504,8 @@ class MemoryIO(object):
         if self.address + n_bytes > self._end_address:
             n_bytes = min(n_bytes, self._end_address - self.address)
 
-            if n_bytes <= 0:
-                return b''
+        if n_bytes <= 0:
+            return b''
 
         # Perform the read and increment the offset
         data = self._machine_controller.read(

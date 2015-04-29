@@ -75,4 +75,3 @@ Advanced SCP/SDP APIs
 .. automodule:: rig.machine_control.consts
     :members:
     :special-members:
-
