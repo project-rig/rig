@@ -325,6 +325,13 @@ class MachineController(ContextMixin):
         return connection.read(self.scp_data_length, x, y, p,
                                address, length_bytes)
 
+    def _get_struct_field_and_address(self, struct_name, field_name):
+        field = self.structs[six.b(struct_name)][six.b(field_name)]
+        address = self.structs[six.b(struct_name)].base + field.offset
+        # NOTE Python 2 and 3 fix
+        pack_chars = b"<" + (field.length * field.pack_chars)
+        return field, address, pack_chars
+
     @ContextMixin.use_contextual_arguments()
     def read_struct_field(self, struct_name, field_name, x, y, p=0):
         """Read the value out of a struct maintained by SARK.
@@ -354,11 +361,8 @@ class MachineController(ContextMixin):
                 cn.read_struct_field("sv", "status_map[1]")
         """
         # Look up the struct and field
-        field = self.structs[six.b(struct_name)][six.b(field_name)]
-
-        address = self.structs[six.b(struct_name)].base + field.offset
-        # NOTE Python 2 and 3 fix
-        pack_chars = b"<" + (field.length * field.pack_chars)
+        field, address, pack_chars = \
+            self._get_struct_field_and_address(struct_name, field_name)
         length = struct.calcsize(pack_chars)
 
         # Perform the read
@@ -371,6 +375,49 @@ class MachineController(ContextMixin):
             return unpacked[0]
         else:
             return unpacked
+
+    @ContextMixin.use_contextual_arguments()
+    def write_struct_field(self, struct_name, field_name, values, x, y, p=0):
+        """Write a value into a struct.
+
+        This method is particularly useful for writing values into the ``sv``
+        struct which contains some configuration data.  See ``sark.h`` for
+        details.
+
+        Parameters
+        ----------
+        struct_name : string
+            Name of the struct to write to, e.g., `"sv"`
+        field_name : string
+            Name of the field to write, e.g., `"random"`
+        values :
+            Value(s) to be written into the field.
+
+        .. warning::
+            Fields which are arrays must currently be written in their
+            entirety.
+        """
+        # Look up the struct and field
+        field, address, pack_chars = \
+            self._get_struct_field_and_address(struct_name, field_name)
+
+        if field.length != 1:
+            assert len(values) == field.length
+            data = struct.pack(pack_chars, *values)
+        else:
+            data = struct.pack(pack_chars, values)
+
+        # Perform the write
+        self.write(address, data, x, y, p)
+
+    def _get_vcpu_field_and_address(self, field_name, x, y, p):
+        """Get the field and address for a VCPU struct field."""
+        vcpu_struct = self.structs[b"vcpu"]
+        field = vcpu_struct[six.b(field_name)]
+        address = (self.read_struct_field("sv", "vcpu_base", x, y) +
+                   vcpu_struct.size * p) + field.offset
+        pack_chars = b"<" + field.pack_chars
+        return field, address, pack_chars
 
     @ContextMixin.use_contextual_arguments()
     def read_vcpu_struct_field(self, field_name, x, y, p):
@@ -392,12 +439,8 @@ class MachineController(ContextMixin):
         """
         # Get the base address of the VCPU struct for this chip, then advance
         # to get the correct VCPU struct for the requested core.
-        vcpu_struct = self.structs[b"vcpu"]
-        field = vcpu_struct[six.b(field_name)]
-        address = (self.read_struct_field("sv", "vcpu_base", x, y) +
-                   vcpu_struct.size * p) + field.offset
-
-        pack_chars = b"<" + field.pack_chars
+        field, address, pack_chars = \
+            self._get_vcpu_field_and_address(field_name, x, y, p)
 
         # Perform the read
         length = struct.calcsize(pack_chars)
@@ -416,6 +459,33 @@ class MachineController(ContextMixin):
             # Otherwise just return. (Note: at the time of writing, no fields
             # in the VCPU struct are of this form.)
             return unpacked  # pragma: no cover
+
+    @ContextMixin.use_contextual_arguments()
+    def write_vcpu_struct_field(self, field_name, value, x, y, p):
+        """Write a value to the VCPU struct for a specific core.
+
+        Parameters
+        ----------
+        field_name : string
+            Name of the field to write (e.g. `"user0"`)
+        value :
+            Value to write to this field.
+        """
+        field, address, pack_chars = \
+            self._get_vcpu_field_and_address(field_name, x, y, p)
+
+        # Pack the data
+        if b"s" in pack_chars:
+            data = struct.pack(pack_chars, value.encode('utf-8'))
+        elif field.length == 1:
+            data = struct.pack(pack_chars, value)
+        else:
+            # NOTE: At the time of writing no VCPU struct fields are of this
+            # form.
+            data = struct.pack(pack_chars, *value)  # pragma: no cover
+
+        # Perform the write
+        self.write(address, data, x, y)
 
     @ContextMixin.use_contextual_arguments()
     def get_processor_status(self, p, x, y):
