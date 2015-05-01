@@ -195,12 +195,35 @@ constrained to the allocated region. ::
     >>> block.read(13)
     b"Hello, world!"
 
-These blocks can also be sliced to allow a single allocation to be safely
-divided between different parts of the application::
+Writes can be optionally buffered before being transmitted to the SpiNNaker
+board.  This can be configured by using the `buffer_size` keyword argument::
+
+    >>> # Allocate 1024 bytes of SDRAM with tag '3' on chip (0, 0) with a
+    >>> # 256-byte write buffer
+    >>> block = mc.sdram_alloc_as_filelike(1024, 3, 0, 0, buffer_size=256)
+    >>> block.buffer_size
+    256
+
+If buffering is used then
+:py:meth:`~.rig.machine_control.machine_controller.MemoryIO.flush` must be
+called to force writes on a given file-like (and its siblings -- see below) to
+be completed::
+
+   >>> block.seek(0)
+   >>> block.write("Hello")
+   >>> block.flush()
+
+This is not necessary for unbuffered file-like objects (the default).
+
+File-like views of memory can also be sliced to allow a single allocation to be
+safely divided between different parts of the application::
 
     >>> hello = block[0:5]
     >>> hello.read()
     b"Hello"
+
+Slices of the same memory file-like are considered to be siblings and flushing
+one of them will result in flushing of the write buffer for all siblings.
 
 The :py:func:`~rig.machine_control.utils.sdram_alloc_for_vertices` utility
 function is provided to allocate multiple SDRAM blocks simultaneously.  This
