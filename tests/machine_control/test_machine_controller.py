@@ -120,6 +120,20 @@ class TestMachineControllerLive(object):
         with controller(x=0, y=0, p=1):
             assert controller.read(0x60000000, len(data)) == data
 
+    def test_write_and_read_struct_values(self, controller):
+        """Test reading a struct value, writing a new value and then resetting
+        the value.
+        """
+        with controller(x=0, y=1):
+            controller.read_struct_field("sv", "p2p_addr") == 0x0 | 0x0100
+
+            # Read back the led->period, set it to something else and then
+            # restore it.
+            led_period = controller.read_struct_field("sv", "led_period")
+            controller.write_struct_field("sv", "led_period", 100)
+            assert controller.read_struct_field("sv", "led_period") == 100
+            controller.write_struct_field("sv", "led_period", led_period)
+
     def test_set_get_clear_iptag(self, controller):
         # Get our address, then add a new IPTag pointing
         # **YUCK**
@@ -723,6 +737,46 @@ class TestMachineController(object):
             x, y, p
         )
 
+    @pytest.mark.parametrize("x, y, p", [(0, 1, 2), (2, 5, 6)])
+    @pytest.mark.parametrize(
+        "which_struct, field, value",
+        [("sv", "dbg_addr", 5),
+         ("sv", "status_map", (0, )*20),
+         ])
+    def test_write_struct_field(self, x, y, p, which_struct, field, value):
+        # Open the struct file
+        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
+        structs = struct_file.read_struct_file(struct_data)
+        assert (six.b(which_struct) in structs and
+                six.b(field) in structs[six.b(which_struct)]), "Test is broken"
+
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn.structs = structs
+        cn.write = mock.Mock()
+
+        # Perform the struct write
+        with cn(x=x, y=y, p=p):
+            cn.write_struct_field(which_struct, field, value)
+
+        which_struct = six.b(which_struct)
+        field = six.b(field)
+        if isinstance(value, tuple):
+            bytes = struct.pack(
+                b"<" + len(value) * structs[which_struct][field].pack_chars,
+                *value
+            )
+        else:
+            bytes = struct.pack(
+                b"<" + structs[which_struct][field].pack_chars, value
+            )
+
+        # Check that read was called appropriately
+        cn.write.assert_called_once_with(
+            structs[which_struct].base + structs[which_struct][field].offset,
+            bytes, x, y, p
+        )
+
     @pytest.mark.parametrize("x, y, p, vcpu_base",
                              [(0, 0, 5, 0x67800000),
                               (1, 0, 5, 0x00000000),
@@ -760,6 +814,42 @@ class TestMachineController(object):
         # Check that the VCPU base was used
         cn.read.assert_called_once_with(
             vcpu_base + vcpu_struct.size * p + field_.offset, len(data), x, y)
+
+    @pytest.mark.parametrize("x, y, p, vcpu_base",
+                             [(0, 0, 5, 0x67800000),
+                              (1, 0, 5, 0x00000000),
+                              (3, 2, 10, 0x00ff00ff)])
+    @pytest.mark.parametrize(
+        "field, value, data",
+        [("app_name", "rig_test", b"rig_test\x00\x00\x00\x00\x00\x00\x00\x00"),
+         ("cpu_flags", 8, b"\x08")]
+    )
+    def test_write_vcpu_struct(self, x, y, p, vcpu_base, field, value, data):
+        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
+        structs = struct_file.read_struct_file(struct_data)
+        vcpu_struct = structs[b"vcpu"]
+        assert six.b(field) in vcpu_struct, "Test is broken"
+        field_ = vcpu_struct[six.b(field)]
+
+        # Create a mock SV struct reader
+        def mock_read_struct_field(struct_name, field, x, y, p=0):
+            if six.b(struct_name) == b"sv" and six.b(field) == b"vcpu_base":
+                return vcpu_base
+            assert False, "Unexpected struct field read."  # pragma: no cover
+
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.side_effect = mock_read_struct_field
+        cn.structs = structs
+        cn.write = mock.Mock()
+
+        # Perform the struct field write
+        cn.write_vcpu_struct_field(field, value, x, y, p)
+
+        # Check that the VCPU base was used
+        cn.write.assert_called_once_with(
+            vcpu_base + vcpu_struct.size * p + field_.offset, data, x, y)
 
     @pytest.mark.parametrize("x, y, p, vcpu_base", [(0, 1, 11, 0x67801234),
                                                     (1, 4, 17, 0x33331110)])
