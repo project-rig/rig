@@ -1,15 +1,8 @@
 """SpiNNaker machine regions.
 
-.. todo::
-    Neaten this documentation!
-
-Regions (not to be confused with rig Regions) are used to specify areas of a
-SpiNNaker machine for the purposes of transmitting nearest neighbour packets or
-for determining which chips should be included in any flood-fill of data or
-application loading.
-
-A complete introduction and specification of the region system is given in
-"Managing Big SpiNNaker Machines" By Steve Temple.
+Regions are used to specify areas of a SpiNNaker machine for the purposes of
+transmitting nearest neighbour packets or for determining which chips should be
+included in any flood-fill of data or application loading.
 
 A 32-bit value representing a region uses the top 16 bits (31:16) to represent
 the x- and y-coordinates of the region and the level and the lower 16 bits
