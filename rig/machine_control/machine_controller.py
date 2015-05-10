@@ -639,7 +639,7 @@ class MachineController(ContextMixin):
         rv = self._send_scp(x, y, 0, SCPCommands.alloc_free, arg1, size, tag)
         if rv.arg1 == 0:
             # Allocation failed
-            raise SpiNNakerMemoryError(size, x, y)
+            raise SpiNNakerMemoryError(size, x, y, tag)
         return rv.arg1
 
     @ContextMixin.use_contextual_arguments()
@@ -1421,13 +1421,20 @@ class SpiNNakerMemoryError(Exception):
     """Raised when it is not possible to allocate memory on a SpiNNaker
     chip.
     """
-    def __init__(self, size, x, y):
+    def __init__(self, size, x, y, tag=0):
         self.size = size
         self.chip = (x, y)
+        self.tag = tag
 
     def __str__(self):
-        return ("Failed to allocate {} bytes of SDRAM on chip ({}, {})".
-                format(self.size, self.chip[0], self.chip[1]))
+        if self.tag == 0:
+            return ("Failed to allocate {} bytes of SDRAM on chip ({}, {}). "
+                    "Insufficient memory available.".
+                    format(self.size, self.chip[0], self.chip[1]))
+        else:
+            return ("Failed to allocate {} bytes of SDRAM on chip ({}, {}). "
+                    "Insufficient memory available or tag {} already in use.".
+                    format(self.size, self.chip[0], self.chip[1], self.tag))
 
 
 class SpiNNakerRouterError(Exception):
