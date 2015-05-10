@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
-from rig.type_casts import float_to_fix, fix_to_float, NumpyFloatToFixConverter
+from rig.type_casts import (
+    float_to_fix, fix_to_float,
+    NumpyFloatToFixConverter, NumpyFixToFloatConverter
+)
 import struct
 
 
@@ -195,3 +198,19 @@ class TestNumpyFloatToFixConverter(object):
             struct.pack("{}{}".format(len(values), c),
                         *[ftf(v) for v in values])
         )
+
+
+class TestNumpyFixToFloat(object):
+    @pytest.mark.parametrize(
+        "values, dtype, n_frac, expected_values",
+        [([0xff], np.uint8, 4, np.array([15.9375])),
+         ([0xf8], np.int8, 4, np.array([-.5])),
+         ]
+        )
+    def test_standard(self, values, dtype, n_frac, expected_values):
+        input_array = np.array(values, dtype=dtype)
+
+        fpf = NumpyFixToFloatConverter(n_frac)
+        output_array = fpf(input_array)
+
+        assert np.all(output_array == expected_values)
