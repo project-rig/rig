@@ -659,8 +659,8 @@ class TestMachineController(object):
                                              size, tag)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (5, 6)])
-    @pytest.mark.parametrize("size", [8, 200])
-    def test_sdram_alloc_fail(self, x, y, size):
+    @pytest.mark.parametrize("size, tag", [(8, 0), (200, 2)])
+    def test_sdram_alloc_fail(self, x, y, size, tag):
         """Test that sdram_alloc raises an exception when ALLOC fails."""
         # Create the mock controller
         cn = MachineController("localhost")
@@ -669,10 +669,16 @@ class TestMachineController(object):
                                               0x80, 0, 0, None, None, b"")
 
         with pytest.raises(SpiNNakerMemoryError) as excinfo:
-            cn.sdram_alloc(size, x=x, y=y, app_id=30)
+            cn.sdram_alloc(size, tag=tag, x=x, y=y, app_id=30)
 
         assert str((x, y)) in str(excinfo.value)
         assert str(size) in str(excinfo.value)
+
+        if tag == 0:
+            assert "tag" not in str(excinfo.value)
+        else:
+            assert "tag" in str(excinfo.value)
+            assert str(tag) in str(excinfo.value)
 
     @pytest.mark.parametrize(
         "x, y, app_id, tag, addr, size, buffer_size",
