@@ -141,7 +141,7 @@ class MachineController(ContextMixin):
         # If not known, return the default
         # TODO: Query the machine
         if self._window_size is None:
-            return 8
+            return 1
         return self._window_size
 
     @ContextMixin.use_contextual_arguments(
