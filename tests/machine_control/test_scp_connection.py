@@ -4,10 +4,10 @@ import pytest
 import struct
 import time
 
-from ..consts import SCPCommands, DataType
-from ..packets import SCPPacket
-from ..scp_connection import scpcall, SCPConnection
-from .. import scp_connection
+from rig.machine_control.consts import SCPCommands, DataType
+from rig.machine_control.packets import SCPPacket
+from rig.machine_control.scp_connection import SCPConnection, scpcall
+from rig.machine_control import scp_connection
 
 
 class SendReceive(object):

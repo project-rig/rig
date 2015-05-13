@@ -243,6 +243,51 @@ class NumpyFloatToFixConverter(object):
         return self.dtype(vals)
 
 
+class NumpyFixToFloatConverter(object):
+    """A callable which converts Numpy arrays of fixed point values to floating
+    point.
+
+    General usage is to create a new converter and then call this on arrays of
+    values.  The `dtype` of the input array is used to determine whether the
+    values are signed or otherwise.  For example, the following creates a
+    callable which will convert from any format which has 4 fractional bits::
+
+        >>> kbits = NumpyFixToFloatConverter(4)
+
+    This will produced signed and unsigned values depending on the `dtype` of
+    the original array.
+
+        >>> signed = np.array([0xf0], dtype=np.int8)
+        >>> kbits(signed)
+        array([-1.])
+
+        >>> unsigned = np.array([0xf0], dtype=np.uint8)
+        >>> kbits(unsigned)
+        array([ 15.])
+    """
+    def __init__(self, n_frac):
+        """Create a new converter from fix-point to floating point
+        representation.
+
+        Parameters
+        ----------
+        n_frac : int
+            Number of fractional bits in the fixed-point representation.
+        """
+        self.n_frac = n_frac
+
+    def __call__(self, values):
+        """Convert the given NumPy array of values from fixed point format to
+        floating point.
+
+        ..note::
+            The sign of the resulting values depends on the data type of the
+            input values.  If the input is unsigned then the values will always
+            be positive, otherwise the sign bit from the input value is used.
+        """
+        return values / (2.0**self.n_frac)
+
+
 def validate_fp_params(signed, n_bits, n_frac):
     # Check the number of bits is sane
     if n_bits < 1:

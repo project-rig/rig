@@ -1,6 +1,7 @@
 """A high level interface for controlling a SpiNNaker system."""
 
 import collections
+import functools
 import os
 import six
 from six import iteritems
@@ -9,15 +10,15 @@ import struct
 import time
 import pkg_resources
 
-from . import struct_file
 from .consts import SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
-from . import boot, consts, regions
+from . import boot, consts, regions, struct_file
 from .scp_connection import SCPConnection
 
 from rig import routing_table
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 
 from rig.utils.contexts import ContextMixin, Required
+from rig.utils.docstrings import add_signature_to_docstring
 
 
 class MachineController(ContextMixin):
@@ -338,6 +339,13 @@ class MachineController(ContextMixin):
         return connection.read(self.scp_data_length, self.scp_window_size,
                                x, y, p, address, length_bytes)
 
+    def _get_struct_field_and_address(self, struct_name, field_name):
+        field = self.structs[six.b(struct_name)][six.b(field_name)]
+        address = self.structs[six.b(struct_name)].base + field.offset
+        # NOTE Python 2 and 3 fix
+        pack_chars = b"<" + (field.length * field.pack_chars)
+        return field, address, pack_chars
+
     @ContextMixin.use_contextual_arguments()
     def read_struct_field(self, struct_name, field_name, x, y, p=0):
         """Read the value out of a struct maintained by SARK.
@@ -367,11 +375,8 @@ class MachineController(ContextMixin):
                 cn.read_struct_field("sv", "status_map[1]")
         """
         # Look up the struct and field
-        field = self.structs[six.b(struct_name)][six.b(field_name)]
-
-        address = self.structs[six.b(struct_name)].base + field.offset
-        # NOTE Python 2 and 3 fix
-        pack_chars = b"<" + (field.length * field.pack_chars)
+        field, address, pack_chars = \
+            self._get_struct_field_and_address(struct_name, field_name)
         length = struct.calcsize(pack_chars)
 
         # Perform the read
@@ -384,6 +389,49 @@ class MachineController(ContextMixin):
             return unpacked[0]
         else:
             return unpacked
+
+    @ContextMixin.use_contextual_arguments()
+    def write_struct_field(self, struct_name, field_name, values, x, y, p=0):
+        """Write a value into a struct.
+
+        This method is particularly useful for writing values into the ``sv``
+        struct which contains some configuration data.  See ``sark.h`` for
+        details.
+
+        Parameters
+        ----------
+        struct_name : string
+            Name of the struct to write to, e.g., `"sv"`
+        field_name : string
+            Name of the field to write, e.g., `"random"`
+        values :
+            Value(s) to be written into the field.
+
+        .. warning::
+            Fields which are arrays must currently be written in their
+            entirety.
+        """
+        # Look up the struct and field
+        field, address, pack_chars = \
+            self._get_struct_field_and_address(struct_name, field_name)
+
+        if field.length != 1:
+            assert len(values) == field.length
+            data = struct.pack(pack_chars, *values)
+        else:
+            data = struct.pack(pack_chars, values)
+
+        # Perform the write
+        self.write(address, data, x, y, p)
+
+    def _get_vcpu_field_and_address(self, field_name, x, y, p):
+        """Get the field and address for a VCPU struct field."""
+        vcpu_struct = self.structs[b"vcpu"]
+        field = vcpu_struct[six.b(field_name)]
+        address = (self.read_struct_field("sv", "vcpu_base", x, y) +
+                   vcpu_struct.size * p) + field.offset
+        pack_chars = b"<" + field.pack_chars
+        return field, address, pack_chars
 
     @ContextMixin.use_contextual_arguments()
     def read_vcpu_struct_field(self, field_name, x, y, p):
@@ -405,12 +453,8 @@ class MachineController(ContextMixin):
         """
         # Get the base address of the VCPU struct for this chip, then advance
         # to get the correct VCPU struct for the requested core.
-        vcpu_struct = self.structs[b"vcpu"]
-        field = vcpu_struct[six.b(field_name)]
-        address = (self.read_struct_field("sv", "vcpu_base", x, y) +
-                   vcpu_struct.size * p) + field.offset
-
-        pack_chars = b"<" + field.pack_chars
+        field, address, pack_chars = \
+            self._get_vcpu_field_and_address(field_name, x, y, p)
 
         # Perform the read
         length = struct.calcsize(pack_chars)
@@ -429,6 +473,33 @@ class MachineController(ContextMixin):
             # Otherwise just return. (Note: at the time of writing, no fields
             # in the VCPU struct are of this form.)
             return unpacked  # pragma: no cover
+
+    @ContextMixin.use_contextual_arguments()
+    def write_vcpu_struct_field(self, field_name, value, x, y, p):
+        """Write a value to the VCPU struct for a specific core.
+
+        Parameters
+        ----------
+        field_name : string
+            Name of the field to write (e.g. `"user0"`)
+        value :
+            Value to write to this field.
+        """
+        field, address, pack_chars = \
+            self._get_vcpu_field_and_address(field_name, x, y, p)
+
+        # Pack the data
+        if b"s" in pack_chars:
+            data = struct.pack(pack_chars, value.encode('utf-8'))
+        elif field.length == 1:
+            data = struct.pack(pack_chars, value)
+        else:
+            # NOTE: At the time of writing no VCPU struct fields are of this
+            # form.
+            data = struct.pack(pack_chars, *value)  # pragma: no cover
+
+        # Perform the write
+        self.write(address, data, x, y)
 
     @ContextMixin.use_contextual_arguments()
     def get_processor_status(self, p, x, y):
@@ -581,14 +652,22 @@ class MachineController(ContextMixin):
         rv = self._send_scp(x, y, 0, SCPCommands.alloc_free, arg1, size, tag)
         if rv.arg1 == 0:
             # Allocation failed
-            raise SpiNNakerMemoryError(size, x, y)
+            raise SpiNNakerMemoryError(size, x, y, tag)
         return rv.arg1
 
     @ContextMixin.use_contextual_arguments()
     def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
-                                app_id=Required):
+                                app_id=Required, buffer_size=0):
         """Like :py:meth:`.sdram_alloc` but returns a file-like object which
         allows safe reading and writing to the block that is allocated.
+
+        Other Parameters
+        ----------------
+        buffer_size : int
+            The number of bytes to store in the write buffer for the file-like.
+            If this is set to anything but `0` (the default) then
+            :py:meth:`~.MemoryIO.flush` should be called to ensure that all
+            writes are completed.
 
         Returns
         -------
@@ -605,7 +684,8 @@ class MachineController(ContextMixin):
         # Perform the malloc
         start_address = self.sdram_alloc(size, tag, x, y, app_id)
 
-        return MemoryIO(self, x, y, start_address, start_address + size)
+        return MemoryIO(self, x, y, start_address, start_address + size,
+                        buffer_size=buffer_size)
 
     def _get_next_nn_id(self):
         """Get the next nearest neighbour ID."""
@@ -1354,13 +1434,20 @@ class SpiNNakerMemoryError(Exception):
     """Raised when it is not possible to allocate memory on a SpiNNaker
     chip.
     """
-    def __init__(self, size, x, y):
+    def __init__(self, size, x, y, tag=0):
         self.size = size
         self.chip = (x, y)
+        self.tag = tag
 
     def __str__(self):
-        return ("Failed to allocate {} bytes of SDRAM on chip ({}, {})".
-                format(self.size, self.chip[0], self.chip[1]))
+        if self.tag == 0:
+            return ("Failed to allocate {} bytes of SDRAM on chip ({}, {}). "
+                    "Insufficient memory available.".
+                    format(self.size, self.chip[0], self.chip[1]))
+        else:
+            return ("Failed to allocate {} bytes of SDRAM on chip ({}, {}). "
+                    "Insufficient memory available or tag {} already in use.".
+                    format(self.size, self.chip[0], self.chip[1], self.tag))
 
 
 class SpiNNakerRouterError(Exception):
@@ -1391,10 +1478,37 @@ class SpiNNakerLoadingError(Exception):
             "Failed to load applications to cores {}".format(", ".join(cores)))
 
 
-class MemoryIO(object):
-    """A file-like view into a subspace of the memory-space of a chip."""
+def _if_not_closed(f):
+    """Run the method iff. the memory view hasn't been closed."""
+    @add_signature_to_docstring(f)
+    @functools.wraps(f)
+    def f_(self, *args, **kwargs):
+        if self.closed:
+            raise OSError
+        return f(self, *args, **kwargs)
 
-    def __init__(self, machine_controller, x, y, start_address, end_address):
+    return f_
+
+
+class MemoryIO(object):
+    """A file-like view into a subspace of the memory-space of a chip.
+
+    A `MemoryIO` is sliceable to allow construction of new, more specific,
+    file-like views of memory.
+
+    For example::
+
+        >>> f = MemoryIO(mc, 0, 1, 0x67800000, 0x6780000c)  # doctest: +SKIP
+        >>> f.write(b"Hello, world")                        # doctest: +SKIP
+        >>> f.read()                                        # doctest: +SKIP
+        b"Hello, world"
+        >>> g = f[0:5]                                      # doctest: +SKIP
+        >>> g.read()                                        # doctest: +SKIP
+        b"Hello"
+    """
+
+    def __init__(self, machine_controller, x, y, start_address, end_address,
+                 buffer_size=0, _write_buffer=None):
         """Create a file-like view onto a subset of the memory-space of a chip.
 
         Parameters
@@ -1410,17 +1524,106 @@ class MemoryIO(object):
             Starting address in memory.
         end_address : int
             End address in memory.
+        buffer_size : int
+            Number of bytes to store in the write buffer.
+        _write_buffer : :py:class:`._WriteBufferChild`
+            Internal use only, the write buffer to use to combine writes.
+
+        If `start_address` is greater or equal to `end_address` then
+        `end_address` is ignored and `start_address` is used instead.
         """
         # Store parameters
+        self.closed = False
         self._x = x
         self._y = y
         self._machine_controller = machine_controller
+
+        # Get, or create, a write buffer
+        if _write_buffer is None:
+            _write_buffer = _WriteBuffer(x, y, 0, machine_controller,
+                                         buffer_size)
+        self._write_buffer = _write_buffer
+
+        # Store and clip the addresses
         self._start_address = start_address
-        self._end_address = end_address
+        self._end_address = max(start_address, end_address)
 
         # Current offset from start address
         self._offset = 0
 
+    @property
+    def buffer_size(self):
+        """Return the number of bytes in the write buffer."""
+        return self._write_buffer.buffer_size
+
+    def close(self):
+        """Flush and close the file-like."""
+        if not self.closed:
+            self.flush()
+            self.closed = True
+
+    def __getitem__(self, sl):
+        """Get a new file-like view of SDRAM covering the range indicated by
+        the slice.
+
+        For example, if `f` is a `MemoryIO` covering a 100 byte region of SDRAM
+        then::
+
+            >>> g = f[0:10]  # doctest: +SKIP
+
+        Creates a new `MemoryIO` referring to just the first 10 bytes of `f`,
+        the new file-like will be positioned at the start of the given block::
+
+            >>> g.tell()  # doctest: +SKIP
+            0
+
+        Raises
+        ------
+        ValueError
+            If the slice is not contiguous.
+        """
+        if isinstance(sl, slice) and (sl.step is None or sl.step == 1):
+            # Get the start and end addresses
+            if sl.start is None:
+                start_address = self._start_address
+            elif sl.start < 0:
+                start_address = max(self._start_address,
+                                    self._end_address + sl.start)
+            else:
+                start_address = min(self._end_address,
+                                    self._start_address + sl.start)
+
+            if sl.stop is None:
+                end_address = self._end_address
+            elif sl.stop < 0:
+                end_address = max(start_address,
+                                  self._end_address + sl.stop)
+            else:
+                end_address = min(self._end_address,
+                                  self._start_address + sl.stop)
+
+            # Construct the new file-like
+            return type(self)(
+                self._machine_controller, self._x, self._y,
+                start_address, end_address,
+                _write_buffer=self._write_buffer
+            )
+        else:
+            raise ValueError("Can only make contiguous slices of MemoryIO")
+
+    def __len__(self):
+        """Return the number of bytes in the file-like view of SDRAM."""
+        return self._end_address - self._start_address
+
+    def __enter__(self):
+        """Enter a new block which will call :py:meth:`~.close` when exited."""
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        """Exit a block and call :py:meth:`~.close`."""
+        self.close()
+
+    @_if_not_closed
     def read(self, n_bytes=-1):
         """Read a number of bytes from the memory.
 
@@ -1438,6 +1641,9 @@ class MemoryIO(object):
         :py:class:`bytes`
             Data read from SpiNNaker as a bytestring.
         """
+        # Flush this write buffer
+        self.flush()
+
         # If n_bytes is negative then calculate it as the number of bytes left
         if n_bytes < 0:
             n_bytes = self._end_address - self.address
@@ -1446,8 +1652,8 @@ class MemoryIO(object):
         if self.address + n_bytes > self._end_address:
             n_bytes = min(n_bytes, self._end_address - self.address)
 
-            if n_bytes <= 0:
-                return b''
+        if n_bytes <= 0:
+            return b''
 
         # Perform the read and increment the offset
         data = self._machine_controller.read(
@@ -1455,8 +1661,15 @@ class MemoryIO(object):
         self._offset += n_bytes
         return data
 
+    @_if_not_closed
     def write(self, bytes):
         """Write data to the memory.
+
+        .. warning::
+            If the buffer size is not zero then writes may be buffered (and
+            even overwritten) before being written to the machine.
+            :py:meth:`~.flush` must be called to ensure that all writes are
+            completed when required.
 
         .. note::
             Writes beyond the specified memory range will be truncated.
@@ -1480,11 +1693,20 @@ class MemoryIO(object):
             bytes = bytes[:n_bytes]
 
         # Perform the write and increment the offset
-        self._machine_controller.write(
-            self.address, bytes, self._x, self._y, 0)
+        self._write_buffer.add_new_write(self.address, bytes)
         self._offset += len(bytes)
         return len(bytes)
 
+    @_if_not_closed
+    def flush(self):
+        """Flush any buffered writes.
+
+        This must be called to ensure that all writes to SpiNNaker made using
+        this file-like object (and its siblings, if any) are completed.
+        """
+        self._write_buffer.flush()
+
+    @_if_not_closed
     def tell(self):
         """Get the current offset in the memory region.
 
@@ -1496,11 +1718,13 @@ class MemoryIO(object):
         return self._offset
 
     @property
+    @_if_not_closed
     def address(self):
         """Get the current hardware memory address (indexed from 0x00000000).
         """
         return self._offset + self._start_address
 
+    @_if_not_closed
     def seek(self, n_bytes, from_what=os.SEEK_SET):
         """Seek to a new position in the memory region.
 
@@ -1531,6 +1755,80 @@ class MemoryIO(object):
                 "from_what: can only take values 0 (from start), "
                 "1 (from current) or 2 (from end) not {}".format(from_what)
             )
+
+
+class _WriteBuffer(object):
+    """Write buffer used by :py:class:`.MemoryIO` to combine multiple writes
+    together.
+    """
+
+    def __init__(self, x, y, p, controller, buffer_size=0):
+        self.x = x
+        self.y = y
+        self.p = p
+        self.controller = controller
+
+        # A buffer of writes
+        self.buffer = bytearray(buffer_size)
+        self.start_address = None
+
+        self.current_end = 0
+        self.buffer_size = buffer_size
+
+    def add_new_write(self, start_address, data):
+        """Add a new write to the buffer."""
+        if len(data) > self.buffer_size:
+            # Perform the write if we couldn't buffer it at all
+            self.flush()  # Flush to ensure ordering is preserved
+            self.controller.write(start_address, data,
+                                  self.x, self.y, self.p)
+            return
+
+        if self.start_address is None:
+            # No value currently buffered, add this one
+            self.start_address = start_address
+
+        # If we can fit this write into the buffer then include it,
+        # otherwise we flush the current buffer and start again
+        start_offset = start_address - self.start_address
+        end_offset = start_offset + len(data)  # Byte AFTER the end of the data
+
+        if start_offset <= self.current_end and end_offset <= self.buffer_size:
+            # The write is entirely contained within the buffer and starts
+            # within the area of the buffer which already contains data, so we
+            # can just modify the buffer.
+            self.buffer[start_offset:end_offset] = data
+            self.current_end = max(end_offset, self.current_end)
+        else:
+            # The write either starts outside the used area of the buffer, or
+            # would overflow the buffer.
+            if start_offset < self.buffer_size:
+                # We would overflow the buffer, so store as much into the
+                # buffer as possible.
+                end = self.buffer_size - start_offset
+                self.buffer[start_offset:] = data[:end]
+                self.current_end = self.buffer_size
+
+                # Then prepare the next block of data for buffering
+                start_address += end
+                data = data[end:]
+
+            # Flush the buffer before storing the next write
+            self.flush()
+            self.add_new_write(start_address, data)
+
+    def flush(self):
+        """Write the current buffer out."""
+        if self.start_address is not None:
+            # Write out all the values from the buffer
+            self.controller.write(
+                self.start_address, self.buffer[:self.current_end],
+                self.x, self.y, self.p
+            )
+
+            # Reset the buffer
+            self.start_address = None
+            self.current_end = 0
 
 
 def unpack_routing_table_entry(packed):
