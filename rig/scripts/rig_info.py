@@ -11,6 +11,8 @@ from collections import defaultdict
 
 from datetime import datetime
 
+import rig
+
 from rig.machine import Cores
 
 from rig.machine_control import MachineController, BMPController
@@ -137,6 +139,9 @@ def main(args=None):
     parser = argparse.ArgumentParser(
         description="Print a summary of basic SpiNNaker machine "
                     "and BMP information")
+    parser.add_argument("--version", "-V", action="version",
+                        version="%(prog)s {}".format(rig.__version__))
+
     parser.add_argument("hostname", type=str,
                         help="hostname or IP of SpiNNaker system or BMP")
 

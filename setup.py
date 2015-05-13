@@ -54,9 +54,12 @@ def replace_local_hyperlinks(
 
     return text
 
+with open("rig/version.py", "r") as f:
+    exec(f.read())
+
 setup(
     name="rig",
-    version="0.2.0",
+    version=__version__,
     packages=find_packages(),
     package_data={'rig': ['boot/sark.struct', 'boot/scamp.boot',
                           'binaries/*.aplx']

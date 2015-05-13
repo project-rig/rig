@@ -9,6 +9,8 @@ import argparse
 
 from six import next
 
+import rig
+
 from rig.machine_control import BMPController
 
 from rig.machine_control.scp_connection import TimeoutError
@@ -20,6 +22,9 @@ OFF_CHOICES = "off 0".split()
 def main(args=None):
     parser = argparse.ArgumentParser(
         description="Control SpiNNaker board power (via a BMP)")
+    parser.add_argument("--version", "-V", action="version",
+                        version="%(prog)s {}".format(rig.__version__))
+
     parser.add_argument("hostname", type=str,
                         help="hostname or IP of a SpiNNaker board BMP")
 

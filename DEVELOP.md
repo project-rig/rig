@@ -283,7 +283,7 @@ page](https://github.com/project-rig/rig/releases).
 
 To make a new release of Rig, the following actions must be performed.
 
-1. The version number must be incremented in [`setup.py`](setup.py) and
+1. The version number must be incremented in [`version.py`](rig/version.py) and
    committed to master.
 2. A new tag, *annotated with the release notes*, must be added to this commit:
        

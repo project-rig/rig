@@ -6,6 +6,8 @@ Installed as "rig-boot" by setuptools.
 import sys
 import argparse
 
+import rig
+
 from rig.machine_control import boot, MachineController
 
 from rig.machine_control.scp_connection import TimeoutError
@@ -16,6 +18,9 @@ BOOT_OPTION_POSTFIX = "_boot_options"
 
 def main(args=None):
     parser = argparse.ArgumentParser(description="Boot a SpiNNaker board")
+    parser.add_argument("--version", "-V", action="version",
+                        version="%(prog)s {}".format(rig.__version__))
+
     parser.add_argument("hostname", type=str,
                         help="hostname or IP of SpiNNaker system")
 
