@@ -7,7 +7,8 @@ import six
 import socket
 import struct
 import time
-from . import consts, packets
+from . import consts
+from .packets import SCPPacket
 
 
 class scpcall(collections.namedtuple("_scpcall", "x, y, p, cmd, arg1, arg2, "
@@ -132,7 +133,9 @@ class SCPConnection(object):
                 self.packet = None
 
             def __call__(self, packet):
-                self.packet = packet
+                self.packet = SCPPacket.from_bytestring(
+                    packet, n_args=expected_args
+                )
 
         # Create the packet to send
         callback = Callback()
@@ -214,7 +217,7 @@ class SCPConnection(object):
                         seq = next(self.seq)
 
                     # Construct the packet that we'll be sending
-                    packet = packets.SCPPacket(
+                    packet = SCPPacket(
                         reply_expected=True, tag=0xff, dest_port=0,
                         dest_cpu=args.p, src_port=7, src_cpu=31,
                         dest_x=args.x, dest_y=args.y, src_x=0, src_y=0,
@@ -246,9 +249,8 @@ class SCPConnection(object):
             # Process the received packet (if there is one)
             if ack is not None:
                 # Extract the sequence number from the bytestring, iff possible
-                seq_bytes = ack[2 + consts.SDP_HEADER_LENGTH:
-                                2 + consts.SDP_HEADER_LENGTH + 4]
-                rc, seq = struct.unpack("<2H", seq_bytes)
+                rc, seq = struct.unpack_from("<2H", ack,
+                                             consts.SDP_HEADER_LENGTH + 2)
 
                 # If the code is an error then we respond immediately
                 if rc in self.error_codes:
@@ -264,10 +266,7 @@ class SCPConnection(object):
                 # sufficiently unlikely that there is no problem.
                 outstanding = outstanding_packets.pop(seq, None)
                 if outstanding is not None:
-                    ack_packet = packets.SCPPacket.from_bytestring(
-                        ack, n_args=outstanding.expected_args
-                    )
-                    outstanding.callback(ack_packet)
+                    outstanding.callback(ack)
 
             # Look through all the remaining outstanding packets, if any of
             # them have timed out then we retransmit them.
@@ -321,8 +320,8 @@ class SCPConnection(object):
 
         # Create a callback which will write the data from a packet into a
         # memoryview.
-        def callback(mem, block_data):
-            mem[:] = block_data.data
+        def callback(mem, data):
+            mem[:] = data[6 + consts.SDP_HEADER_LENGTH:]
 
         # Create a generator that will generate request packets and store data
         # until all data has been returned

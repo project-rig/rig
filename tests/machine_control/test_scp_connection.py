@@ -4,7 +4,7 @@ import pytest
 import struct
 import time
 
-from rig.machine_control.consts import SCPCommands, DataType
+from rig.machine_control.consts import SCPCommands, DataType, SDP_HEADER_LENGTH
 from rig.machine_control.packets import SCPPacket
 from rig.machine_control.scp_connection import SCPConnection, scpcall
 from rig.machine_control import scp_connection
@@ -51,7 +51,7 @@ def test_scpcall():
 def test_single_scp_packet(mock_conn):
     # Replace send_scp_burst with a mock
     mock_conn.send_scp_burst = mock.Mock()
-    packet = mock.Mock(name="packet")
+    packet = b'\x00' * (SDP_HEADER_LENGTH + 18)
 
     def send_burst(buffer_size, window_size, args):
         assert buffer_size == 512
@@ -71,14 +71,18 @@ def test_single_scp_packet(mock_conn):
             assert arg.data == b'Hello'
             assert arg.expected_args == 1
             assert arg.timeout == 0.1
+
             arg.callback(packet)
 
     mock_conn.send_scp_burst.side_effect = send_burst
 
     # Send a single SCP packet, ensure these arguments are just passed with a
     # window_size of 1 to send_scp_burst.
-    assert (mock_conn.send_scp(512, 0, 1, 2, 3, 4, 5, 6, b'Hello', 1, 0.1) is
-            packet)
+    rp = mock_conn.send_scp(512, 0, 1, 2, 3, 4, 5, 6, b'Hello', 1, 0.1)
+    assert isinstance(rp, SCPPacket)
+    assert rp.arg1 is not None
+    assert rp.arg2 is None
+    assert rp.arg3 is None
 
     assert mock_conn.send_scp_burst.call_count == 1
 
@@ -134,11 +138,7 @@ class TestBursts(object):
         mock_conn.sock.recv.assert_has_calls([mock.call(receive_length)] * 2)
 
         assert callback.call_count == 1
-        assert (callback.call_args[0][0].bytestring ==
-                return_packet.packet.bytestring)
-        assert callback.call_args[0][0].arg1 is None  # 0 args expected
-        assert callback.call_args[0][0].arg2 is None
-        assert callback.call_args[0][0].arg3 is None
+        assert (callback.call_args[0][0] == return_packet.packet.bytestring)
 
     def test_single_packet_times_out(self, mock_conn):
         """Test correct operation for transmitting a single packet which is
@@ -356,7 +356,9 @@ def test_read(buffer_size, window_size, x, y, p, n_bytes,
                     mock_packet = mock.Mock(spec_set=['data'])
                     mock_packet.data = struct.pack("B", i) * arg.arg2
                     self.read_data += mock_packet.data
-                    arg.callback(mock_packet)
+                    arg.callback(
+                        b'\x00' * (6 + SDP_HEADER_LENGTH) + mock_packet.data
+                    )
 
         ccs = CallCallbacks()
         send_scp_burst.side_effect = ccs
