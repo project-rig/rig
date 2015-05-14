@@ -120,7 +120,7 @@ class TestBursts(object):
                 assert self.packet.dest_cpu == 0
                 assert self.packet.cmd_rc == 12
 
-                self.packet.cmd_rc = 0
+                self.packet.cmd_rc = 0x80
                 return self.packet.bytestring
 
         return_packet = ReturnPacket()
@@ -174,6 +174,32 @@ class TestBursts(object):
 
         # Failing to transmit should take some time
         assert fail_time >= mock_conn.n_tries * mock_conn.default_timeout
+
+        # We shouldn't have transmitted the packet more than the number of
+        # times we specified.
+        assert mock_conn.sock.send.call_count == mock_conn.n_tries
+        assert mock_conn.sock.recv.called
+
+    @pytest.mark.parametrize("err_code", [0x8b, 0x8c, 0x8d, 0x8e])
+    def test_single_packet_fails_with_RC_P2P_ERROR(self, mock_conn, err_code):
+        """Test correct operation for transmitting a single packet which is
+        always acknowledged with one of the RC_P2P error codes.
+        """
+        # Create a generator of packets to send
+        def packets():
+            # Yield a single packet
+            yield scpcall(3, 5, 0, 12)
+
+        # The socket will always return with a packet that indicates some
+        # timeout or similar further down the pipeline, so the packet is never
+        # acknowledged.
+        mock_conn.sock.recv.return_value = SCPPacket(
+            False, 0, 0, 0, 0, 0, 0, 0, 0, 0, err_code, 0).bytestring
+
+        # Send the bursty packet, assert that it was sent for as many times as
+        # specified.
+        with pytest.raises(scp_connection.TimeoutError):
+            mock_conn.send_scp_burst(512, 8, packets())
 
         # We shouldn't have transmitted the packet more than the number of
         # times we specified.
@@ -239,7 +265,7 @@ class TestBursts(object):
                     assert packet.cmd_rc == 12
                     raise IOError  # No packet to return
                 else:
-                    packet.cmd_rc = 0
+                    packet.cmd_rc = 0x80
                     return packet.bytestring
 
         return_packet = ReturnPacket()
@@ -257,7 +283,8 @@ class TestBursts(object):
         [(0x81, scp_connection.BadPacketLengthError),
          (0x83, scp_connection.InvalidCommandError),
          (0x84, scp_connection.InvalidArgsError),
-         (0x87, scp_connection.NoRouteError)])
+         (0x87, scp_connection.NoRouteError),
+         (0x00, Exception)])
     def test_errors(self, mock_conn, rc, error):
         """Test that errors are raised when error RCs are returned."""
         # Create an object which returns a packet with an error code

@@ -249,20 +249,30 @@ class SCPConnection(object):
                                              consts.SDP_HEADER_LENGTH + 2)
 
                 # If the code is an error then we respond immediately
-                if rc in self.error_codes:
-                    raise self.error_codes[rc]
-
-                # Look up the sequence index of packet in the list of
-                # outstanding packets.  We may have already processed a
-                # response for this packet (indicating that the response was
-                # delayed and we retransmitted the initial message) in which
-                # case we can silently ignore the returned packet.
-                # XXX: There is a danger that a response was so delayed that we
-                # already reused the seq number... this is probably
-                # sufficiently unlikely that there is no problem.
-                outstanding = outstanding_packets.pop(seq, None)
-                if outstanding is not None:
-                    outstanding.callback(ack)
+                if rc != consts.SCP_RC_OK:
+                    if rc in consts.SCP_RC_TIMEOUT:
+                        # If the error is timeout related then treat the packet
+                        # as though it timed out, just discard.  This avoids us
+                        # hammering the board when it's most vulnerable.
+                        pass
+                    elif rc in self.error_codes:
+                        raise self.error_codes[rc]
+                    else:
+                        raise Exception(
+                            "Unhandled exception code {:#2x}".format(rc)
+                        )
+                else:
+                    # Look up the sequence index of packet in the list of
+                    # outstanding packets.  We may have already processed a
+                    # response for this packet (indicating that the response
+                    # was delayed and we retransmitted the initial message) in
+                    # which case we can silently ignore the returned packet.
+                    # XXX: There is a danger that a response was so delayed
+                    # that we already reused the seq number... this is probably
+                    # sufficiently unlikely that there is no problem.
+                    outstanding = outstanding_packets.pop(seq, None)
+                    if outstanding is not None:
+                        outstanding.callback(ack)
 
             # Look through all the remaining outstanding packets, if any of
             # them have timed out then we retransmit them.
