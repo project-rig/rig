@@ -43,7 +43,6 @@ def test_scpcall():
     assert call.cmd == 3
     assert call.arg1 == call.arg2 == call.arg3 == 0
     assert call.data == b''
-    assert call.expected_args == 3
     assert call.timeout == 0.0
     assert isinstance(call.callback, collections.Callable)
 
@@ -69,7 +68,6 @@ def test_single_scp_packet(mock_conn):
             assert arg.arg2 == 5
             assert arg.arg3 == 6
             assert arg.data == b'Hello'
-            assert arg.expected_args == 1
             assert arg.timeout == 0.1
 
             arg.callback(packet)
@@ -99,7 +97,7 @@ class TestBursts(object):
 
         def packets():
             # Yield a single packet, with a callback
-            yield scpcall(3, 5, 0, 12, callback=callback, expected_args=0)
+            yield scpcall(3, 5, 0, 12, callback=callback)
 
         sent_packet = SCPPacket(
             True, 0xff, 0, 0, 7, 31, 3, 5, 0, 0, 12, 0, 0, 0, 0, b'')
@@ -366,7 +364,6 @@ def test_read(buffer_size, window_size, x, y, p, n_bytes,
                     assert arg.arg1 == offsets[i]
                     assert arg.arg2 == lens[i]
                     assert arg.arg3 == data_type
-                    assert arg.expected_args == 0
 
                     mock_packet = mock.Mock(spec_set=['data'])
                     mock_packet.data = struct.pack("B", i) * arg.arg2

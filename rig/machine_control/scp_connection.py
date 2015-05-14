@@ -12,8 +12,8 @@ from .packets import SCPPacket
 
 
 class scpcall(collections.namedtuple("_scpcall", "x, y, p, cmd, arg1, arg2, "
-                                                 "arg3, data, expected_args, "
-                                                 "callback, timeout")):
+                                                 "arg3, data,  callback, "
+                                                 "timeout")):
     """Utility for specifying SCP packets which will be sent using
     :py:meth:`~.SCPConnection.send_scp_burst` and their callbacks.
 
@@ -32,9 +32,6 @@ class scpcall(collections.namedtuple("_scpcall", "x, y, p, cmd, arg1, arg2, "
     arg2 : int
     arg3 : int
     data : bytes
-    expected_args : int
-        The number of arguments (0-3) that are expected in the returned
-        packet.
     callback : function
         Function which will be called with the packet that acknowledges the
         transmission of this packet.
@@ -43,10 +40,9 @@ class scpcall(collections.namedtuple("_scpcall", "x, y, p, cmd, arg1, arg2, "
         default specified upon instantiation.
     """
     def __new__(cls, x, y, p, cmd, arg1=0, arg2=0, arg3=0, data=b'',
-                expected_args=3, callback=lambda p: None, timeout=0.0):
+                callback=lambda p: None, timeout=0.0):
         return super(scpcall, cls).__new__(
-            cls, x, y, p, cmd, arg1, arg2, arg3, data, expected_args, callback,
-            timeout
+            cls, x, y, p, cmd, arg1, arg2, arg3, data, callback, timeout
         )
 
 
@@ -140,8 +136,7 @@ class SCPConnection(object):
         # Create the packet to send
         callback = Callback()
         packets = [
-            scpcall(x, y, p, cmd, arg1, arg2, arg3, data, expected_args,
-                    callback, timeout)
+            scpcall(x, y, p, cmd, arg1, arg2, arg3, data, callback, timeout)
         ]
 
         # Send the burst
@@ -179,13 +174,12 @@ class SCPConnection(object):
         class TransmittedPacket(object):
             """A packet which has been transmitted and still awaits a response.
             """
-            __slots__ = ["callback", "packet", "expected_args", "n_tries",
+            __slots__ = ["callback", "packet", "n_tries",
                          "time_sent", "extra_timeout"]
 
-            def __init__(self, callback, packet, expected_args, extra_timeout):
+            def __init__(self, callback, packet, extra_timeout):
                 self.callback = callback
                 self.packet = packet
-                self.expected_args = expected_args
                 self.extra_timeout = extra_timeout
                 self.n_tries = 1
                 self.time_sent = time.time()
@@ -230,9 +224,7 @@ class SCPConnection(object):
                     # expecting a response for it and can retransmit it if
                     # necessary.
                     outstanding_packets[seq] = TransmittedPacket(
-                        args.callback, packet.bytestring, args.expected_args,
-                        args.timeout
-                    )
+                        args.callback, packet.bytestring, args.timeout)
 
                     # Actually send the packet
                     self.sock.send(packet.bytestring)
@@ -337,7 +329,7 @@ class SCPConnection(object):
                 # Create the call spec and yield
                 yield scpcall(
                     x, y, p, consts.SCPCommands.read, read_address,
-                    block_size, dtype, expected_args=0,
+                    block_size, dtype,
                     callback=functools.partial(callback,
                                                mem[offset:offset + block_size])
                 )
