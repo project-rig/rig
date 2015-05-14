@@ -177,12 +177,12 @@ class SCPConnection(object):
             """A packet which has been transmitted and still awaits a response.
             """
             __slots__ = ["callback", "packet", "n_tries",
-                         "time_sent", "extra_timeout"]
+                         "time_sent", "full_timeout"]
 
             def __init__(self, callback, packet, extra_timeout):
                 self.callback = callback
                 self.packet = packet
-                self.extra_timeout = extra_timeout
+                self.full_timeout = extra_timeout
                 self.n_tries = 1
                 self.time_sent = time.time()
 
@@ -226,7 +226,9 @@ class SCPConnection(object):
                     # expecting a response for it and can retransmit it if
                     # necessary.
                     outstanding_packets[seq] = TransmittedPacket(
-                        args.callback, packet.bytestring, args.timeout)
+                        args.callback, packet.bytestring,
+                        self.default_timeout + args.timeout
+                    )
 
                     # Actually send the packet
                     self.sock.send(outstanding_packets[seq].packet)
@@ -267,7 +269,7 @@ class SCPConnection(object):
             current_time = time.time()
             for seq, outstanding in six.iteritems(outstanding_packets):
                 if (current_time - outstanding.time_sent >
-                        self.default_timeout + outstanding.extra_timeout):
+                        outstanding.full_timeout):
                     # This packet has timed out, if we have sent it more than
                     # the given number of times then raise a timeout error for
                     # it.
