@@ -144,6 +144,21 @@ class TestBursts(object):
         """Test correct operation for transmitting a single packet which is
         never acknowledged.
         """
+        # Create a callable for the socket send that asserts that we always
+        # send the same packet.
+        class Send(object):
+            def __init__(self):
+                self.last_packet = None
+
+            def __call__(self, packet):
+                if self.last_packet is None:
+                    self.last_packet = packet
+                else:
+                    assert self.last_packet == packet
+
+        mock_conn.sock.send.side_effect = Send()
+
+        # Create a generator of packets to send
         def packets():
             # Yield a single packet
             yield scpcall(3, 5, 0, 12)

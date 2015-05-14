@@ -281,8 +281,7 @@ class SCPConnection(object):
                         raise TimeoutError(self.n_tries)
 
                     # Otherwise we retransmit it
-                    self.sock.send(b"\x00\x00" + outstanding.packet)
-                    # self.sock.send(outstanding.packet)
+                    self.sock.send(outstanding.packet)
                     outstanding.n_tries += 1
                     outstanding.time_sent = current_time
 
