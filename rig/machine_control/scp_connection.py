@@ -140,7 +140,7 @@ class SCPConnection(object):
         ]
 
         # Send the burst
-        self.send_scp_burst(buffer_size, 1, iter(packets))
+        self.send_scp_burst(buffer_size, 1, packets)
 
         # Return the received packet
         assert callback.packet is not None
@@ -163,6 +163,8 @@ class SCPConnection(object):
             Iterable of :py:class:`.scpcall` elements.  These elements can
             specify a callback which will be called with the returned packet.
         """
+        parameters_and_callbacks = iter(parameters_and_callbacks)
+
         # Non-blocking and then the following is a busy loop.
         self.sock.setblocking(False)
 
@@ -227,7 +229,7 @@ class SCPConnection(object):
                         args.callback, packet.bytestring, args.timeout)
 
                     # Actually send the packet
-                    self.sock.send(packet.bytestring)
+                    self.sock.send(outstanding_packets[seq].packet)
 
             # Listen on the socket for an acknowledgement packet, there not be
             # one.
