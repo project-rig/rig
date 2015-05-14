@@ -282,6 +282,7 @@ class SCPConnection(object):
 
                     # Otherwise we retransmit it
                     self.sock.send(b"\x00\x00" + outstanding.packet)
+                    # self.sock.send(outstanding.packet)
                     outstanding.n_tries += 1
                     outstanding.time_sent = current_time
 
@@ -400,7 +401,7 @@ class SCPConnection(object):
         self.send_scp_burst(buffer_size, window_size, packets(address, data))
 
 
-def seqs(mask=0xf):
+def seqs(mask=0xffff):
     i = 0
     while True:
         yield i
