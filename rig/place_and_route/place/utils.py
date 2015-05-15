@@ -3,6 +3,22 @@
 from six import iteritems, itervalues
 
 
+def add_resources(res_a, res_b):
+    """Return the resources after adding res_b's resources to res_a.
+
+    Parameters
+    ----------
+    res_a : dict
+        Dictionary `{resource: value, ...}`.
+    res_b : dict
+        Dictionary `{resource: value, ...}`. Must be a (non-strict) subset of
+        res_a. If A resource is not present in res_b, the value is presumed to
+        be 0.
+    """
+    return {resource: value + res_b.get(resource, 0)
+            for resource, value in iteritems(res_a)}
+
+
 def subtract_resources(res_a, res_b):
     """Return the resources remaining after subtracting res_b's resources from
     res_a.

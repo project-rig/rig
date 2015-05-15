@@ -203,6 +203,18 @@ class Machine(object):
             self.chip_resources, self.chip_resource_exceptions,
             self.dead_chips, self.dead_links)
 
+    def __eq__(self, other):
+        """Test whether this Machine describes the same machine as another."""
+        return (self.width == other.width and
+                self.height == other.height and
+                self.chip_resources == other.chip_resources and
+                all(self[chip] == other[chip]
+                    for chip in self.chip_resource_exceptions) and
+                all(self[chip] == other[chip]
+                    for chip in other.chip_resource_exceptions) and
+                self.dead_chips == other.dead_chips and
+                self.dead_links == other.dead_links)
+
     def __contains__(self, chip_or_link):
         """Test if a given chip or link is present and alive.
 

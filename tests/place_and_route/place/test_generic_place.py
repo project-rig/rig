@@ -16,11 +16,13 @@ from rig.place_and_route.constraints import LocationConstraint, \
 
 from rig.place_and_route import place as default_place
 from rig.place_and_route.place.hilbert import place as hilbert_place
+from rig.place_and_route.place.sa import place as sa_place
 
 # This dictionary should be updated to contain all implemented algorithms along
 # with applicable keyword arguments.
 ALGORITHMS_UNDER_TEST = [(default_place, {}),
-                         (hilbert_place, {})]
+                         (hilbert_place, {}),
+                         (sa_place, {})]
 
 
 @pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)

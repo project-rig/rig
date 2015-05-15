@@ -41,3 +41,9 @@ class Net(object):
     def __contains__(self, vertex):
         """Test if a supplied vertex is a source or sink of this net."""
         return vertex == self.source or vertex in self.sinks
+    
+    def __iter__(self):
+        """Iterate over all vertices in the net, starting with the source."""
+        yield self.source
+        for vertex in self.sinks:
+            yield vertex

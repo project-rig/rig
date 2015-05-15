@@ -5,7 +5,32 @@ from rig.machine import Cores
 from rig.place_and_route.constraints import ReserveResourceConstraint
 
 from rig.place_and_route.place.utils import \
-    subtract_resources, overallocated, resources_after_reservation
+    add_resources, subtract_resources, overallocated, \
+    resources_after_reservation
+
+
+def test_add_resources():
+    # Null-case
+    assert add_resources({}, {}) == {}
+
+    # Adding nothing to something
+    assert add_resources({"a": 0, "b": 0}, {}) == {"a": 0, "b": 0}
+
+    # Adding subset of zeros to something
+    assert add_resources({"a": 0, "b": 0}, {"a": 0}) \
+        == {"a": 0, "b": 0}
+
+    # Adding zeros to something
+    assert add_resources({"a": 0, "b": 0}, {"a": 0, "b": 0}) \
+        == {"a": 0, "b": 0}
+
+    # Adding subset of non-zeros to something
+    assert add_resources({"a": 10, "b": 20}, {"a": 1}) \
+        == {"a": 11, "b": 20}
+
+    # Adding non-zeros to something
+    assert add_resources({"a": 10, "b": 20}, {"a": 1, "b": 2}) \
+        == {"a": 11, "b": 22}
 
 
 def test_subtract_resources():
