@@ -234,7 +234,9 @@ class TestBursts(object):
         assert mock_conn.sock.send.call_count == mock_conn.n_tries
         assert mock_conn.sock.recv.called
 
-    def test_seq_not_reused_for_outstanding_packet(self, mock_conn):
+    @pytest.mark.parametrize("window_size", [1, 8])
+    def test_seq_not_reused_for_outstanding_packet(self, mock_conn,
+                                                   window_size):
         """Test that a sequence index is never reused for a packet which
         receives no acknowledgement.
         """
@@ -270,13 +272,13 @@ class TestBursts(object):
 
         return_packet = ReturnPacket()
         sr = SendReceive(return_packet)
-        mock_conn.seq = scp_connection.seqs(0x1)
+        mock_conn.seq = scp_connection.seqs((1 << window_size + 1) - 1)
         mock_conn.sock.send.side_effect = sr.send
         mock_conn.sock.recv.side_effect = sr.recv
 
         # Send the packets, the one packet we refuse to ignore should timeout
         with pytest.raises(scp_connection.TimeoutError):
-            mock_conn.send_scp_burst(512, 8, packets())
+            mock_conn.send_scp_burst(512, window_size, packets())
 
     @pytest.mark.parametrize(
         "rc, error",
