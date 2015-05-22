@@ -180,3 +180,68 @@ def test_build_routing_tables():
     e0 = RoutingTableEntry(set([Routes.core_1]), 0xDEAD, 0xBEEF)
     e1 = RoutingTableEntry(set([Routes.core_2]), 0x1234, 0xABCD)
     assert entries == [e0, e1] or entries == [e1, e0]
+
+
+def test_build_routing_tables_repeated_key_mask():
+    # Multiple nets with the same key should be merged together
+    n0 = Net(object(), object())
+    r0 = RoutingTree((0, 0), set([Routes.core_6]))
+    n1 = Net(object(), object())
+    r1 = RoutingTree((0, 0), set([Routes.core_5]))
+    routes = {n0: r0, n1: r1}
+    net_keys = {n0: (0xCAFE, 0xFFFF), n1: (0xCAFE, 0xFFFF)}
+    assert build_routing_tables(routes, net_keys) == {
+        (0, 0): [RoutingTableEntry(set([Routes.core_5, Routes.core_6]),
+                                   0xCAFE, 0xFFFF)]
+    }
+
+
+def test_build_routing_tables_repeated_key_mask_not_default():
+    """The routes illustrated below have the same key and mask but should NOT
+    BE marked as default routes, despite the fact that each alone could be.
+
+                (1, 2)
+                  ^
+                  |
+                  |
+    (0, 1) ---> (1, 1) ---> (2, 1)
+                  ^
+                  |
+                  |
+                (1, 0)
+    """
+    n0 = Net(object(), object())
+    r0 = \
+        RoutingTree((0, 1), set([
+            RoutingTree((1, 1), set([
+                RoutingTree((2, 1), set([Routes.core_1]))
+            ]))
+        ]))
+
+    n1 = Net(object(), object())
+    r1 = \
+        RoutingTree((1, 0), set([
+            RoutingTree((1, 1), set([
+                RoutingTree((1, 2), set([Routes.core_2]))
+            ]))
+        ]))
+
+    routes = {n0: r0, n1: r1}
+    net_keys = {n0: (0xCAFE, 0xFFFF), n1: (0xCAFE, 0xFFFF)}
+
+    # Build the routing tables
+    routing_tables = build_routing_tables(routes, net_keys)
+
+    assert routing_tables[(0, 1)] == [
+        RoutingTableEntry(set([Routes.east]), 0xCAFE, 0xFFFF)]
+    assert routing_tables[(1, 0)] == [
+        RoutingTableEntry(set([Routes.north]), 0xCAFE, 0xFFFF)]
+
+    assert routing_tables[(2, 1)] == [
+        RoutingTableEntry(set([Routes.core_1]), 0xCAFE, 0xFFFF)]
+    assert routing_tables[(1, 2)] == [
+        RoutingTableEntry(set([Routes.core_2]), 0xCAFE, 0xFFFF)]
+
+    # (1, 1) SHOULD contain 1 entry
+    assert routing_tables[(1, 1)] == [
+        RoutingTableEntry(set([Routes.east, Routes.north]), 0xCAFE, 0xFFFF)]

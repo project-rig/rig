@@ -2,7 +2,7 @@
 structures from the products of placement, allocation and routing.
 """
 
-from collections import defaultdict, deque
+from collections import defaultdict, deque, namedtuple, OrderedDict
 
 from six import iteritems
 
@@ -51,7 +51,8 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     """Convert a set of RoutingTrees into a per-chip set of routing tables.
 
     This command produces routing tables with entries optionally omitted when
-    the route does not change direction.
+    the route does not change direction. Entries with identical keys and masks
+    will be merged.
 
     Note: The routing trees provided are assumed to be correct and continuous
     (not missing any hops). If this is not the case, the output is undefined.
@@ -73,8 +74,11 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     -------
     {(x, y): [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
     """
-    # {(x, y): [RoutingTableEntry, ...]
-    routing_tables = defaultdict(list)
+    # Pairs of inbound and outbound routes.
+    _InOutPair = namedtuple("_InOutPair", "ins, outs")
+
+    # {(x, y): {(key, mask): _InOutPair}}
+    route_sets = defaultdict(OrderedDict)
 
     for net, routing_tree in iteritems(routes):
         key, mask = net_keys[net]
@@ -102,8 +106,29 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
                     out_directions.add(child)
 
             # Add a routing entry when the direction changes
-            if not omit_default_routes or set([direction]) != out_directions:
-                routing_tables[(x, y)].append(
-                    RoutingTableEntry(out_directions, key, mask))
+            if (key, mask) in route_sets[(x, y)]:
+                # Update the existing route set if possible
+                route_sets[(x, y)][(key, mask)].ins.add(direction)
+                route_sets[(x, y)][(key, mask)].outs.update(out_directions)
+            else:
+                # Otherwise create a new route set
+                route_sets[(x, y)][(key, mask)] = _InOutPair(
+                    set([direction]), set(out_directions)
+                )
+
+    # Construct the routing tables from the route sets
+    routing_tables = defaultdict(list)
+    for (x, y), routes in iteritems(route_sets):
+        for (key, mask), route in iteritems(routes):
+            # Remove default routes where possible
+            if omit_default_routes and (len(route.ins) == 1 and
+                                        route.outs == route.ins):
+                # This route can be removed, so skip it.
+                continue
+
+            # Add the route
+            routing_tables[(x, y)].append(
+                RoutingTableEntry(route.outs, key, mask)
+            )
 
     return routing_tables
