@@ -944,7 +944,8 @@ class TestMachineController(object):
 
     @pytest.mark.parametrize(
         "app_id, wait, cores",
-        [(31, False, [1, 2, 3]), (12, True, [5])]
+        [(31, False, [1, 2, 3]), (12, True, [5]),
+         (66, False, list(range(1, 18)))]
     )
     @pytest.mark.parametrize("present_map", [False, True])
     def test_flood_fill_aplx_single_aplx(self, cn, aplx_file, app_id, wait,
@@ -1030,7 +1031,6 @@ class TestMachineController(object):
             cn._send_scp.call_args_list[-1][0]
         assert x_ == x and y_ == y and p_ == p
         assert cmd == SCPCommands.nearest_neighbour_packet
-        print(hex(NNCommands.flood_fill_end << 24))
         assert arg1 & 0xff000000 == NNCommands.flood_fill_end << 24
         assert arg2 & 0xff000000 == app_id << 24
         assert arg2 & 0x0003ffff == coremask
