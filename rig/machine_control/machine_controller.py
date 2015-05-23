@@ -715,7 +715,7 @@ class MachineController(ContextMixin):
     def _send_ffe(self, pid, app_id, app_flags, cores, fr):
         """Send a flood-fill end packet."""
         arg1 = (NNCommands.flood_fill_end << 24) | pid
-        arg2 = (app_id << 24) | (app_flags << 18) | (cores & 0x3fff)
+        arg2 = (app_id << 24) | (app_flags << 18) | (cores & 0x3ffff)
         self._send_scp(0, 0, 0, SCPCommands.nearest_neighbour_packet,
                        arg1, arg2, fr)
 
