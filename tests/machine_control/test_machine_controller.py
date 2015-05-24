@@ -1040,13 +1040,58 @@ class TestMachineController(object):
             exp_flags |= consts.AppFlags.wait
         assert arg2 & 0x00fc0000 == exp_flags << 18
 
-    def test_load_and_check_aplxs(self):
+    def test_load_and_check_succeed_all_cores(self):
+        """Test that APLX loading doesn't take place multiple times if the core
+        count comes back good.
+        """
+        # Construct the machine controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn.count_cores_in_state = mock.Mock()
+        cn.flood_fill_aplx = mock.Mock()
+        cn.read_vcpu_struct_field = mock.Mock()
+        cn.send_signal = mock.Mock()
+
+        # Construct a list of targets and a list of failed targets
+        app_id = 27
+        targets = {
+            "spam": {(0, 0): set([0, 1, 2]),
+                     (1, 1): set([1])},
+            "eggs": {(2, 3): set([4, 5, 6])}
+        }
+
+        def count_cores_in_state(state, id_):
+            assert state == "wait"
+            assert id_ == app_id
+            return 7  # NO cores failed!
+        cn.count_cores_in_state.side_effect = count_cores_in_state
+
+        # Test that loading applications results in calls to flood_fill_aplx,
+        # and read_struct_field and that failed cores are reloaded.
+        with cn(app_id=app_id):
+            cn.load_application(targets, wait=True, all_cores=True)
+
+        # First and second loads
+        cn.flood_fill_aplx.assert_has_calls([
+            mock.call(targets, app_id=app_id, wait=True),
+        ])
+
+        # Check that count cores was called and that read__vcpu_struct wasn't!
+        assert cn.count_cores_in_state.called
+        assert not cn.read_vcpu_struct_field.called
+
+        # No signals sent
+        assert not cn.send_signal.called
+
+    @pytest.mark.parametrize("all_cores", [True, False])
+    def test_load_and_check_aplxs(self, all_cores):
         """Test that APLX loading takes place multiple times if one of the
         chips fails to be placed in the wait state.
         """
         # Construct the machine controller
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
+        cn.count_cores_in_state = mock.Mock()
         cn.flood_fill_aplx = mock.Mock()
         cn.read_vcpu_struct_field = mock.Mock()
         cn.send_signal = mock.Mock()
@@ -1057,7 +1102,15 @@ class TestMachineController(object):
         failed_targets = {(0, 1, 4)}
         faileds = {(0, 1): {4}}
 
+        def count_cores_in_state(state, id_):
+            assert state == "wait"
+            assert id_ == app_id
+            return 1  # 1 core safely loaded
+        cn.count_cores_in_state.side_effect = count_cores_in_state
+
         def read_struct_field(fn, x, y, p):
+            assert cn.count_cores_in_state.called is all_cores
+
             if (x, y, p) in failed_targets:
                 failed_targets.remove((x, y, p))  # Succeeds next time
                 return consts.AppState.idle
@@ -1068,7 +1121,8 @@ class TestMachineController(object):
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
         with cn(app_id=app_id):
-            cn.load_application("test.aplx", targets, wait=True)
+            cn.load_application("test.aplx", targets,
+                                all_cores=all_cores, wait=True)
 
         # First and second loads
         cn.flood_fill_aplx.assert_has_calls([
@@ -1116,7 +1170,7 @@ class TestMachineController(object):
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
         with cn(app_id=app_id):
-            cn.load_application({"test.aplx": targets})
+            cn.load_application({"test.aplx": targets}, all_cores=False)
 
         # First and second loads
         cn.flood_fill_aplx.assert_has_calls([
@@ -1163,7 +1217,7 @@ class TestMachineController(object):
         # and read_struct_field and that failed cores are reloaded.
         with cn(app_id=app_id):
             with pytest.raises(SpiNNakerLoadingError) as excinfo:
-                cn.load_application({"test.aplx": targets})
+                cn.load_application({"test.aplx": targets}, all_cores=False)
 
         assert "(0, 1, 4)" in str(excinfo.value)
 
