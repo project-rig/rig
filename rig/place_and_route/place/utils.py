@@ -2,6 +2,8 @@
 
 from six import iteritems, itervalues
 
+from rig.place_and_route.exceptions import InsufficientResourceError
+
 
 def add_resources(res_a, res_b):
     """Return the resources after adding res_b's resources to res_a.
@@ -56,3 +58,31 @@ def resources_after_reservation(res, constraint):
     res[constraint.resource] -= (constraint.reservation.stop -
                                  constraint.reservation.start)
     return res
+
+
+def apply_reserve_resource_constraint(machine, constraint):
+    """Apply the changes inplied by a reserve resource constraint to a
+    machine model."""
+    if constraint.location is None:
+        # Compensate for globally reserved resources
+        machine.chip_resources \
+            = resources_after_reservation(
+                machine.chip_resources, constraint)
+        if overallocated(machine.chip_resources):
+            raise InsufficientResourceError(
+                "Cannot meet {}".format(constraint))
+        for location in machine.chip_resource_exceptions:
+            machine.chip_resource_exceptions[location] \
+                = resources_after_reservation(
+                    machine.chip_resource_exceptions[location],
+                    constraint)
+            if overallocated(machine[location]):
+                raise InsufficientResourceError(
+                    "Cannot meet {}".format(constraint))
+    else:
+        # Compensate for reserved resources at a specified location
+        machine[constraint.location] = resources_after_reservation(
+            machine[constraint.location], constraint)
+        if overallocated(machine[constraint.location]):
+            raise InsufficientResourceError(
+                "Cannot meet {}".format(constraint))

@@ -1,4 +1,10 @@
-"""Generic correctness tests applicable to all placement algorithms."""
+"""Generic correctness tests applicable to all placement algorithms.
+
+Note that these tests are intended to be so easy that it will just weed out
+fundamental failures of placement algorithms. Note that in general,
+however, it is perfectly acceptable for problems to exist which not all
+placers can handle.
+"""
 
 import pytest
 
@@ -6,7 +12,7 @@ from six import iteritems
 
 from rig.netlist import Net
 
-from rig.machine import Machine, Cores
+from rig.machine import Machine, Cores, Links
 
 from rig.place_and_route.exceptions import InsufficientResourceError
 from rig.place_and_route.exceptions import InvalidConstraintError
@@ -22,7 +28,10 @@ from rig.place_and_route.place.sa import place as sa_place
 # with applicable keyword arguments.
 ALGORITHMS_UNDER_TEST = [(default_place, {}),
                          (hilbert_place, {}),
-                         (sa_place, {})]
+                         (sa_place, {"effort": 1.0}),
+                         # Testing with effort = 0 tests the initial (random)
+                         # placement solutions of the SA placer.
+                         (sa_place, {"effort": 0.0})]
 
 
 @pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
@@ -72,21 +81,27 @@ def test_impossible(algorithm, kwargs):
         algorithm({object(): {Cores: 2}}, [], machine, [], **kwargs)
 
 
-@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
-def test_trivial(algorithm, kwargs):
-    """Test that algorithms succeed in placing trivial cases.
+def assert_valid(placement, vertices, machine):
+    """Given a placement, make sure it doesn't break any rules."""
+    used_chips = set()
+    for v in vertices:
+        assert v in placement
+        assert placement[v] in machine
+        assert placement[v] not in used_chips
+        used_chips.add(v)
 
-    Note that these tests are intended to be so easy that it will just weed out
-    fundamental failures of placement algorithms. Note that in general,
-    however, it is perfectly acceptable for problems to exist which not all
-    placers can handle.
-    """
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_singleton_single_machine(algorithm, kwargs):
     # Putting in just one vertex in a singleton machine.
     machine = Machine(1, 1)
     vertex = object()
     assert algorithm({vertex: {Cores: 1}}, [], machine, [], **kwargs) \
         == {vertex: (0, 0)}
 
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_singleton_large_machine(algorithm, kwargs):
     # Putting in just one vertex into a large machine
     machine = Machine(10, 10)
     vertex = object()
@@ -94,6 +109,9 @@ def test_trivial(algorithm, kwargs):
     assert vertex in placement
     assert placement[vertex] in machine
 
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_multiple_single_machine(algorithm, kwargs):
     # Putting in multiple vertices in a singleton machine with adequate
     # resources.
     machine = Machine(1, 1, chip_resources={Cores: 8})
@@ -102,6 +120,9 @@ def test_trivial(algorithm, kwargs):
                      [], machine, [], **kwargs) \
         == {v: (0, 0) for v in vertices}
 
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_multiple_connected_single_machine(algorithm, kwargs):
     # Putting in multiple connected vertices in a singleton machine with
     # adequate resources.
     machine = Machine(1, 1, chip_resources={Cores: 8})
@@ -111,33 +132,54 @@ def test_trivial(algorithm, kwargs):
                      nets, machine, [], **kwargs) \
         == {v: (0, 0) for v in vertices}
 
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_multiple_large_machine(algorithm, kwargs):
     # Putting in small number of disconnected vertices into a large machine
     # with adequate resources.
     machine = Machine(10, 10, chip_resources={Cores: 1})
     vertices = [object() for _ in range(8)]
     placement = algorithm({v: {Cores: 1} for v in vertices},
                           [], machine, [], **kwargs)
-    used_chips = set()
-    for v in vertices:
-        assert v in placement
-        assert placement[v] in machine
-        assert placement[v] not in used_chips
-        used_chips.add(v)
+    assert_valid(placement, vertices, machine)
 
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_multiple_connected_large_machine(algorithm, kwargs):
     # Putting in small number of connected vertices into a large machine with
     # adequate resources.
     machine = Machine(10, 10, chip_resources={Cores: 1})
     vertices = [object() for _ in range(8)]
-    nets = [Net(vertices[0], vertices[1:])]
+    nets = [Net(vertices[0], vertices[:])]
     placement = algorithm({v: {Cores: 1} for v in vertices},
                           nets, machine, [], **kwargs)
-    used_chips = set()
-    for v in vertices:
-        assert v in placement
-        assert placement[v] in machine
-        assert placement[v] not in used_chips
-        used_chips.add(v)
+    assert_valid(placement, vertices, machine)
 
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_multiple_connected_large_machine_no_wrap(algorithm, kwargs):
+    # Putting in small number of connected vertices into a large machine with
+    # adequate resources but no wrap-around links.
+    machine = Machine(10, 10, chip_resources={Cores: 1})
+    for x in range(10):
+        machine.dead_links.add((x, 0, Links.south))
+        machine.dead_links.add((x, 0, Links.south_west))
+        machine.dead_links.add((x, 9, Links.north))
+        machine.dead_links.add((x, 9, Links.north_east))
+    for y in range(10):
+        machine.dead_links.add((0, y, Links.west))
+        machine.dead_links.add((0, y, Links.south_west))
+        machine.dead_links.add((9, y, Links.east))
+        machine.dead_links.add((9, y, Links.north_east))
+    vertices = [object() for _ in range(8)]
+    nets = [Net(vertices[0], vertices[:])]
+    placement = algorithm({v: {Cores: 1} for v in vertices},
+                          nets, machine, [], **kwargs)
+    assert_valid(placement, vertices, machine)
+
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_multiple_disconnected_large_machine(algorithm, kwargs):
     # Putting in small number of disconnected groups of vertices into a large
     # machine with adequate resources.
     machine = Machine(10, 10, chip_resources={Cores: 1})
@@ -146,12 +188,21 @@ def test_trivial(algorithm, kwargs):
             Net(vertices[4], vertices[5:])]
     placement = algorithm({v: {Cores: 1} for v in vertices},
                           nets, machine, [], **kwargs)
-    used_chips = set()
-    for v in vertices:
-        assert v in placement
-        assert placement[v] in machine
-        assert placement[v] not in used_chips
-        used_chips.add(v)
+    assert_valid(placement, vertices, machine)
+
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_multiple_disconnected_large_machine_multiple_cores(algorithm, kwargs):
+    # Putting in small number of disconnected groups of vertices into a large
+    # machine with adequate resources such that all vertices should fit within
+    # a single chip.
+    machine = Machine(2, 1, chip_resources={Cores: 8})
+    vertices = [object() for _ in range(8)]
+    nets = [Net(vertices[0], vertices[1:4]),
+            Net(vertices[4], vertices[5:])]
+    placement = algorithm({v: {Cores: 1} for v in vertices},
+                          nets, machine, [], **kwargs)
+    assert_valid(placement, vertices, machine)
 
 
 @pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
@@ -221,6 +272,24 @@ def test_reserve_resource_constraint(algorithm, kwargs):
     with pytest.raises(InsufficientResourceError):
         algorithm({vertex: {Cores: 1}}, [], machine, constraints, **kwargs)
 
+    # Should be able to limit resources on every chip making the constraint
+    # tortologically impossible.
+    machine = Machine(1, 1, chip_resources={Cores: 1})
+    vertex = object()
+    constraints = [ReserveResourceConstraint(Cores, slice(0, 1)),
+                   ReserveResourceConstraint(Cores, slice(1, 2))]
+    with pytest.raises(InsufficientResourceError):
+        algorithm({vertex: {}}, [], machine, constraints, **kwargs)
+
+    # Should be able to limit resources on every chip making the constraint
+    # tortologically impossible on a single chip.
+    machine = Machine(2, 1, chip_resources={Cores: 1},
+                      chip_resource_exceptions={(0, 0): {Cores: 0}})
+    vertex = object()
+    constraints = [ReserveResourceConstraint(Cores, slice(0, 1))]
+    with pytest.raises(InsufficientResourceError):
+        algorithm({vertex: {}}, [], machine, constraints, **kwargs)
+
     # Should be able to limit resources on specific chip to make the situation
     # impossible
     machine = Machine(1, 1, chip_resources={Cores: 1})
@@ -228,6 +297,24 @@ def test_reserve_resource_constraint(algorithm, kwargs):
     constraints = [ReserveResourceConstraint(Cores, slice(0, 1), (0, 0))]
     with pytest.raises(InsufficientResourceError):
         algorithm({vertex: {Cores: 1}}, [], machine, constraints, **kwargs)
+
+    # Should be able to limit resources on a specific chip making the
+    # constraint tortologically impossible.
+    machine = Machine(1, 1, chip_resources={Cores: 1})
+    vertex = object()
+    constraints = [ReserveResourceConstraint(Cores, slice(0, 1), (0, 0)),
+                   ReserveResourceConstraint(Cores, slice(1, 2), (0, 0))]
+    with pytest.raises(InsufficientResourceError):
+        algorithm({vertex: {}}, [], machine, constraints, **kwargs)
+
+    # Should be able to limit resources on a specific chip making the
+    # constraint tortologically impossible on that chip.
+    machine = Machine(2, 1, chip_resources={Cores: 1},
+                      chip_resource_exceptions={(0, 0): {Cores: 0}})
+    vertex = object()
+    constraints = [ReserveResourceConstraint(Cores, slice(0, 1), (0, 0))]
+    with pytest.raises(InsufficientResourceError):
+        algorithm({vertex: {}}, [], machine, constraints, **kwargs)
 
     # Should be able to limit resources on chips with resource exceptions to
     # make the situation impossible

@@ -25,7 +25,7 @@ class TestNet(object):
         for sink in sinks:
             assert sink in net
         assert Vertex() not in net
-        
+
         # Make sure iteration works
         vertices = list(net)
         assert len(vertices) == len(sinks) + 1
