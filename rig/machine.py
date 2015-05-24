@@ -100,6 +100,12 @@ class Links(IntEnum):
     def to_vector(self):
         """Given a link direction, return the equivalent vector."""
         return _direction_link_lookup[self]
+    
+    
+    @property
+    def opposite(self):
+        """Get the opposite link to the one given."""
+        return Links((self + 3) % 6)
 
 
 _link_direction_lookup = {

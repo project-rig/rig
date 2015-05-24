@@ -266,3 +266,11 @@ def test_has_wrap_around_links():
     assert not machine.has_wrap_around_links(1.0)
     assert machine.has_wrap_around_links(0.5)
     assert machine.has_wrap_around_links(0.1)
+
+def test_links_opposite():
+    assert Links.north.opposite == Links.south
+    assert Links.north_east.opposite == Links.south_west
+    assert Links.east.opposite == Links.west
+    assert Links.south.opposite == Links.north
+    assert Links.south_west.opposite == Links.north_east
+    assert Links.west.opposite == Links.east
