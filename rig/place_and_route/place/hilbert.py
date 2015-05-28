@@ -12,7 +12,7 @@ from ..exceptions import InsufficientResourceError, InvalidConstraintError
 from ..constraints import LocationConstraint, ReserveResourceConstraint
 
 from .utils import \
-    subtract_resources, overallocated, resources_after_reservation
+    subtract_resources, overallocated, apply_reserve_resource_constraint
 
 
 def hilbert(level, angle=1, s=None):
@@ -118,20 +118,7 @@ def place(vertices_resources, nets, machine, constraints):
             unplaced_vertices.remove(constraint.vertex)
             placements[constraint.vertex] = loc
         elif isinstance(constraint, ReserveResourceConstraint):
-            if constraint.location is None:
-                # Compensate for globally reserved resources
-                machine.chip_resources \
-                    = resources_after_reservation(
-                        machine.chip_resources, constraint)
-                for location in machine.chip_resource_exceptions:
-                    machine.chip_resource_exceptions[location] \
-                        = resources_after_reservation(
-                            machine.chip_resource_exceptions[location],
-                            constraint)
-            else:
-                # Compensate for reserved resources at a specified location
-                machine[constraint.location] = resources_after_reservation(
-                    machine[constraint.location], constraint)
+            apply_reserve_resource_constraint(machine, constraint)
 
     # Allocate chips along a Hilbert curve large enough to cover the whole
     # system
