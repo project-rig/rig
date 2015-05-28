@@ -852,12 +852,18 @@ class MachineController(ContextMixin):
             Time to pause (in seconds) after loading to ensure that the
             application successfully reaches the wait state before checking for
             success.
+        use_count : bool
+            If True (the default) then the targets dictionary will be assumed
+            to represent _all_ the cores that will be loaded and a faster
+            method to determine whether all applications have been loaded
+            correctly will be used. If False a fallback method will be used.
         """
         # Get keyword arguments
         app_id = kwargs.pop("app_id")
         wait = kwargs.pop("wait")
         n_tries = kwargs.pop("n_tries")
         app_start_delay = kwargs.pop("app_start_delay")
+        use_count = kwargs.pop("use_count", True)
 
         # Coerce the arguments into a single form.  If there are two arguments
         # then assume that we have filename and a map of chips and cores;
@@ -875,6 +881,12 @@ class MachineController(ContextMixin):
                 "targets"
             )
 
+        # Count the number of cores being loaded
+        core_count = sum(
+            len(cores) for ts in six.itervalues(application_map) for
+            cores in six.itervalues(ts)
+        )
+
         # Mark all targets as unloaded
         unloaded = application_map
 
@@ -887,6 +899,13 @@ class MachineController(ContextMixin):
             # the wait state
             self.flood_fill_aplx(unloaded, app_id=app_id, wait=True)
             time.sleep(app_start_delay)
+
+            # If running in "fast" mode then check that the correct number of
+            # cores are in the "wait" state, if so then break out of this loop.
+            if (use_count and
+                    core_count == self.count_cores_in_state("wait", app_id)):
+                unloaded = {}
+                continue
 
             # Query each target in turn to determine if it is loaded or
             # otherwise.  If it is loaded (in the wait state) then remove it
