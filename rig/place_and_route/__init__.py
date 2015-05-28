@@ -6,7 +6,7 @@ the use of these functions.
 """
 
 # Default algorithms
-from .place.hilbert import place
+from .place.sa import place
 from .allocate.greedy import allocate
 from .route.ner import route
 

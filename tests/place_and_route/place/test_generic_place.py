@@ -28,7 +28,7 @@ from rig.place_and_route.place.sa import place as sa_place
 # with applicable keyword arguments.
 ALGORITHMS_UNDER_TEST = [(default_place, {}),
                          (hilbert_place, {}),
-                         (sa_place, {"effort": 1.0}),
+                         (sa_place, {}),
                          # Testing with effort = 0 tests the initial (random)
                          # placement solutions of the SA placer.
                          (sa_place, {"effort": 0.0})]
