@@ -326,7 +326,7 @@ class TestMachineControllerLive(object):
          ]
     )
     def test_load_and_retrieve_routing_tables(self, controller, routes):
-        with controller(x=1, y=1):
+        with controller(x=0, y=0):
             # Load the routing table entries
             controller.load_routing_table_entries(routes)
 
@@ -346,7 +346,7 @@ class TestMachineControllerLive(object):
         assert controller.count_cores_in_state("run") == 0
 
         # All the routing tables should have gone as well
-        with controller(x=1, y=1):
+        with controller(x=0, y=0):
             loaded = controller.get_routing_table_entries()
 
         for entry in loaded:
