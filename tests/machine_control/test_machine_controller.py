@@ -1243,8 +1243,24 @@ class TestMachineController(object):
         assert arg2 & 0x00300000 == consts.AppDiagnosticSignal.count << 20
         assert arg2 & 0x03c00000 == 1 << 22  # op == 1
         assert arg2 & 0x0c000000 == 0  # level == 0
-
         assert arg3 == 0x0000ffff  # Transmit to all
+
+    @pytest.mark.parametrize(
+        "states, exp", [(("idle", "exit"), 4),
+                        (["runtime_exception", "watchdog", "dead"], 6)]
+    )
+    def test_count_cores_in_state_iterable_of_states(self, states, exp):
+        # Create the controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = mock.Mock(spec_set=SCPPacket)
+        cn._send_scp.return_value.arg1 = 2
+
+        # Count the cores
+        assert cn.count_cores_in_state(states) == exp
+
+        # Check the correct number of packets were sent
+        assert cn._send_scp.call_count == len(states)
 
     @pytest.mark.parametrize("state", ["non-existant",
                                        consts.AppDiagnosticSignal.AND])

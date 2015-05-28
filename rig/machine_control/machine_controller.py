@@ -969,13 +969,22 @@ class MachineController(ContextMixin):
 
         Parameters
         ----------
-        state : string or :py:class:`~rig.machine_control.consts.AppState`
+        state : string or :py:class:`~rig.machine_control.consts.AppState` or
+                iterable
             Count the number of cores currently in this state. This may be
             either an entry of the
             :py:class:`~rig.machine_control.consts.AppState` enum or, for
             convenience, the name of a state (defined in
-            :py:class:`~rig.machine_control.consts.AppState`) as a string.
+            :py:class:`~rig.machine_control.consts.AppState`) as a string or
+            an iterable of these, in which case the total count will be
+            returned.
         """
+        if (isinstance(state, collections.Iterable) and
+                not isinstance(state, str)):
+            # If the state is iterable then call for each state and return the
+            # sum.
+            return sum(self.count_cores_in_state(s, app_id) for s in state)
+
         if isinstance(state, str):
             try:
                 state = getattr(consts.AppState, state)
