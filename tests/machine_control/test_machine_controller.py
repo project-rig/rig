@@ -196,7 +196,7 @@ class TestMachineControllerLive(object):
             "Controller has no structs, check test fixture."
         controller.load_application(
             pkg_resources.resource_filename("rig", "binaries/rig_test.aplx"),
-            targets
+            targets, use_count=False
         )
 
         # Read back a word to test that the application loaded
@@ -1040,7 +1040,7 @@ class TestMachineController(object):
             exp_flags |= consts.AppFlags.wait
         assert arg2 & 0x00fc0000 == exp_flags << 18
 
-    def test_load_and_check_succeed_all_cores(self):
+    def test_load_and_check_succeed_use_count(self):
         """Test that APLX loading doesn't take place multiple times if the core
         count comes back good.
         """
@@ -1069,7 +1069,7 @@ class TestMachineController(object):
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
         with cn(app_id=app_id):
-            cn.load_application(targets, wait=True, all_cores=True)
+            cn.load_application(targets, wait=True, use_count=True)
 
         # First and second loads
         cn.flood_fill_aplx.assert_has_calls([
@@ -1083,8 +1083,8 @@ class TestMachineController(object):
         # No signals sent
         assert not cn.send_signal.called
 
-    @pytest.mark.parametrize("all_cores", [True, False])
-    def test_load_and_check_aplxs(self, all_cores):
+    @pytest.mark.parametrize("use_count", [True, False])
+    def test_load_and_check_aplxs(self, use_count):
         """Test that APLX loading takes place multiple times if one of the
         chips fails to be placed in the wait state.
         """
@@ -1109,7 +1109,7 @@ class TestMachineController(object):
         cn.count_cores_in_state.side_effect = count_cores_in_state
 
         def read_struct_field(fn, x, y, p):
-            assert cn.count_cores_in_state.called is all_cores
+            assert cn.count_cores_in_state.called is use_count
 
             if (x, y, p) in failed_targets:
                 failed_targets.remove((x, y, p))  # Succeeds next time
@@ -1122,7 +1122,7 @@ class TestMachineController(object):
         # and read_struct_field and that failed cores are reloaded.
         with cn(app_id=app_id):
             cn.load_application("test.aplx", targets,
-                                all_cores=all_cores, wait=True)
+                                use_count=use_count, wait=True)
 
         # First and second loads
         cn.flood_fill_aplx.assert_has_calls([
@@ -1170,7 +1170,7 @@ class TestMachineController(object):
         # Test that loading applications results in calls to flood_fill_aplx,
         # and read_struct_field and that failed cores are reloaded.
         with cn(app_id=app_id):
-            cn.load_application({"test.aplx": targets}, all_cores=False)
+            cn.load_application({"test.aplx": targets}, use_count=False)
 
         # First and second loads
         cn.flood_fill_aplx.assert_has_calls([
@@ -1217,7 +1217,7 @@ class TestMachineController(object):
         # and read_struct_field and that failed cores are reloaded.
         with cn(app_id=app_id):
             with pytest.raises(SpiNNakerLoadingError) as excinfo:
-                cn.load_application({"test.aplx": targets}, all_cores=False)
+                cn.load_application({"test.aplx": targets}, use_count=False)
 
         assert "(0, 1, 4)" in str(excinfo.value)
 

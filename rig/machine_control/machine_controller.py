@@ -852,19 +852,18 @@ class MachineController(ContextMixin):
             Time to pause (in seconds) after loading to ensure that the
             application successfully reaches the wait state before checking for
             success.
-        all_cores : bool
-            If True then the targets dictionary will be assumed to represent
-            _all_ the cores that will be loaded and a faster method to
-            determine whether all applications have been loaded correctly will
-            be used. If False (the default) then a fallback method will be
-            used.
+        use_count : bool
+            If True (the default) then the targets dictionary will be assumed
+            to represent _all_ the cores that will be loaded and a faster
+            method to determine whether all applications have been loaded
+            correctly will be used. If False a fallback method will be used.
         """
         # Get keyword arguments
         app_id = kwargs.pop("app_id")
         wait = kwargs.pop("wait")
         n_tries = kwargs.pop("n_tries")
         app_start_delay = kwargs.pop("app_start_delay")
-        all_cores = kwargs.pop("all_cores", False)
+        use_count = kwargs.pop("use_count", True)
 
         # Coerce the arguments into a single form.  If there are two arguments
         # then assume that we have filename and a map of chips and cores;
@@ -903,7 +902,7 @@ class MachineController(ContextMixin):
 
             # If running in "fast" mode then check that the correct number of
             # cores are in the "wait" state, if so then break out of this loop.
-            if (all_cores and
+            if (use_count and
                     core_count == self.count_cores_in_state("wait", app_id)):
                 unloaded = {}
                 continue
