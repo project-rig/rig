@@ -1195,6 +1195,14 @@ class MachineController(ContextMixin):
         return table
 
     @ContextMixin.use_contextual_arguments()
+    def clear_routing_table_entries(self, x, y, app_id):
+        """Clear the routing table entries associated with a given application.
+        """
+        # Construct the arguments
+        arg1 = (app_id << 8) | consts.AllocOperations.free_rtr_by_app
+        self._send_scp(x, y, 0, SCPCommands.alloc_free, arg1, 0x1)
+
+    @ContextMixin.use_contextual_arguments()
     def get_p2p_routing_table(self, x, y):
         """Dump the contents of a chip's P2P routing table.
 

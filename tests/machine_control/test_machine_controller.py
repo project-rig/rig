@@ -1525,6 +1525,22 @@ class TestMachineController(object):
         cn.read_struct_field.assert_called_once_with("sv", "rtr_copy", x, y)
         cn.read.assert_called_once_with(addr, 1024*16, x, y)
 
+    @pytest.mark.parametrize("x, y, app_id", [(0, 1, 65), (3, 2, 55)])
+    def test_clear_routing_table_entries(self, x, y, app_id):
+        # Create the controller to ensure that appropriate packets are sent
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+
+        # Clear the routing table entries
+        with cn(app_id=app_id, x=x, y=y):
+            cn.clear_routing_table_entries()
+
+        # Assert ONE packet was sent to do this
+        arg1 = (app_id << 8) | consts.AllocOperations.free_rtr_by_app
+        arg2 = 1
+        cn._send_scp.assert_called_once_with(x, y, 0, SCPCommands.alloc_free,
+                                             arg1, arg2)
+
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")
 
