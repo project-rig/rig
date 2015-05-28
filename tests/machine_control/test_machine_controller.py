@@ -1260,6 +1260,32 @@ class TestMachineController(object):
         assert arg2 & 0x00ff0000 == expected_signal_num << 16
         assert arg3 == 0x0000ffff  # Transmit to all
 
+    # XXX: This is here ONLY until SpiNNaker tools 1.4!!!
+    def test_send_signal_stop_clears_routing_table_entries(self):
+        _app_id = 43
+
+        # Calling `send_signal("stop")` and friends should ask for a machine
+        # object and clear the routing tables on all extant chips.
+        # Create a mock machine with some dead cores
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+
+        mcn = Machine(5, 4, dead_chips=set([(0, 1), (1, 0), (1, 1)]))
+        cn.get_machine = mock.Mock(return_value=mcn)
+
+        def clear_routing_table_fn(x, y, app_id):
+            assert app_id == _app_id
+            assert (x, y) in mcn
+
+        cn.clear_routing_table_entries = mock.Mock()
+        cn.clear_routing_table_entries.side_effect = clear_routing_table_fn
+
+        # Send stop and assert that the routing table entries are removed apart
+        # from where a dead chip is located.
+        with cn(app_id=_app_id):
+            cn.send_signal("stop")
+        assert cn.clear_routing_table_entries.call_count == 20 - 3
+
     @pytest.mark.parametrize("app_id, count", [(16, 3), (30, 68)])
     @pytest.mark.parametrize("state, expected_state_num",
                              [(consts.AppState.idle, consts.AppState.idle),
