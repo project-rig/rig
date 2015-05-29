@@ -326,7 +326,7 @@ class TestMachineControllerLive(object):
          ]
     )
     def test_load_and_retrieve_routing_tables(self, controller, routes):
-        with controller(x=1, y=1):
+        with controller(x=0, y=0):
             # Load the routing table entries
             controller.load_routing_table_entries(routes)
 
@@ -346,7 +346,7 @@ class TestMachineControllerLive(object):
         assert controller.count_cores_in_state("run") == 0
 
         # All the routing tables should have gone as well
-        with controller(x=1, y=1):
+        with controller(x=0, y=0):
             loaded = controller.get_routing_table_entries()
 
         for entry in loaded:
@@ -1260,6 +1260,32 @@ class TestMachineController(object):
         assert arg2 & 0x00ff0000 == expected_signal_num << 16
         assert arg3 == 0x0000ffff  # Transmit to all
 
+    # XXX: This is here ONLY until SpiNNaker tools 1.4!!!
+    def test_send_signal_stop_clears_routing_table_entries(self):
+        _app_id = 43
+
+        # Calling `send_signal("stop")` and friends should ask for a machine
+        # object and clear the routing tables on all extant chips.
+        # Create a mock machine with some dead cores
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+
+        mcn = Machine(5, 4, dead_chips=set([(0, 1), (1, 0), (1, 1)]))
+        cn.get_machine = mock.Mock(return_value=mcn)
+
+        def clear_routing_table_fn(x, y, app_id):
+            assert app_id == _app_id
+            assert (x, y) in mcn
+
+        cn.clear_routing_table_entries = mock.Mock()
+        cn.clear_routing_table_entries.side_effect = clear_routing_table_fn
+
+        # Send stop and assert that the routing table entries are removed apart
+        # from where a dead chip is located.
+        with cn(app_id=_app_id):
+            cn.send_signal("stop")
+        assert cn.clear_routing_table_entries.call_count == 20 - 3
+
     @pytest.mark.parametrize("app_id, count", [(16, 3), (30, 68)])
     @pytest.mark.parametrize("state, expected_state_num",
                              [(consts.AppState.idle, consts.AppState.idle),
@@ -1524,6 +1550,22 @@ class TestMachineController(object):
 
         cn.read_struct_field.assert_called_once_with("sv", "rtr_copy", x, y)
         cn.read.assert_called_once_with(addr, 1024*16, x, y)
+
+    @pytest.mark.parametrize("x, y, app_id", [(0, 1, 65), (3, 2, 55)])
+    def test_clear_routing_table_entries(self, x, y, app_id):
+        # Create the controller to ensure that appropriate packets are sent
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+
+        # Clear the routing table entries
+        with cn(app_id=app_id, x=x, y=y):
+            cn.clear_routing_table_entries()
+
+        # Assert ONE packet was sent to do this
+        arg1 = (app_id << 8) | consts.AllocOperations.free_rtr_by_app
+        arg2 = 1
+        cn._send_scp.assert_called_once_with(x, y, 0, SCPCommands.alloc_free,
+                                             arg1, arg2)
 
     def test_get_p2p_routing_table(self):
         cn = MachineController("localhost")

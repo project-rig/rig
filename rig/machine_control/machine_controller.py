@@ -969,6 +969,20 @@ class MachineController(ContextMixin):
                 "send_signal: Cannot transmit signal of type {}".format(
                     repr(signal)))
 
+        # XXX If the signal is "stop", then we first remove all routing table
+        # entries associated with the application ID. This code will be
+        # unnecessaru when SpiNNaker tools 1.4 becomes available.
+        if signal is consts.AppSignal.stop:
+            # Get a machine object so we can determine where we need to remove
+            # the routing tables.
+            mcn = self.get_machine()
+
+            # Now remove all routing entries:
+            for (x, y) in [(x, y)
+                           for x in range(mcn.width)
+                           for y in range(mcn.height) if (x, y) in mcn]:
+                self.clear_routing_table_entries(x, y, app_id)
+
         # Construct the packet for transmission
         arg1 = consts.signal_types[signal]
         arg2 = (signal << 16) | 0xff00 | app_id
@@ -1193,6 +1207,14 @@ class MachineController(ContextMixin):
             entry, rtr_data = rtr_data[:read_size], rtr_data[read_size:]
             table.append(unpack_routing_table_entry(entry))
         return table
+
+    @ContextMixin.use_contextual_arguments()
+    def clear_routing_table_entries(self, x, y, app_id):
+        """Clear the routing table entries associated with a given application.
+        """
+        # Construct the arguments
+        arg1 = (app_id << 8) | consts.AllocOperations.free_rtr_by_app
+        self._send_scp(x, y, 0, SCPCommands.alloc_free, arg1, 0x1)
 
     @ContextMixin.use_contextual_arguments()
     def get_p2p_routing_table(self, x, y):
