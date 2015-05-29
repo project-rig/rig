@@ -243,10 +243,10 @@ class SCPConnection(object):
             while r:
                 # Note that 'r' is never changed so this while loop will either
                 # get skipped if r is empty or loop until 'break' of r is not.
-                # Since we may recieve multiple packets at once, it is better to
-                # try and pull all out of the socket immediately rather than
-                # running around the parent loop again and incuring the 'select'
-                # cost.
+                # Since we may receive multiple packets at once, it is better
+                # to try and pull all out of the socket immediately rather than
+                # running around the parent loop again and incuring the
+                # 'select' cost.
                 try:
                     ack = self.sock.recv(receive_length)
                 except IOError:
@@ -296,7 +296,8 @@ class SCPConnection(object):
                     # Otherwise we retransmit it
                     self.sock.send(outstanding.packet)
                     outstanding.n_tries += 1
-                    outstanding.timeout_time = current_time + outstanding.timeout
+                    outstanding.timeout_time = (current_time +
+                                                outstanding.timeout)
 
     def read(self, buffer_size, window_size, x, y, p, address, length_bytes):
         """Read a bytestring from an address in memory.
