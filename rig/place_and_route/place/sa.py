@@ -709,7 +709,7 @@ def place(vertices_resources, nets, machine, constraints,
         d_limit = min(max(d_limit, 1), max(machine.width, machine.height))
 
         iteration_count += num_iterations
-        logger.info("After %d iterations cost is %0.1f, "
+        logger.debug("After %d iterations cost is %0.1f, "
                     "swap acceptance rate is %0.1f%%, "
                     "temperature changing to %0.3f, "
                     "swap distance limit now %d.",
