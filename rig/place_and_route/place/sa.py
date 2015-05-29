@@ -710,11 +710,11 @@ def place(vertices_resources, nets, machine, constraints,
 
         iteration_count += num_iterations
         logger.debug("After %d iterations cost is %0.1f, "
-                    "swap acceptance rate is %0.1f%%, "
-                    "temperature changing to %0.3f, "
-                    "swap distance limit now %d.",
-                    iteration_count, current_cost,
-                    r_accept*100, temperature, d_limit)
+                     "swap acceptance rate is %0.1f%%, "
+                     "temperature changing to %0.3f, "
+                     "swap distance limit now %d.",
+                     iteration_count, current_cost,
+                     r_accept*100, temperature, d_limit)
 
         # Call the user callback before the next iteration, terminating if
         # requested.
