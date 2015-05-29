@@ -235,9 +235,12 @@ class SCPConnection(object):
 
             # Listen on the socket for an acknowledgement packet, there may not
             # be one.
-            timeout = min((o.timeout_time for o in
-                           six.itervalues(outstanding_packets)),
-                          default=0.0) - time.time()
+            if outstanding_packets:
+                timeout = min((o.timeout_time for o in
+                               six.itervalues(outstanding_packets)
+                               )) - time.time()
+            else:
+                timeout = 0.0
             r, w, x = select.select([self.sock], [], [], max(timeout, 0.0))
             # Process the received packet (if there is one).
             while r:

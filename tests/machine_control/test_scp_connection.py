@@ -406,6 +406,38 @@ class TestBursts(object):
         assert (window_size < mock_conn.sock.send.call_count <=
                 window_size * n_tries)
 
+    def test_timeout_when_no_outstanding(self, mock_conn):
+        """Tests that the timeout can still be set correctly even when there
+        are no outstanding packets.
+
+        This will occur exactly when we send a full-window of packets and
+        receive their acknowledgement immediately.
+        """
+        # Create a full window of packets to send
+        packets = [scpcall(0, 0, 0, 0) for _ in range(8)]
+
+        class SendReceive(object):
+            def __init__(self):
+                self.packets = list()
+
+            def send(self, bytestring):
+                self.packets.append(bytestring)
+
+            def recv(self, *args, **kwargs):
+                if self.packets:
+                    packet = SCPPacket.from_bytestring(self.packets.pop())
+                    packet.cmd_rc = 128
+                    return packet.bytestring
+                raise IOError
+
+        sr = SendReceive()
+        mock_conn.sock.send.side_effect = sr.send
+        mock_conn.sock.recv.side_effect = sr.recv
+
+        # Send packets
+        with mock.patch("select.select", new=mock_select):
+            mock_conn.send_scp_burst(512, 8, packets)
+
 
 @pytest.mark.parametrize(
     "buffer_size, window_size, x, y, p", [(128, 1, 0, 0, 1), (256, 5, 1, 2, 3)]
