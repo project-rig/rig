@@ -28,11 +28,13 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
 
     Generates
     ---------
-    (x, y)
-        Produces (in order) an (x, y) pair for every hop along the longest
-        dimension first route. Ties are broken randomly. The first generated
-        value is that of the first hop after the starting position, the last
-        generated value is the destination position.
+    (:py:class:`~rig.machine.Links`, (x, y))
+        Produces (in order) a (direction, (x, y)) pair for every hop along the
+        longest dimension first route. The direction gives the direction to
+        travel in from the previous step to reach the current step. Ties are
+        broken randomly. The first generated value is that of the first hop
+        after the starting position, the last generated value is the
+        destination position.
     """
     x, y = start
 
@@ -47,12 +49,14 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
         sign = 1 if magnitude > 0 else -1
         for _ in range(abs(magnitude)):
             if dimension == 0:
-                x += sign
+                dx, dy = sign, 0
             elif dimension == 1:
-                y += sign
+                dx, dy = 0, sign
             elif dimension == 2:  # pragma: no branch
-                x -= sign
-                y -= sign
+                dx, dy = -sign, -sign
+
+            x += dx
+            y += dy
 
             # Wrap-around if required
             if width is not None:
@@ -60,7 +64,9 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
             if height is not None:
                 y %= height
 
-            yield (x, y)
+            direction = Links.from_vector((dx, dy))
+
+            yield (direction, (x, y))
 
 
 def links_between(a, b, machine):

@@ -60,9 +60,10 @@ def assert_fully_connected(root, machine):
         assert node.chip not in visited, "Cycle exists in tree"
         visited.add(node.chip)
 
-        for child in node.children:
+        for direction, child in node.children:
             if isinstance(child, RoutingTree):
-                assert links_between(node.chip, child.chip, machine)
+                assert direction in links_between(
+                    node.chip, child.chip, machine)
                 to_visit.append(child)
 
 
@@ -80,10 +81,10 @@ def assert_equivilent(route, net, placements, allocation, constraints=[]):
     endpoints = set()
     for node in route:
         if isinstance(node, RoutingTree):
-            for child in node.children:
+            for direction, child in node.children:
                 if not isinstance(child, RoutingTree):
                     x, y = node.chip
-                    endpoints.add((x, y, child))
+                    endpoints.add((x, y, direction, child))
 
     # Enumerate all vertices which are constrained to a certain route
     endpoint_constraints = {}
@@ -98,13 +99,18 @@ def assert_equivilent(route, net, placements, allocation, constraints=[]):
 
         if vertex in endpoint_constraints:
             route = endpoint_constraints[vertex]
-            endpoint = (x, y, route)
+            endpoint = (x, y, route, vertex)
             assert endpoint in endpoints
             endpoints.remove(endpoint)
         else:
-            cores = allocation[vertex].get(Cores, slice(0, 0))
-            for core in range(cores.start, cores.stop):
-                endpoint = (x, y, Routes.core(core))
+            cores = allocation.get(vertex, {}).get(Cores, None)
+            if cores is not None:
+                for core in range(cores.start, cores.stop):
+                    endpoint = (x, y, Routes.core(core), vertex)
+                    assert endpoint in endpoints
+                    endpoints.remove(endpoint)
+            else:
+                endpoint = (x, y, None, vertex)
                 assert endpoint in endpoints
                 endpoints.remove(endpoint)
 
@@ -182,6 +188,27 @@ def test_correctness(algorithm, kwargs):
 
     # Broadcast nets from every vertex
     nets = [Net(v, vertices) for v in vertices]
+    test_cases.append((vertices_resources, placements, nets, allocation))
+
+    # A net where the sink vertex is allocated 0 cores (should result in the
+    # net terminating on a chip with the RoutingTree not having a child for
+    # that vertex).
+    vertices = [object(), object()]
+    vertices_resources = {v: {Cores: 0} for v in vertices}
+    placements = {v: (x, 0) for x, v in enumerate(vertices)}
+    allocation = {v: {Cores: slice(0, 0)} for v in vertices}
+    nets = [Net(vertices[0], vertices[1])]
+    test_cases.append((vertices_resources, placements, nets, allocation))
+
+    # A net where the sink vertex is not allocated any core resource (should
+    # result in the net terminating on a chip with the RoutingTree not having a
+    # child for that vertex).
+    vertices_resources = {v: {} for v in vertices}
+    allocation = {v: {} for v in vertices}
+    test_cases.append((vertices_resources, placements, nets, allocation))
+
+    # The same again but this time we're not passing in any allocation.
+    allocation = {}
     test_cases.append((vertices_resources, placements, nets, allocation))
 
     # Run through each test case simply ensuring a valid net has been created

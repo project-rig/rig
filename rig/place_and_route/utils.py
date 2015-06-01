@@ -6,9 +6,9 @@ from collections import defaultdict, deque, namedtuple, OrderedDict
 
 from six import iteritems
 
-from ..machine import Links, Cores
+from ..machine import Cores
 
-from ..routing_table import Routes, RoutingTableEntry
+from ..routing_table import RoutingTableEntry
 
 from .routing_tree import RoutingTree
 
@@ -51,11 +51,14 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     """Convert a set of RoutingTrees into a per-chip set of routing tables.
 
     This command produces routing tables with entries optionally omitted when
-    the route does not change direction. Entries with identical keys and masks
-    will be merged.
+    the route does not change direction (i.e. when default routing can be
+    used). Entries with identical keys and masks will be merged.
 
     Note: The routing trees provided are assumed to be correct and continuous
     (not missing any hops). If this is not the case, the output is undefined.
+
+    Note: If a routing tree has a teriminating vertex whose route is set to
+    None, that vertex is ignored.
 
     Parameters
     ----------
@@ -83,27 +86,28 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     for net, routing_tree in iteritems(routes):
         key, mask = net_keys[net]
 
-        # A queue of (node, direction) to visit. The direction is the Links
+        # A queue of (direction, node) to visit. The direction is the Links
         # entry which describes the direction in which we last moved to reach
-        # the current node (or None for the root).
-        to_visit = deque([(routing_tree, None)])
+        # the node (or None for the root).
+        to_visit = deque([(None, routing_tree)])
         while to_visit:
-            node, direction = to_visit.popleft()
+            direction, node = to_visit.popleft()
 
             x, y = node.chip
 
             # Determine the set of directions we must travel to reach the
             # children
             out_directions = set()
-            for child in node.children:
-                if isinstance(child, RoutingTree):
-                    cx, cy = child.chip
-                    dx, dy = cx - x, cy - y
-                    child_direction = Routes(Links.from_vector((dx, dy)))
-                    to_visit.append((child, child_direction))
+            for child_direction, child in node.children:
+                # Note that if the direction is unspecified, we simply
+                # (silently) don't add a route for that child.
+                if child_direction is not None:
                     out_directions.add(child_direction)
-                else:
-                    out_directions.add(child)
+
+                # Search the next steps of the route too
+                if isinstance(child, RoutingTree):
+                    assert child_direction is not None
+                    to_visit.append((child_direction, child))
 
             # Add a routing entry when the direction changes
             if (key, mask) in route_sets[(x, y)]:

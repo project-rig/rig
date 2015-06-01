@@ -6,6 +6,8 @@ from rig.machine import Machine, Links
 
 from rig.place_and_route.routing_tree import RoutingTree
 
+from rig.routing_table import Routes
+
 from rig.place_and_route.route.utils import links_between
 
 from rig.place_and_route.route.ner import ner_net, \
@@ -92,80 +94,85 @@ ner_net_testcases = [
 ]
 
 
-def test_ner_net():
+@pytest.mark.parametrize("source,destinations,width,height,"
+                         "wrap_around,radius",
+                         ner_net_testcases)
+def test_ner_net(source, destinations, width, height,
+                 wrap_around, radius):
     # This test checks:
     # * Completeness of connectivity
     # * Tree structure (no loops)
     # * Lack of uneccessary paths
     # * Correctness of lookup
+    root, lookup = ner_net(source, destinations, width, height,
+                           wrap_around, radius)
 
-    for (source, destinations, width, height,
-         wrap_around, radius) in ner_net_testcases:
-        root, lookup = ner_net(source, destinations, width, height,
-                               wrap_around, radius)
+    # Check all endpoints are in the lookup
+    assert source in lookup
+    for destination in destinations:
+        assert destination in lookup
 
-        # Check all endpoints are in the lookup
-        assert source in lookup
-        for destination in destinations:
-            assert destination in lookup
+    # Check that the root in the lookup is consistent
+    assert lookup[source] is root
 
-        # Check that the root in the lookup is consistent
-        assert lookup[source] is root
+    # Perform a tree-search to check for correctness of the tree
 
-        # Perform a tree-search to check for correctness of the tree
+    # (x, y) which have been visited in the search
+    visited = set()
 
-        # (x, y) which have been visited in the search
-        visited = set()
+    # A stack or queue of ((x, y), node) pairs yet to visit.
+    to_visit = deque([(source, root)])
+    while to_visit:
+        (x, y), node = to_visit.popleft()
 
-        # A stack or queue of ((x, y), node) pairs yet to visit.
-        to_visit = deque([(source, root)])
-        while to_visit:
-            (x, y), node = to_visit.popleft()
+        # Check coordinates are correct
+        assert (x, y) == node.chip
 
-            # Check coordinates are correct
-            assert (x, y) == node.chip
+        # Check for loops
+        assert (x, y) not in visited, "Loop detected"
+        visited.add((x, y))
 
-            # Check for loops
-            assert (x, y) not in visited, "Loop detected"
-            visited.add((x, y))
+        # Ensure that node can be looked up if it is a source/destination
+        if (x, y) == source or (x, y) in destinations:
+            assert (x, y) in lookup
+            assert lookup[(x, y)] is node
 
-            # Ensure that node can be looked up if it is a source/destination
-            if (x, y) == source or (x, y) in destinations:
-                assert (x, y) in lookup
-                assert lookup[(x, y)] is node
+        if len(node.children) == 0:
+            # Only destinations/sources are allowed to have no children
+            # (i.e.  no path should terminate in the middle of nowhere!)
+            assert (x, y) == source or (x, y) in destinations
+        else:
+            for child_direction, child in node.children:
+                # Check children are actually physically adjacent
+                dx = child.chip[0] - node.chip[0]
+                dy = child.chip[1] - node.chip[1]
+                if wrap_around:
+                    assert (child_direction, (dx, dy)) in set([
+                        (Routes.east, (1, 0)), (Routes.west, (-1, 0)),
+                        (Routes.north, (0, 1)), (Routes.south, (0, -1)),
+                        (Routes.north_east, (1, 1)),
+                        (Routes.south_west, (-1, -1)),
+                        (Routes.west, (width - 1, 0)),
+                        (Routes.east, (-(width - 1), 0)),
+                        (Routes.south, (0, height - 1)),
+                        (Routes.north, (0, -(height - 1))),
+                        (Routes.south_west, (width - 1, height - 1)),
+                        (Routes.north_east, (-(width - 1), -(height - 1))),
+                    ])
+                else:
+                    assert (child_direction, (dx, dy)) in set([
+                        (Links.east, (1, 0)), (Links.west, (-1, 0)),
+                        (Links.north, (0, 1)), (Links.south, (0, -1)),
+                        (Links.north_east, (1, 1)),
+                        (Links.south_west, (-1, -1))])
 
-            if len(node.children) == 0:
-                # Only destinations/sources are allowed to have no children
-                # (i.e.  no path should terminate in the middle of nowhere!)
-                assert (x, y) == source or (x, y) in destinations
-            else:
-                for child in node.children:
-                    # Check children are actually physically adjacent
-                    dx = node.chip[0] - child.chip[0]
-                    dy = node.chip[1] - child.chip[1]
-                    if wrap_around:
-                        assert (dx, dy) in set([(1, 0), (-1, 0),
-                                                (0, 1), (0, -1),
-                                                (1, 1), (-1, -1),
-                                                (width - 1, 0),
-                                                (-(width - 1), 0),
-                                                (0, height - 1),
-                                                (0, -(height - 1)),
-                                                (width - 1, height - 1),
-                                                (-(width - 1), -(height - 1)),
-                                                ])
-                    else:
-                        assert (dx, dy) in set([(1, 0), (-1, 0),
-                                                (0, 1), (0, -1),
-                                                (1, 1), (-1, -1)])
+                # Continue the traversal
+                to_visit.append((child.chip, child))
 
-                    # Continue the traversal
-                    to_visit.append((child.chip, child))
-
-        # Check all sources/destinations were visited
-        assert source in visited
-        for destination in destinations:
-            assert destination in visited
+    # Check all sources/destinations were visited
+    assert source in visited
+    for destination in destinations:
+        assert destination in visited
 
 
 def test_copy_and_disconnect_tree():
@@ -185,11 +192,14 @@ def test_copy_and_disconnect_tree():
     # Tree with nothing broken
     t11 = RoutingTree((1, 2))
     t10 = RoutingTree((0, 2))
-    t1 = RoutingTree((0, 1), set([t10, t11]))
+    t1 = RoutingTree((0, 1), set([(Routes.north, t10),
+                                  (Routes.north_east, t11)]))
     t01 = RoutingTree((2, 0))
     t00 = RoutingTree((2, 1))
-    t0 = RoutingTree((1, 0), set([t00, t01]))
-    t = RoutingTree((0, 0), set([t0, t1]))
+    t0 = RoutingTree((1, 0), set([(Routes.north_east, t00),
+                                  (Routes.east, t01)]))
+    t = RoutingTree((0, 0), set([(Routes.east, t0),
+                                 (Routes.north, t1)]))
     test_cases.append((t0, working_machine, set()))
 
     # Tree with broken link
@@ -198,8 +208,9 @@ def test_copy_and_disconnect_tree():
     # Tree with a broken chip
     t3 = RoutingTree((1, 2))
     t2 = RoutingTree((2, 1))
-    t1 = RoutingTree((1, 1), set([t2, t3]))
-    t0 = RoutingTree((0, 0), set([t1]))
+    t1 = RoutingTree((1, 1), set([(Routes.east, t2),
+                                  (Routes.north, t3)]))
+    t0 = RoutingTree((0, 0), set([(Routes.north_east, t1)]))
     test_cases.append((t0, dead_chip_machine,
                        set([((0, 0), (2, 1)), ((0, 0), (1, 2))])))
 
@@ -249,9 +260,10 @@ def test_copy_and_disconnect_tree():
             # Make sure the coordinate is correct
             assert chip == old_node.chip == new_node.chip
 
-            for child in new_node.children:
+            for child_direction, child in new_node.children:
                 # Ensure all children are not members of the old tree
-                assert old_lookup[child.chip] is not child
+                old_child = old_lookup[child.chip]
+                assert old_child is not child
 
                 # Ensure they are members of the new tree
                 assert new_lookup[child.chip] is child
@@ -260,8 +272,11 @@ def test_copy_and_disconnect_tree():
                 assert child not in nodes_with_parents
                 nodes_with_parents.add(child)
 
-            old_children = set(c.chip for c in old_node.children)
-            new_children = set(c.chip for c in new_node.children)
+                # Ensure the direction is unchanged
+                assert (child_direction, old_child) in old_node.children
+
+            old_children = set((d, c.chip) for d, c in old_node.children)
+            new_children = set((d, c.chip) for d, c in new_node.children)
 
             # Make sure no children at new positions have been added
             assert old_children.issuperset(new_children)
@@ -270,9 +285,9 @@ def test_copy_and_disconnect_tree():
             # disconnected or on dead chips
             assert (  # pragma: no branch
                 old_children.difference(new_children) ==
-                set(c for c in old_children
+                set((d, c) for d, c in old_children
                     if c not in machine or
-                    not links_between(chip, c, machine)))
+                    d not in links_between(chip, c, machine)))
 
 
 def test_a_star():
@@ -316,20 +331,23 @@ def test_a_star():
                               machine, wrap_around)
 
                 # Path should start at one of the sources
-                assert path[0] in sources
+                assert path[0][1] in sources
 
                 # Path should touch exactly one source
-                assert len(set(path).intersection(sources)) == 1
+                assert len(set(xy for d, xy in path).intersection(sources)) \
+                    == 1
 
                 # Should be a continuous, connected path ending at the sink
-                last_step = path[0]
-                for step in path[1:] + [sink]:
-                    assert links_between(last_step, step, machine)
+                last_direction, last_step = path[0]
+                for direction, step in path[1:] + [(None, sink)]:
+                    assert last_direction in links_between(last_step, step,
+                                                           machine)
                     last_step = step
+                    last_direction = direction
 
                 # Path should not be cyclcic or include the sink
                 visited = set([sink])
-                for step in path:
+                for direction, step in path:
                     assert step not in visited
                     visited.add(step)
 
@@ -351,7 +369,8 @@ def test_a_star_impossible():
 
     # Ensure, conversely, we can get a route from (1, 0) to (0, 0) thus showing
     # we're obeying link liveness in the correct direction.
-    assert a_star((0, 0), (1, 0), set([(1, 0)]), machine, True) == [(1, 0)]
+    assert a_star((0, 0), (1, 0), set([(1, 0)]), machine, True) \
+        == [(Links.west, (1, 0))]
 
 
 def test_avoid_dead_links_no_change():
@@ -370,9 +389,11 @@ def test_avoid_dead_links_no_change():
     t002 = RoutingTree((1, 3), set([]))
     t001 = RoutingTree((0, 3), set([]))
     t000 = RoutingTree((1, 2), set([]))
-    t00 = RoutingTree((0, 2), set([t000, t001, t002]))
-    t0 = RoutingTree((0, 1), set([t00]))
-    t = RoutingTree((0, 0), set([t0]))
+    t00 = RoutingTree((0, 2), set([(Routes.east, t000),
+                                   (Routes.north, t001),
+                                   (Routes.north_east, t002)]))
+    t0 = RoutingTree((0, 1), set([(Routes.north, t00)]))
+    t = RoutingTree((0, 0), set([(Routes.north, t0)]))
     test_cases.append(t)
 
     for old_root in test_cases:
@@ -396,8 +417,8 @@ def test_avoid_dead_links_no_change():
 
             # Children should be the same
             assert (  # pragma: no branch
-                set(n.chip for n in new_node.children) ==
-                set(n.chip for n in old_node.children))
+                set(n.chip for d, n in new_node.children) ==
+                set(n.chip for d, n in old_node.children))
 
 
 def test_avoid_dead_links_change():
@@ -415,38 +436,41 @@ def test_avoid_dead_links_change():
 
     # A routing tree which crosses a dead link
     t1 = RoutingTree((4, 5))
-    t0 = RoutingTree((4, 4), set([t1]))
+    t0 = RoutingTree((4, 4), set([(Routes.north, t1)]))
     test_cases.append(t0)
 
     # A routing tree which is blocked by a dead chip
     t2 = RoutingTree((4, 2))
-    t1 = RoutingTree((4, 1), set([t2]))
-    t0 = RoutingTree((4, 0), set([t1]))
+    t1 = RoutingTree((4, 1), set([(Routes.north, t2)]))
+    t0 = RoutingTree((4, 0), set([(Routes.north, t1)]))
     test_cases.append(t0)
 
     # A subtree tree which is blocked by a wall of chips
     t002 = RoutingTree((3, 3))
     t001 = RoutingTree((2, 3))
     t000 = RoutingTree((3, 2))
-    t00 = RoutingTree((2, 2), set([t000, t001, t002]))
-    t0 = RoutingTree((1, 1), set([t00]))
-    t = RoutingTree((0, 0), set([t0]))
+    t00 = RoutingTree((2, 2), set([(Routes.east, t000),
+                                   (Routes.north, t001),
+                                   (Routes.north_east, t002)]))
+    t0 = RoutingTree((1, 1), set([(Routes.north_east, t00)]))
+    t = RoutingTree((0, 0), set([(Routes.north_east, t0)]))
     test_cases.append(t)
 
     # A subtree which blocks A* from reaching the start without crossing itself
     # but which doesn't directly encircle the top of the blockage.
     t55 = RoutingTree((2, 5), set([]))
-    t54 = RoutingTree((3, 5), set([t55]))
-    t53 = RoutingTree((4, 5), set([t54]))
+    t54 = RoutingTree((3, 5), set([(Routes.west, t55)]))
+    t53 = RoutingTree((4, 5), set([(Routes.west, t54)]))
     t52 = RoutingTree((5, 2), set([]))
-    t51 = RoutingTree((5, 3), set([t52]))
-    t50 = RoutingTree((5, 4), set([t51]))
-    t4 = RoutingTree((5, 5), set([t50, t53]))
-    t3 = RoutingTree((4, 4), set([t4]))
-    t2 = RoutingTree((3, 3), set([t3]))
-    t1 = RoutingTree((2, 2), set([t2]))
-    t0 = RoutingTree((1, 1), set([t1]))
-    t = RoutingTree((0, 0), set([t0]))
+    t51 = RoutingTree((5, 3), set([(Routes.south, t52)]))
+    t50 = RoutingTree((5, 4), set([(Routes.south, t51)]))
+    t4 = RoutingTree((5, 5), set([(Routes.south, t50),
+                                  (Routes.west, t53)]))
+    t3 = RoutingTree((4, 4), set([(Routes.north_east, t4)]))
+    t2 = RoutingTree((3, 3), set([(Routes.north_east, t3)]))
+    t1 = RoutingTree((2, 2), set([(Routes.north_east, t2)]))
+    t0 = RoutingTree((1, 1), set([(Routes.north_east, t1)]))
+    t = RoutingTree((0, 0), set([(Routes.north_east, t0)]))
     test_cases.append(t)
 
     # For each test case just ensure the new tree is a tree and visits all
@@ -480,9 +504,10 @@ def test_avoid_dead_links_change():
             # Node should be in lookup (already know it is consistent if it is)
             assert node.chip in new_lookup
 
-            for child in node.children:
-                # All children should be accessible
-                assert links_between(node.chip, child.chip, machine)
+            for direction, child in node.children:
+                # All children should be accessible via the link supplied
+                assert direction in links_between(node.chip, child.chip,
+                                                  machine)
 
                 # Check children
                 to_visit.append(child)
