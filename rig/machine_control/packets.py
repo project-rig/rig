@@ -56,21 +56,18 @@ class SDPPacket(object):
     @property
     def bytestring(self):
         """Convert the packet into a bytestring."""
-        # Convert x and y to p2p addresses
-        packed_dest_cpu_port = (((self.dest_port & 0x7) << 5) |
-                                (self.dest_cpu & 0x1f))
-        packed_src_cpu_port = (((self.src_port & 0x7) << 5) |
-                               (self.src_cpu & 0x1f))
-
         # Construct the header
-        header = struct.pack(
-            '<2x8B', FLAG_REPLY if self.reply_expected else FLAG_NO_REPLY,
-            self.tag, packed_dest_cpu_port, packed_src_cpu_port,
-            self.dest_y, self.dest_x, self.src_y, self.src_x
-        )
-
-        # Return the header and the packed data
-        return header + self.packed_data
+        return struct.pack(
+            '<2x8B',
+            FLAG_REPLY if self.reply_expected else FLAG_NO_REPLY,
+            self.tag,
+            (self.dest_port & 0x7) << 5 | (self.dest_cpu & 0x1f),
+            (self.src_port & 0x7) << 5 | (self.src_cpu & 0x1f),
+            self.dest_y,
+            self.dest_x,
+            self.src_y,
+            self.src_x
+        ) + self.packed_data
 
 
 class SCPPacket(SDPPacket):

@@ -18,6 +18,14 @@ SCP_SVER_RECEIVE_LENGTH_MAX = 512
 produce (256 + 8 bytes).
 """
 
+SCP_RC_OK = 0x80
+"""SCP response code which indicates that everything was fine."""
+
+SCP_RC_TIMEOUT = {0x8b, 0x8c, 0x8d, 0x8e}
+"""SCP response codes which should be treated as if they were a packet timing
+out.
+"""
+
 SPINNAKER_RTR_BASE = 0xE1000000  # Unbuffered
 """Base address of router hardware registers."""
 

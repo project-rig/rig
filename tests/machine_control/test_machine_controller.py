@@ -460,15 +460,17 @@ class TestMachineController(object):
         cn.get_software_version.assert_called_once_with(0, 0)
 
     @pytest.mark.parametrize(
-        "buffer_size, x, y, p, start_address, data",
-        [(128, 0, 1, 2, 0x67800000, b"\x00" * 100),
-         (256, 1, 4, 5, 0x67801000, b"\x10\x23"),
+        "buffer_size, window_size, x, y, p, start_address, data",
+        [(128, 3, 0, 1, 2, 0x67800000, b"\x00" * 100),
+         (256, 8, 1, 4, 5, 0x67801000, b"\x10\x23"),
          ]
     )
-    def test_write(self, buffer_size, x, y, p, start_address, data):
+    def test_write(self, buffer_size, window_size, x, y, p,
+                   start_address, data):
         # Create the mock controller
         cn = MachineController("localhost")
         cn._scp_data_length = buffer_size
+        cn._window_size = window_size
         cn.connections[0] = mock.Mock(spec_set=SCPConnection)
 
         # Perform the read and ensure that values are passed on as appropriate
@@ -476,19 +478,21 @@ class TestMachineController(object):
             cn.write(start_address, data)
 
         cn.connections[0].write.assert_called_once_with(
-            buffer_size, x, y, p, start_address, data
+            buffer_size, window_size, x, y, p, start_address, data
         )
 
     @pytest.mark.parametrize(
-        "buffer_size, x, y, p, start_address, length, data",
-        [(128, 0, 1, 2, 0x67800000, 100, b"\x00" * 100),
-         (256, 1, 4, 5, 0x67801000, 2, b"\x10\x23"),
+        "buffer_size, window_size, x, y, p, start_address, length, data",
+        [(128, 1, 0, 1, 2, 0x67800000, 100, b"\x00" * 100),
+         (256, 5, 1, 4, 5, 0x67801000, 2, b"\x10\x23"),
          ]
     )
-    def test_read(self, buffer_size, x, y, p, start_address, length, data):
+    def test_read(self, buffer_size, window_size, x, y, p,
+                  start_address, length, data):
         # Create the mock controller
         cn = MachineController("localhost")
         cn._scp_data_length = buffer_size
+        cn._window_size = window_size
         cn.connections[0] = mock.Mock(spec_set=SCPConnection)
         cn.connections[0].read.return_value = data
 
@@ -497,7 +501,7 @@ class TestMachineController(object):
             assert data == cn.read(start_address, length)
 
         cn.connections[0].read.assert_called_once_with(
-            buffer_size, x, y, p, start_address, length
+            buffer_size, window_size, x, y, p, start_address, length
         )
 
     @pytest.mark.parametrize(

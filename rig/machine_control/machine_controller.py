@@ -98,6 +98,7 @@ class MachineController(ContextMixin):
         self.timeout = timeout
         self._nn_id = 0  # ID for nearest neighbour packets
         self._scp_data_length = None
+        self._window_size = None
 
         # Load default structs if none provided
         self.structs = structs
@@ -131,6 +132,17 @@ class MachineController(ContextMixin):
             data = self.get_software_version(0, 0)
             self._scp_data_length = data.buffer_size
         return self._scp_data_length
+
+    @property
+    def scp_window_size(self):
+        """The maximum number of packets that can be sent to a SpiNNaker board
+        without receiving any acknowledgement packets.
+        """
+        # If not known, return the default
+        # TODO: Query the machine
+        if self._window_size is None:
+            return 1
+        return self._window_size
 
     @ContextMixin.use_contextual_arguments(
         x=Required, y=Required, p=Required)
@@ -302,7 +314,8 @@ class MachineController(ContextMixin):
         """
         # Call the SCPConnection to perform the write on our behalf
         connection = self._get_connection(x, y)
-        return connection.write(self.scp_data_length, x, y, p, address, data)
+        return connection.write(self.scp_data_length, self.scp_window_size,
+                                x, y, p, address, data)
 
     @ContextMixin.use_contextual_arguments()
     def read(self, address, length_bytes, x, y, p=0):
@@ -323,8 +336,8 @@ class MachineController(ContextMixin):
         """
         # Call the SCPConnection to perform the read on our behalf
         connection = self._get_connection(x, y)
-        return connection.read(self.scp_data_length, x, y, p,
-                               address, length_bytes)
+        return connection.read(self.scp_data_length, self.scp_window_size,
+                               x, y, p, address, length_bytes)
 
     def _get_struct_field_and_address(self, struct_name, field_name):
         field = self.structs[six.b(struct_name)][six.b(field_name)]
