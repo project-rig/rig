@@ -227,9 +227,45 @@ Sensible default implementations for each function are aliased as:
 :py:func:`.route` prototype
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. py:function:: route(vertices_resources, nets, machine, constraints, placements, allocations, core_resource=Cores, **kwargs)
+.. py:function:: route(vertices_resources, nets, machine, constraints, \
+                       placements, allocations={}, core_resource=Cores, **kwargs)
     
-    Generate routes which connect the vertices defined by a set of nets.
+    Generate routes which connect the vertices of all nets together.
+    
+    This function produces a
+    :py:class:`~.rig.place_and_route.routing_tree.RoutingTree` for each net
+    which defines a multicast tree route through chips rooted at the chip
+    containing the source vertex and visiting every chip on which a sink vertex
+    is placed on. This data structure can then be converted into routing tables
+    ready for loading onto a SpiNNaker machine using the
+    :py:func:`rig.place_and_route.utils.build_routing_tables` function.
+    
+    Most applications will probably wish to supply the ``allocations`` optional
+    argument which enables the router to produce
+    :py:class:`~.rig.place_and_route.routing_tree.RoutingTree`s which end on the
+    specific cores allocated to each sink vertex. The resource allocated to the
+    resource specified by the ``core_resource`` argument (which defaults to
+    :py:class:`~rig.machine.Cores`) is assumed to indicate the core number for
+    each vertex.
+    
+    For example, if a vertex, ``v``, is allocated the resources ``{Cores:
+    slice(1, 3)``, if ``v`` is the sink in a net, that tree will terminate at
+    cores 1 and 2 of the chip ``v`` is placed on (assuming ``core_resource`` is
+    :py:class:`~rig.machine.Cores`).
+    
+    Note that if a vertex is allocated an empty set of cores, e.g. ``{Cores:
+    slice(0, 0)}``, the tree will terminate at the chip allocated to the vertex
+    but not be routed to any cores.
+    
+    If the ``allocations`` argument is ommitted or for any vertices not
+    allocated the ``core_resource`` resource, the trees produced by this
+    function do not terminate on individual cores but instead terminate on
+    individual chips (with the exception of any constraint-enforced endpoints).
+    The sink vertices are included in the set of children of these
+    :py:class:`~.rig.place_and_route.routing_tree.RoutingTree` nodes but the
+    route to these children is set to None. It is left up to the application
+    author to decide how to route these vertices in an application-specific
+    post-processing step.
     
     Parameters
     ----------
@@ -260,8 +296,9 @@ Sensible default implementations for each function are aliased as:
             failure to comply with this requirement will result in undefined
             behaviour.
     allocations : {vertex: {resource: slice, ...}, ...}
-        A dictionary of the format returned by :py:func:`allocate` describing
-        the allocation of resources to vertices.
+        An optional dictionary of the format returned by :py:func:`allocate`
+        describing the allocation of resources to vertices. If not supplied,
+        this dictionary defaults to being empty.
     core_resource : resource (Default: :py:data:`~rig.machine.Cores`)
         **Optional.** Identifier of the resource in `allocations` which
         indicates the cores to route to when routing to a vertex.

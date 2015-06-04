@@ -99,13 +99,14 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
 
         # Take the longest dimension first route.
         last_node = route[neighbour]
-        for x, y in longest_dimension_first(vector, neighbour, width, height):
+        for direction, (x, y) in longest_dimension_first(vector, neighbour,
+                                                         width, height):
             this_node = route.get((x, y), None)
             if this_node is None:
                 this_node = RoutingTree((x, y))
                 route[(x, y)] = this_node
 
-            last_node.children.add(this_node)
+            last_node.children.add((Routes(direction), this_node))
             last_node = this_node
 
     return (route[source], route)
@@ -127,7 +128,7 @@ def copy_and_disconnect_tree(root, machine):
     ----------
     root : :py:class:`~rig.place_and_route.routing_tree.RoutingTree`
         The root of the RoutingTree that contains nothing but RoutingTrees
-        (i.e. no vertices and links).
+        (i.e. no children which are vertices or links).
     machine : :py:class:`~rig.machine.Machine`
         The machine in which the routes exist.
 
@@ -151,10 +152,10 @@ def copy_and_disconnect_tree(root, machine):
     # new_child), ...]
     broken_links = set()
 
-    # A queue [(new_parent, old_node), ...]
-    to_visit = deque([(None, root)])
+    # A queue [(new_parent, direction, old_node), ...]
+    to_visit = deque([(None, None, root)])
     while to_visit:
-        new_parent, old_node = to_visit.popleft()
+        new_parent, direction, old_node = to_visit.popleft()
 
         if old_node.chip in machine:
             # Create a copy of the node
@@ -172,17 +173,19 @@ def copy_and_disconnect_tree(root, machine):
         elif new_node is not new_parent:
             # If this node is not dead, check connectivity to parent node (no
             # reason to check connectivity between a dead node and its parent).
-            if links_between(new_parent.chip, new_node.chip, machine):
+            if direction in links_between(new_parent.chip,
+                                          new_node.chip,
+                                          machine):
                 # Is connected via working link
-                new_parent.children.add(new_node)
+                new_parent.children.add((direction, new_node))
             else:
                 # Link to parent is dead (or original parent was dead and the
                 # new parent is not adjacent)
                 broken_links.add((new_parent.chip, new_node.chip))
 
         # Copy children
-        for child in old_node.children:
-            to_visit.append((new_node, child))
+        for child_direction, child in old_node.children:
+            to_visit.append((new_node, child_direction, child))
 
     return (new_root, new_lookup, broken_links)
 
@@ -212,9 +215,11 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
 
     Returns
     -------
-    [(x, y), ...]
+    [(:py:class:`~rig.machine.Links`, (x, y)), ...]
         A path starting with a coordinate in `sources` and terminating at
         connected neighbour of `sink` (i.e. the path does not include `sink`).
+        The direction given is the link down which to proceed from the given
+        (x, y) to arrive at the next point in the path.
 
     Raises
     ------
@@ -232,9 +237,10 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
                      shortest_mesh_path_length(to_xyz(node),
                                                to_xyz(heuristic_source)))
 
-    # A dictionary {node: previous_node}. An entry indicates that 1) the node
-    # has been visited and 2) which node we hopped from to reach previous_node.
-    # This may be None if the node is the sink.
+    # A dictionary {node: (direction, previous_node}. An entry indicates that
+    # 1) the node has been visited and 2) which node we hopped from (and the
+    # direction used) to reach previous_node.  This may be None if the node is
+    # the sink.
     visited = {sink: None}
 
     # The node which the tree will be reconnected to
@@ -254,12 +260,8 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
 
         # Try all neighbouring locations. Note: link identifiers are from the
         # perspective of the neighbour, not the current node!
-        for neighbour_link, vector in [(Links.east, (-1, 0)),
-                                       (Links.west, (1, 0)),
-                                       (Links.north, (0, -1)),
-                                       (Links.south, (0, 1)),
-                                       (Links.north_east, (-1, -1)),
-                                       (Links.south_west, (1, 1))]:
+        for neighbour_link in Links:
+            vector = neighbour_link.opposite.to_vector()
             neighbour = ((node[0] + vector[0]) % machine.width,
                          (node[1] + vector[1]) % machine.height)
 
@@ -272,7 +274,7 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
                 continue
 
             # Explore all other neighbours
-            visited[neighbour] = node
+            visited[neighbour] = (neighbour_link, node)
             heapq.heappush(to_visit, (heuristic(neighbour), neighbour))
 
     # Fail of no paths exist
@@ -281,10 +283,14 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
             "Could not find path from {} to {}".format(
                 sink, heuristic_source))
 
-    # Reconstruct the discovered path
-    path = [selected_source]
-    while visited[path[-1]] != sink:
-        path.append(visited[path[-1]])
+    # Reconstruct the discovered path, starting from the source we found and
+    # working back until the sink.
+    path = [(visited[selected_source][0], selected_source)]
+    while visited[path[-1][1]][1] != sink:
+        node = visited[path[-1][1]][1]
+        direction = visited[node][0]
+        path.append((direction, node))
+
     return path
 
 
@@ -319,21 +325,31 @@ def avoid_dead_links(root, machine, wrap_around=False):
     # Make a copy of the RoutingTree with all broken parts disconnected
     root, lookup, broken_links = copy_and_disconnect_tree(root, machine)
 
+    # For each disconnected subtree, use A* to connect the tree to *any* other
+    # disconnected subtree. Note that this process will eventually result in
+    # all disconnected subtrees being connected, the result is a fully
+    # connected tree.
     for parent, child in broken_links:
         child_chips = set(c.chip for c in lookup[child])
 
         # Try to reconnect broken links to any other part of the tree
-        # (excluding the broken subtree itself)
+        # (excluding this broken subtree itself since that would create a
+        # cycle).
         path = a_star(child, parent,
                       set(lookup).difference(child_chips),
                       machine, wrap_around)
 
         # Add new RoutingTree nodes to reconnect the child to the tree.
-        last_node = lookup[path[0]]
-        for x, y in path[1:]:
+        last_node = lookup[path[0][1]]
+        last_direction = path[0][0]
+        for direction, (x, y) in path[1:]:
             if (x, y) not in child_chips:
+                # This path segment traverses new ground so we must create a
+                # new RoutingTree for the segment.
                 new_node = RoutingTree((x, y))
-                assert (x, y) not in lookup, "Cycle must not be created."
+                # A* will not traverse anything but chips in this tree so this
+                # assert is meerly a sanity check that this ocurred correctly.
+                assert (x, y) not in lookup, "Cycle created."
                 lookup[(x, y)] = new_node
             else:
                 # This path segment overlaps part of the disconnected tree
@@ -343,20 +359,24 @@ def avoid_dead_links(root, machine, wrap_around=False):
                 # of the A* path.
                 new_node = lookup[(x, y)]
 
-                # Disconnect node from parent
+                # Find the node's current parent and disconnect it.
                 for node in lookup[child]:  # pragma: no branch
-                    if new_node in node.children:
-                        node.children.remove(new_node)
+                    dn = [(d, n) for d, n in node.children if n == new_node]
+                    assert len(dn) <= 1
+                    if dn:
+                        node.children.remove(dn[0])
+                        # A node can only have one parent so we can stop now.
                         break
-            last_node.children.add(new_node)
+            last_node.children.add((Routes(last_direction), new_node))
             last_node = new_node
-        last_node.children.add(lookup[child])
+            last_direction = direction
+        last_node.children.add((last_direction, lookup[child]))
 
     return (root, lookup)
 
 
 def route(vertices_resources, nets, machine, constraints, placements,
-          allocation, core_resource=Cores, radius=20):
+          allocations={}, core_resource=Cores, radius=20):
     """Routing algorithm based on Neighbour Exploring Routing (NER).
 
     Algorithm refrence: J. Navaridas et al. SpiNNaker: Enhanced multicast
@@ -394,16 +414,24 @@ def route(vertices_resources, nets, machine, constraints, placements,
         # Fix routes to avoid dead chips/links
         root, lookup = avoid_dead_links(root, machine, wrap_around)
 
-        # Annotate RoutingTree with vertices/links
+        # Add the sinks in the net to the RoutingTree
         for sink in net.sinks:
+            tree_node = lookup[placements[sink]]
             if sink in route_to_endpoint:
-                # Route to link
-                lookup[placements[sink]].children.add(route_to_endpoint[sink])
+                # Sinks with route-to-endpoint constraints must be routed
+                # in the according directions.
+                tree_node.children.add((route_to_endpoint[sink], sink))
             else:
-                # Route to the sink's cores
-                cores = allocation[sink].get(core_resource, slice(0, 0))
-                for core in range(cores.start, cores.stop):
-                    lookup[placements[sink]].children.add(Routes.core(core))
+                cores = allocations.get(sink, {}).get(core_resource, None)
+                if cores is not None:
+                    # Sinks with the core_resource resource specified must be
+                    # routed to that set of cores.
+                    for core in range(cores.start, cores.stop):
+                        tree_node.children.add((Routes.core(core), sink))
+                else:
+                    # Sinks without that resource are simply included without
+                    # an associated route
+                    tree_node.children.add((None, sink))
 
         routes[net] = root
 

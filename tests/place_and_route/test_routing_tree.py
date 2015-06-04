@@ -1,5 +1,7 @@
 from rig.place_and_route.routing_tree import RoutingTree
 
+from rig.routing_table import Routes
+
 
 class TestRoutingTree(object):
 
@@ -15,19 +17,20 @@ class TestRoutingTree(object):
         # Multiple Children
         t2 = RoutingTree((2, 0))
         t1 = RoutingTree((1, 0))
-        t0 = RoutingTree((0, 0), set([t1, t2]))
+        t0 = RoutingTree((0, 0), set([(Routes.east, t1),
+                                      (Routes.west, t2)]))
         assert set(t0) == set([t0, t1, t2])
 
         # Grandchildren
         t2 = RoutingTree((2, 0))
-        t1 = RoutingTree((1, 0), set([t2]))
-        t0 = RoutingTree((0, 0), set([t1]))
+        t1 = RoutingTree((1, 0), set([(Routes.west, t2)]))
+        t0 = RoutingTree((0, 0), set([(Routes.west, t1)]))
         assert set(t0) == set([t0, t1, t2])
 
         # Inclusion of other types
         t2 = object()
-        t1 = RoutingTree((1, 0), set([t2]))
-        t0 = RoutingTree((0, 0), set([t1]))
+        t1 = RoutingTree((1, 0), set([(Routes.west, t2)]))
+        t0 = RoutingTree((0, 0), set([(Routes.west, t1)]))
         assert set(t0) == set([t0, t1, t2])
 
     def test_repr(self):

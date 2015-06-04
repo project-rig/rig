@@ -117,7 +117,8 @@ def place(vertices_resources, nets, machine, constraints):
             # Place the vertex
             unplaced_vertices.remove(constraint.vertex)
             placements[constraint.vertex] = loc
-        elif isinstance(constraint, ReserveResourceConstraint):
+        elif isinstance(constraint,  # pragma: no branch
+                        ReserveResourceConstraint):
             apply_reserve_resource_constraint(machine, constraint)
 
     # Allocate chips along a Hilbert curve large enough to cover the whole

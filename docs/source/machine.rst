@@ -3,3 +3,4 @@
 
 .. automodule:: rig.machine
     :members:
+    :special-members:

@@ -8,6 +8,22 @@ from rig.netlist import Net
 from rig.place_and_route import wrapper
 
 
+class Vertex(object):
+    """A generic object which is used as the vertex type in these tests.
+
+    Explicitly meets the requirements of a vertex object according to the
+    documentation."""
+
+    def __init__(self):
+        pass
+
+    def __eq__(self, other):
+        return id(self) == id(other)
+
+    def __hash__(self):
+        return hash(id(self))
+
+
 class TestWrapper(object):
     """Simple santy-check level tests of the wrapper, no comprehensive checks
     since internal function is largely tested elsewhere."""
@@ -33,7 +49,7 @@ class TestWrapper(object):
         # Create a ring network which will consume all available cores
         num_vertices = m.width * m.height * (
             m.chip_resources[Cores] - (1 if reserve_monitor else 0))
-        vertices = [object() for _ in range(num_vertices)]
+        vertices = [Vertex() for _ in range(num_vertices)]
         vertices_resources = {v: {Cores: 1, SDRAM: 3} for v in vertices}
         vertices_applications = {v: "app.aplx" for v in vertices}
         nets = [Net(vertices[i],
