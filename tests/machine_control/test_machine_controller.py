@@ -925,6 +925,42 @@ class TestMachineController(object):
         assert ps.app_name == "Hello World!"
         assert ps.rt_code is consts.RuntimeException.api_startup_failure
 
+    @pytest.mark.parametrize("_x, _y", [(0, 5), (7, 10)])
+    def test_get_router_diagnostics(self, _x, _y):
+        # Check that a read is made from the right region of memory and that
+        # the resulting data is unpacked correctly
+        cn = MachineController("localhost")
+        def mock_read(address, length, x, y, p=0):
+            assert x == _x
+            assert y == _y
+            assert p == 0
+            assert address == 0xe1000300
+            assert length == 64
+            return struct.pack("<16I", *list(range(16)))
+        cn.read = mock.Mock(side_effect=mock_read)
+
+        # Get the router status
+        with cn(x=_x, y=_y):
+            rd = cn.get_router_diagnostics()
+
+        # Assert this matches what we'd expect
+        assert rd.local_multicast == 0
+        assert rd.external_multicast == 1
+        assert rd.local_p2p == 2
+        assert rd.external_p2p == 3
+        assert rd.local_nearest_neighbour == 4
+        assert rd.external_nearest_neighbour == 5
+        assert rd.local_fixed_route == 6
+        assert rd.external_fixed_route == 7
+        assert rd.dropped_multicast == 8
+        assert rd.dropped_p2p == 9
+        assert rd.dropped_nearest_neighbour == 10
+        assert rd.dropped_fixed_route == 11
+        assert rd.counter12 == 12
+        assert rd.counter13 == 13
+        assert rd.counter14 == 14
+        assert rd.counter15 == 15
+
     @pytest.mark.parametrize("n_args", [0, 3])
     def test_flood_fill_aplx_args_fails(self, n_args):
         """Test that calling flood_fill_aplx with an invalid number of
