@@ -296,7 +296,6 @@ class TestMachineControllerLive(object):
         for x, y, link in m.dead_links:
             assert 0 <= x < m.width
             assert 0 <= y < m.height
-            assert (x, y) not in m.chip_resource_exceptions
             assert link in Links
 
     def test_get_machine_spinn_5(self, live_machine, spinnaker_width,
