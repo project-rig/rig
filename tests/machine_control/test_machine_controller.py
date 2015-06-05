@@ -174,6 +174,32 @@ class TestMachineControllerLive(object):
                 for y in range(2):
                     controller.set_led(1, x=x, y=y, action=None)
 
+    def test_get_router_diagnostics(self, controller):
+        # Get the router status of (1, 1) twice. Since doing this results in a
+        # P2P SCP packet being sent from (0, 0) to (1, 1) the "local_p2p" in
+        # (1, 1) register must be incremented.
+        with controller(x=1, y=1):
+            rd0 = controller.get_router_diagnostics()
+            rd1 = controller.get_router_diagnostics()
+
+        delta = rd1.local_p2p - rd0.local_p2p
+
+        # Account for the possibility that the counter may wrap-around
+        if delta < 0:  # pragma: no cover
+            # Wrap-around appears to have ocurred. To be sure, check that the
+            # delta is a large portion of the range of the counter's range (if
+            # it isn't then the counter may well have gone backwards!).
+            assert abs(delta) > (1 << 31)
+
+            # Fix the wrap-around
+            delta += 1 << 32
+            assert delta >= 0  # Sanity check
+
+        # If the read register command is really working, the counter should
+        # definately have increased (since locally-arriving P2P packets are
+        # sent in order to execute the command).
+        assert delta >= 1
+
     def test_count_cores_in_state_idle(self, controller):
         """Check that we have no idle cores as there are no cores assigned to
         the application yet.
@@ -930,6 +956,7 @@ class TestMachineController(object):
         # Check that a read is made from the right region of memory and that
         # the resulting data is unpacked correctly
         cn = MachineController("localhost")
+
         def mock_read(address, length, x, y, p=0):
             assert x == _x
             assert y == _y
