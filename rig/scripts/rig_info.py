@@ -10,6 +10,7 @@ from six import iteritems, itervalues
 from collections import defaultdict
 
 from datetime import datetime
+from pytz import utc
 
 import rig
 
@@ -29,7 +30,8 @@ def get_spinnaker_info(mc):
     yield "Software: {} v{} (Built {})".format(
         info.version_string.split("/")[0],
         info.version,
-        datetime.fromtimestamp(info.build_date).strftime('%Y-%m-%d %H:%M:%S'),
+        datetime.fromtimestamp(info.build_date, tz=utc).strftime(
+            '%Y-%m-%d %H:%M:%S'),
     )
 
     yield ""
@@ -107,7 +109,8 @@ def get_bmp_info(bc):
     yield "Software: {} v{} (Built {})".format(
         info.version_string.split("/")[0],
         info.version,
-        datetime.fromtimestamp(info.build_date).strftime('%Y-%m-%d %H:%M:%S'),
+        datetime.fromtimestamp(info.build_date, tz=utc).strftime(
+            '%Y-%m-%d %H:%M:%S'),
     )
     yield "Code block in use: {}".format(info.code_block)
     yield "Board ID (slot number): {}".format(info.board_id)

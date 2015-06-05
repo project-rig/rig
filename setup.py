@@ -93,7 +93,7 @@ setup(
     keywords="spinnaker placement routing graph fixed-point",
 
     # Requirements
-    install_requires=["numpy>1.6", "six", "enum34", "sentinel"],
+    install_requires=["numpy>1.6", "six", "enum34", "sentinel", "pytz"],
 
     # Scripts
     entry_points={
