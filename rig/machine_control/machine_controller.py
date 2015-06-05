@@ -539,6 +539,21 @@ class MachineController(ContextMixin):
         return ProcessorStatus(**state)
 
     @ContextMixin.use_contextual_arguments()
+    def get_router_diagnostics(self, x, y):
+        """Get the values of the router diagnostic counters.
+
+        Returns
+        -------
+        :py:class:`~.RouterDiagnostics`
+            Description of the state of the counters.
+        """
+        # Read the block of memory
+        data = self.read(0xe1000300, 64, x=x, y=y)
+
+        # Convert to 16 ints, then process that as the appropriate tuple type
+        return RouterDiagnostics(*struct.unpack("<16I", data))
+
+    @ContextMixin.use_contextual_arguments()
     def iptag_set(self, iptag, addr, port, x, y):
         """Set the value of an IPTag.
 
@@ -1449,6 +1464,19 @@ class ProcessorStatus(collections.namedtuple(
     user_vars : list
         List of 4 integer values that may be set by the user.
     """
+
+
+class RouterDiagnostics(collections.namedtuple(
+    "RouterDiagnostics", ["local_multicast", "external_multicast",
+                          "local_p2p", "external_p2p",
+                          "local_nearest_neighbour",
+                          "external_nearest_neighbour",
+                          "local_fixed_route", "external_fixed_route",
+                          "dropped_multicast", "dropped_p2p",
+                          "dropped_nearest_neighbour", "dropped_fixed_route",
+                          "counter12", "counter13", "counter14", "counter15"])
+                        ):
+    """Read out of the diagnostic counters of a SpiNNaker router."""
 
 
 class IPTag(collections.namedtuple("IPTag",
