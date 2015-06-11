@@ -34,8 +34,25 @@ def test_routes():
     assert Routes.core(16) is Routes.core_16
     assert Routes.core(17) is Routes.core_17
 
+    # Make sure route type methods work
+    for link in Links:
+        assert Routes(link).is_link
+        assert not Routes(link).is_core
+    for core_num in range(18):
+        assert not Routes.core(core_num).is_link
+        assert Routes.core(core_num).is_core
+
     # Lookups out of range should fail
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         Routes.core(-1)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         Routes.core(18)
+
+    # The core number property should work
+    for core_num in range(18):
+        assert Routes.core(core_num).core_num == core_num
+
+    # But should fail for links
+    for link in Links:
+        with pytest.raises(ValueError):
+            Routes(link).core_num
