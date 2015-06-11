@@ -59,10 +59,7 @@ def _initial_placement(movable_vertices, vertices_resources, machine, random):
     InvalidConstraintError
     """
     # Initially fill chips in the system in a random order
-    locations = [(x, y)
-                 for x in range(machine.width)
-                 for y in range(machine.height)
-                 if (x, y) in machine]
+    locations = list(machine)
     random.shuffle(locations)
     location_iter = iter(locations)
 
@@ -594,10 +591,7 @@ def place(vertices_resources, nets, machine, constraints,
     # Location-to-Vertices: A lookup {(x, y): [vertex, ...], ...} giving the
     # set of vertices on a given chip.  Chips which are not in the machine are
     # excluded from this lookup.
-    l2v = {(x, y): []
-           for x in range(machine.width)
-           for y in range(machine.height)
-           if (x, y) in machine}
+    l2v = {xy: [] for xy in machine}
     for vertex, location in iteritems(placements):
         l2v[location].append(vertex)
 

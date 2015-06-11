@@ -185,6 +185,26 @@ class TestMachine(object):
         with pytest.raises(IndexError):
             machine[(-1, -1)] = new_resource_exception
 
+    def test_iter(self):
+        machine = Machine(3, 2, dead_chips=set([(0, 0), (1, 1)]))
+        assert set(machine) == set([(1, 0), (2, 0), (0, 1), (2, 1)])
+
+    def test_iter_links(self):
+        machine = Machine(1, 2, dead_links=set([(0, 0, Links.south),
+                                                (0, 1, Links.north)]))
+        assert set(machine.iter_links()) == set([
+            (0, 0, Links.east),
+            (0, 0, Links.west),
+            (0, 0, Links.north),
+            (0, 0, Links.north_east),
+            (0, 0, Links.south_west),
+            (0, 1, Links.east),
+            (0, 1, Links.west),
+            (0, 1, Links.south),
+            (0, 1, Links.north_east),
+            (0, 1, Links.south_west),
+        ])
+
 
 def test_links_from_vector():
     # In all but the last of the following tests we assume we're in a 4x8
