@@ -84,12 +84,7 @@ def links_between(a, b, machine):
     """
     ax, ay = a
     bx, by = b
-    return set(link for link, (dx, dy) in [(Links.east, (1, 0)),
-                                           (Links.north_east, (1, 1)),
-                                           (Links.north, (0, 1)),
-                                           (Links.west, (-1, 0)),
-                                           (Links.south_west, (-1, -1)),
-                                           (Links.south, (0, -1))]
+    return set(link for link, (dx, dy) in ((l, l.to_vector()) for l in Links)
                if (ax + dx) % machine.width == bx and
                (ay + dy) % machine.height == by and
                (ax, ay, link) in machine)

@@ -1,5 +1,7 @@
 import pytest
 
+import random
+
 from collections import deque
 
 from rig.machine import Machine, Links
@@ -93,6 +95,25 @@ ner_net_testcases = [
     ((0, 0), [(10, 10), (11, 11), (30, 30), (29, 29)], 40, 40, True, 1),
 ]
 
+# The following set of additional fuzzing tests feature one-to-most nets with
+# neighbour-exploring enabled. These are designed to catch cases where
+# longest-dimension first routes are generated which pass through
+# already-connected nodes. To encourage this, large-fan-outs are used to
+# increase the number of nets created. The combination of short NER distance
+# and random distribution of destinations encourages random-walk style routes
+# to be created by NER which in turn maximises the chances of intersecting
+# paths being produced. Fuzzing is required since the NER routes, shortest path
+# calculations and LDF routes are all subject to random or
+# memory-address-related variations in output.
+for _ in range(50):
+    w, h = 6, 6
+    sx, sy = 2, 3
+    ner_net_testcases.append(
+        ((sx, sy), sorted(((x, y) for x in range(w) for y in range(h)
+                           if (x, y) != (sx, sy) and random.random() < 0.5),
+                          key=(lambda _: random.random())),
+         w, h, False, 1))
+
 
 @pytest.mark.parametrize("source,destinations,width,height,"
                          "wrap_around,radius",
@@ -152,12 +173,16 @@ def test_ner_net(source, destinations, width, height,
                         (Routes.north, (0, 1)), (Routes.south, (0, -1)),
                         (Routes.north_east, (1, 1)),
                         (Routes.south_west, (-1, -1)),
+                        (Routes.north_east, (-(width - 1), 1)),
+                        (Routes.south_west, (width - 1, -1)),
                         (Routes.west, (width - 1, 0)),
                         (Routes.east, (-(width - 1), 0)),
                         (Routes.south, (0, height - 1)),
                         (Routes.north, (0, -(height - 1))),
                         (Routes.south_west, (width - 1, height - 1)),
                         (Routes.north_east, (-(width - 1), -(height - 1))),
+                        (Routes.north_east, (1, -(height - 1))),
+                        (Routes.south_west, (-1, height - 1)),
                     ])
                 else:
                     assert (child_direction, (dx, dy)) in set([
