@@ -265,6 +265,27 @@ class Machine(object):
 
         self.chip_resource_exceptions[xy] = resources
 
+    def __iter__(self):
+        """Iterate over the working chips in the machine.
+
+        Generates a series of (x, y) tuples.
+        """
+        for x in range(self.width):
+            for y in range(self.height):
+                if (x, y) in self:
+                    yield (x, y)
+
+    def iter_links(self):
+        """An iterator over the working links in the machine.
+
+        Generates a series of (x, y, link) tuples.
+        """
+        for x in range(self.width):
+            for y in range(self.height):
+                for link in Links:
+                    if (x, y, link) in self:
+                        yield (x, y, link)
+
     def has_wrap_around_links(self, minimum_working=0.9):
         """Test if a machine has wrap-around connections installed.
 

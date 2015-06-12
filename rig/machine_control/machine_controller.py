@@ -1006,9 +1006,7 @@ class MachineController(ContextMixin):
             mcn = self.get_machine()
 
             # Now remove all routing entries:
-            for (x, y) in [(x, y)
-                           for x in range(mcn.width)
-                           for y in range(mcn.height) if (x, y) in mcn]:
+            for (x, y) in mcn:
                 self.clear_routing_table_entries(x, y, app_id)
 
         # Construct the packet for transmission

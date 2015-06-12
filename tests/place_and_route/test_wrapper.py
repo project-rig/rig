@@ -104,10 +104,9 @@ class TestWrapper(object):
 
         # Check the correct application map is given (same app on every core)
         assert application_map == {  # pragma: no branch
-            "app.aplx": {(x, y): set(range(1 if reserve_monitor else 0,
-                                           m.chip_resources[Cores]))
-                         for x in range(m.width)
-                         for y in range(m.height)}}
+            "app.aplx": {xy: set(range(1 if reserve_monitor else 0,
+                                       m.chip_resources[Cores]))
+                         for xy in m}}
 
         # Check that all routing keys are observed at least once
         used_keys = set()

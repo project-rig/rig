@@ -40,8 +40,15 @@ class Routes(IntEnum):
 
     @classmethod
     def core(cls, num):
-        """Get the :py:class:`.Routes` for the numbered core."""
-        assert 0 <= num <= 17, "Cores are numbered from 0 to 17"
+        """Get the :py:class:`.Routes` for the numbered core.
+
+        Raises
+        ------
+        ValueError
+            If the core number isn't in the range 0-17 inclusive.
+        """
+        if not (0 <= num <= 17):
+            raise ValueError("Cores are numbered from 0 to 17")
         return cls(6 + num)
 
     east = 0
@@ -69,3 +76,27 @@ class Routes(IntEnum):
     core_15 = 21
     core_16 = 22
     core_17 = 23
+
+    @property
+    def is_link(self):
+        """True iff a Routes object represents a chip to chip link."""
+        return self < 6
+
+    @property
+    def is_core(self):
+        """True iff a Routes object represents a route to a core."""
+        return not self.is_link
+
+    @property
+    def core_num(self):
+        """Get the core number being routed to.
+
+        Raises
+        ------
+        ValueError
+            If the route is not to a core.
+        """
+        if self.is_core:
+            return self - 6
+        else:
+            raise ValueError("{} is not a core".format(repr(self)))

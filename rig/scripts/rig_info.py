@@ -85,12 +85,10 @@ def get_spinnaker_info(mc):
     # count}}
     yield "Application states:"
     app_states = defaultdict(lambda: defaultdict(lambda: 0))
-    for x in range(machine.width):
-        for y in range(machine.height):
-            if (x, y) in machine:
-                for p in range(machine[(x, y)][Cores]):
-                    status = mc.get_processor_status(x=x, y=y, p=p)
-                    app_states[status.app_name][status.cpu_state] += 1
+    for x, y in machine:
+        for p in range(machine[(x, y)][Cores]):
+            status = mc.get_processor_status(x=x, y=y, p=p)
+            app_states[status.app_name][status.cpu_state] += 1
     for app_name, states in sorted(iteritems(app_states),
                                    key=(lambda s: sum(itervalues(s[1])))):
         state_counts = []
