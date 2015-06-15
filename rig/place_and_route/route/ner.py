@@ -76,12 +76,12 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
         neighbour = None
 
         # Try to find nodes nearby by searching an enlarging concentric ring of
-        # ndoes.
+        # nodes.
         for x, y in concentric_hexagons(radius, destination):
             if wrap_around:
                 x %= width
                 y %= height
-            if (x, y) in route and (x, y) != destination:
+            if (x, y) in route:
                 neighbour = (x, y)
                 break
 
@@ -97,10 +97,27 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
         else:
             vector = shortest_mesh_path(to_xyz(neighbour), to_xyz(destination))
 
+        # The longest-dimension-first route may inadvertently pass through an
+        # already connected node. If the route is allowed to pass through that
+        # node it would create a cycle in the route which would be VeryBad(TM).
+        # As a result, we work backward through the route and truncate it at
+        # the first point where the route intersects with a connected node.
+        ldf = list(longest_dimension_first(vector, neighbour, width, height))
+        i = len(ldf)
+        for direction, (x, y) in reversed(ldf):
+            i -= 1
+            if (x, y) in route:
+                # We've just bumped into a node which is already part of the
+                # route, this becomes our new neighbour and we truncate the LDF
+                # route. (Note ldf list is truncated just after the current
+                # position since it gives (direction, destination) pairs).
+                neighbour = (x, y)
+                ldf = ldf[i + 1:]
+                break
+
         # Take the longest dimension first route.
         last_node = route[neighbour]
-        for direction, (x, y) in longest_dimension_first(vector, neighbour,
-                                                         width, height):
+        for direction, (x, y) in ldf:
             this_node = route.get((x, y), None)
             if this_node is None:
                 this_node = RoutingTree((x, y))
