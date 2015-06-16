@@ -17,8 +17,6 @@ class LocationConstraint(object):
         The x- and y-coordinates of the chip the vertex must be placed on.
     """
 
-    __slots__ = ["vertex", "location"]
-
     def __init__(self, vertex, location):
         self.vertex = vertex
         self.location = location
@@ -52,8 +50,6 @@ class ReserveResourceConstraint(object):
         reservation applies globally.
     """
 
-    __slots__ = ["resource", "reservation", "location"]
-
     def __init__(self, resource, reservation, location=None):
         self.resource = resource
         self.reservation = reservation
@@ -78,8 +74,6 @@ class AlignResourceConstraint(object):
     alignment : int
         The number of which all assigned start-indices must be a multiple.
     """
-
-    __slots__ = ["resource", "alignment"]
 
     def __init__(self, resource, alignment):
         self.resource = resource
@@ -117,8 +111,6 @@ class RouteEndpointConstraint(object):
     route : :py:class:`~rig.routing_table.Routes`
         The route to which paths will be directed.
     """
-
-    __slots__ = ["vertex", "route"]
 
     def __init__(self, vertex, route):
         self.vertex = vertex

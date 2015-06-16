@@ -14,7 +14,6 @@ class Net(object):
     sinks : list
         A list of vertices that the net connects to.
     """
-    __slots__ = ["source", "weight", "sinks"]
 
     def __init__(self, source, sinks, weight=1.0):
         """Create a new Net.

@@ -173,8 +173,6 @@ class Machine(object):
         that links have two directions and both should be defined if a link is
         dead in both directions (the typical case).
     """
-    __slots__ = ["width", "height", "chip_resources",
-                 "chip_resource_exceptions", "dead_chips", "dead_links"]
 
     def __init__(self, width, height,
                  chip_resources={Cores: 18, SDRAM: 128*1024*1024,

@@ -38,8 +38,6 @@ class RoutingTree(object):
           reach the vertex.
     """
 
-    __slots__ = ["chip", "children"]
-
     def __init__(self, chip, children=None):
         self.chip = chip
         self.children = children if children is not None else set()
