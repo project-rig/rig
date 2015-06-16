@@ -318,9 +318,12 @@ def test_standard_system_dimensions():
     # Special case: 0
     assert standard_system_dimensions(0) == (0, 0)
 
+    # Special case: 1
+    assert standard_system_dimensions(1) == (8, 8)
+
     # Should crash on non-multiples of 3
     with pytest.raises(ValueError):
-        standard_system_dimensions(1)
+        standard_system_dimensions(2)
     with pytest.raises(ValueError):
         standard_system_dimensions(5)
 

@@ -37,11 +37,11 @@ back into the generator. For command-line applications, a wrapper script
     {'ip_address': '192.168.240.253', 'dimensions': (48, 24)}
 
 Third-parties whose needs are not met by the supplied CLI wizard interface are
-encouraged to build their own font-ends which support the wizard protocol. The
+encouraged to build their own front-ends which support the wizard protocol. The
 wizard generator functions generate the following objects:
 
 * :py:class:`~rig.wizard.MultipleChoice` This tuple includes a question to be
-  presented to the user along with a list of valid options to chose from and
+  presented to the user along with a list of valid options to choose from and
   a default value to select (or None if no default exists). The generator
   should be sent the index of the user's selection.
 * :py:class:`~rig.wizard.Text` This tuple includes a question to be

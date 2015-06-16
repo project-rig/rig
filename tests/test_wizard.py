@@ -58,7 +58,7 @@ def test_dimensions_wizard_invalid():
         g = wizard.dimensions_wizard()
         g.send(None)
         g.send(2)  # Num boards
-        g.send("1")
+        g.send("4")
     with pytest.raises(wizard.Failure):
         g = wizard.dimensions_wizard()
         g.send(None)

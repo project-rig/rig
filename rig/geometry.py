@@ -191,12 +191,16 @@ def standard_system_dimensions(num_boards):
       ValueError
         If the number of boards is not a multiple of three.
     """
-    if num_boards % 3 != 0:
-        raise ValueError("{} is not a multiple of 3".format(num_boards))
-
     # Special case to avoid division by 0
     if num_boards == 0:
         return (0, 0)
+
+    # Special case: meaningful systems with 1 board can exist
+    if num_boards == 1:
+        return (8, 8)
+
+    if num_boards % 3 != 0:
+        raise ValueError("{} is not a multiple of 3".format(num_boards))
 
     # Find the largest pair of factors to discover the squarest system in terms
     # of triads of boards.
