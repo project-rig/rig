@@ -101,6 +101,7 @@ setup(
             "rig-boot = rig.scripts.rig_boot:main",
             "rig-power = rig.scripts.rig_power:main",
             "rig-info = rig.scripts.rig_info:main",
+            "rig-discover = rig.scripts.rig_discover:main",
         ],
     }
 )
