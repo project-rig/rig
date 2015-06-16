@@ -43,6 +43,8 @@ introductory tutorials:
     :special-members:
     :exclude-members: boot_packet, BootCommand
 
+.. autofunction:: rig.machine_control.unbooted_ping.listen
+
 Advanced SCP/SDP APIs
 ---------------------
 
