@@ -40,6 +40,7 @@ Execution control and machine management
         :maxdepth: 2
 
         control
+        wizard
 
 
 Standalone utility applications
