@@ -83,6 +83,8 @@ The utilities provided by Rig can be broken down approximately as follows:
   * ``rig-info``: No-nonsense command line utility to get high-level
     information about a SpiNNaker system, e.g. "what is it running, is it on
     fire?".
+  * ``rig-discover``: No-nonsense command line utility for discovering the IP of
+    connected, unbooted SpiNNaker boards.
 
 Python Version Support
 ----------------------
