@@ -1,6 +1,9 @@
+import pytest
+
 from rig.geometry import concentric_hexagons, to_xyz, minimise_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \
-    shortest_torus_path_length, shortest_torus_path
+    shortest_torus_path_length, shortest_torus_path, \
+    standard_system_dimensions
 
 
 def test_concentric_hexagons():
@@ -309,3 +312,28 @@ def test_shortest_torus_path():
                     break
             assert unseen_neg_minimiseds == set(), \
                 (start, end, width, height, neg_minimiseds)
+
+
+def test_standard_system_dimensions():
+    # Special case: 0
+    assert standard_system_dimensions(0) == (0, 0)
+
+    # Special case: 1
+    assert standard_system_dimensions(1) == (8, 8)
+
+    # Should crash on non-multiples of 3
+    with pytest.raises(ValueError):
+        standard_system_dimensions(2)
+    with pytest.raises(ValueError):
+        standard_system_dimensions(5)
+
+    # Square systems
+    assert standard_system_dimensions(3 * 1 * 1) == (12, 12)
+    assert standard_system_dimensions(3 * 2 * 2) == (24, 24)
+    assert standard_system_dimensions(3 * 20 * 20) == (240, 240)
+
+    # Rectangular systems (should always be wide)
+    assert standard_system_dimensions(3 * 1 * 2) == (24, 12)
+    assert standard_system_dimensions(3 * 1 * 3) == (36, 12)
+    assert standard_system_dimensions(3 * 2 * 4) == (48, 24)
+    assert standard_system_dimensions(3 * 1 * 17) == (204, 12)

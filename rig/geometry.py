@@ -3,6 +3,8 @@
 
 import random
 
+from math import sqrt
+
 
 def to_xyz(xy):
     """Convert a two-tuple (x, y) coordinate into an (x, y, 0) coordinate."""
@@ -169,3 +171,46 @@ def concentric_hexagons(radius, start=(0, 0)):
                 yield (x, y)
                 x += dx
                 y += dy
+
+
+def standard_system_dimensions(num_boards):
+    """Calculate the standard network dimensions (in chips) for a system with
+    the specified number of SpiNN-5 boards.
+
+    Returns
+    -------
+    (w, h)
+        Width and height of the network in chips.
+
+        Standard SpiNNaker systems are constructed as squarely as possible
+        given the number of boards available. When a square system cannot be
+        made, the function prefers wider systems over taller systems.
+
+      Raises
+      ------
+      ValueError
+        If the number of boards is not a multiple of three.
+    """
+    # Special case to avoid division by 0
+    if num_boards == 0:
+        return (0, 0)
+
+    # Special case: meaningful systems with 1 board can exist
+    if num_boards == 1:
+        return (8, 8)
+
+    if num_boards % 3 != 0:
+        raise ValueError("{} is not a multiple of 3".format(num_boards))
+
+    # Find the largest pair of factors to discover the squarest system in terms
+    # of triads of boards.
+    for h in reversed(  # pragma: no branch
+            range(1, int(sqrt(num_boards // 3)) + 1)):
+        if (num_boards // 3) % h == 0:
+            break
+
+    w = (num_boards // 3) // h
+
+    # Convert the number of triads into numbers of chips (each triad of boards
+    # contributes as 12x12 block of chips).
+    return (w * 12, h * 12)

@@ -78,3 +78,16 @@ And for BMPs::
     Temperature top: 28.9 *C
     Temperature bottom: 30.0 *C
 
+
+``rig-discover``
+================
+
+The ``rig-discover`` command listens for any attached unbooted SpiNNaker
+boards on the network. This can be used to determine the IP address of a
+locally attached board. Example::
+
+    $ rig-discover
+    192.168.240.253
+
+If no machines are discovered, the command will exit after a short timeout
+without printing anything.
