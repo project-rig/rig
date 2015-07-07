@@ -225,13 +225,14 @@ class TestMachineControllerLive(object):
             targets, use_count=False
         )
 
-        # Read back a word to test that the application loaded
+        # Read back a word and IOBUF to test that the application loaded
         for (t_x, t_y), cores in iteritems(targets):
             with controller(x=t_x, y=t_y):
                 print(t_x, t_y)
                 addr_base = controller.read_struct_field("sv", "sdram_base")
 
                 for t_p in cores:
+                    # Test memory location
                     addr = addr_base + 4 * t_p
                     data = struct.unpack(
                         "<I", controller.read(addr, 4, t_x, t_y)
@@ -241,6 +242,11 @@ class TestMachineControllerLive(object):
                     y = (data & 0x00ff0000) >> 16
                     p = (data & 0x0000ffff)
                     assert p == t_p and x == t_x and y == t_y
+
+                    # Test IOBUF contains expected message
+                    assert controller.get_iobuf(t_p).startswith(
+                        "Rig test APLX started on {}, {}, {}.\n".format(
+                            t_x, t_y, t_p))
 
     @pytest.mark.order_after("live_test_load_application")
     @pytest.mark.parametrize(
@@ -949,6 +955,41 @@ class TestMachineController(object):
         assert ps.app_id == 30
         assert ps.app_name == "Hello World!"
         assert ps.rt_code is consts.RuntimeException.api_startup_failure
+
+    @pytest.mark.parametrize("_x, _y", [(0, 5), (7, 10)])
+    @pytest.mark.parametrize("iobuf_addresses",
+                             [[0x0],
+                              [0xDEADBEEF, 0x0],
+                              [0xDEADBEEF, 0x12345678, 0x0]])
+    def test_get_iobuf(self, _x, _y, iobuf_addresses):
+        # Check that a read is made from the right region of memory and that
+        # the resulting data is unpacked correctly
+        cn = MachineController("localhost")
+
+        num_iobufs = len(iobuf_addresses) - 1
+
+        iobuf_size = 0x1024
+
+        def mock_read(address, length, x, y, p=0):
+            assert x == _x
+            assert y == _y
+            assert p == 0
+            assert address == iobuf_addresses.pop(0)
+            assert length == iobuf_size + 16
+            data = b"hello, world!\n"
+            return (struct.pack("<4I",
+                                iobuf_addresses[0],
+                                0, 0,
+                                len(data)) +
+                    data +
+                    (b"\0" * (length - 16 - len(data))))
+        cn.read = mock.Mock(side_effect=mock_read)
+        cn.read_struct_field = mock.Mock(return_value=iobuf_size)
+        cn.read_vcpu_struct_field = mock.Mock(return_value=iobuf_addresses[0])
+
+        # Get (and check) the IOBUF value
+        with cn(x=_x, y=_y):
+            assert cn.get_iobuf(1) == "hello, world!\n" * num_iobufs
 
     @pytest.mark.parametrize("_x, _y", [(0, 5), (7, 10)])
     def test_get_router_diagnostics(self, _x, _y):

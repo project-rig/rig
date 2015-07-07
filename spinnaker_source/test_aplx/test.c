@@ -14,6 +14,11 @@ void user_event(uint32_t arg0, uint32_t arg1)
 
 void c_main(void)
 {
+  io_printf(IO_BUF, "Rig test APLX started on %d, %d, %d.\n",
+            (sark_chip_id() >> 8) & 0xFF,  // X
+            (sark_chip_id() >> 0) & 0xFF,  // Y
+            sark_core_id());  // P
+
   // Write to a word in SDRAM to indicate that we loaded correctly.
   uint32_t *sdram_base = (uint32_t *)sv->sdram_base;
   io_printf(IO_BUF, "Writing to SDRAM (0x%08x + %d).\n",
