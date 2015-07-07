@@ -91,3 +91,14 @@ locally attached board. Example::
 
 If no machines are discovered, the command will exit after a short timeout
 without printing anything.
+
+
+``rig-iobuf``
+================
+
+The ``rig-iobuf`` command prints the messages printed by an application's calls
+to ``io_printf(IOBUF, ...)``. For example, printing the IOBUF for core 1 on
+chip 0, 0::
+
+    $ rig-iobuf HOSTNAME 0 0 1
+    Hello, world!
