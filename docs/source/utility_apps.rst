@@ -102,3 +102,44 @@ chip 0, 0::
 
     $ rig-iobuf HOSTNAME 0 0 1
     Hello, world!
+
+
+``rig-ps``
+================
+
+The ``rig-ps`` command enumerates every application running on a machine. For
+example::
+
+    $ rig-ps HOSTNAME
+    X   Y   P   State             Application      App ID
+    --- --- --- ----------------- ---------------- ------
+      0   0   0 run               scamp-133             0
+      0   0   1 sync0             network_tester       66
+      0   0   2 sync0             network_tester       66
+      0   0   3 sync0             network_tester       66
+      0   0   4 sync0             network_tester       66
+      0   0   5 sync0             network_tester       66
+    ...snip...
+
+The listing can be filtered by:
+
+* Application ID with ``--app-id`` or ``-a``
+* Application name with ``--name`` or ``-n``
+* Application State with ``--state`` or ``-s``
+
+The above arguments accept regular expressions as their argument. These can be
+used, for example, to locate misbehaving application cores::
+
+    $ rig-ps HOSTNAME --state '(?!run)'
+    X   Y   P   State             Application      App ID
+    --- --- --- ----------------- ---------------- ------
+      3   6  13 watchdog          network_tester       66
+
+Finally, the listings can be carried out for just a particular chip or core by
+adding the optional 'x', 'y' and 'p' arguments (similar to the ybug 'ps'
+command)::
+
+    $ rig-ps HOSTNAME 0 0 3
+    X   Y   P   State             Application      App ID
+    --- --- --- ----------------- ---------------- ------
+      0   0   3 sync0             network_tester       66

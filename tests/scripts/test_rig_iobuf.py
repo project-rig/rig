@@ -44,10 +44,8 @@ def test_unknown_arch(monkeypatch):
     assert rig_iobuf.main(["localhost", "0", "0", "1"]) != 0
 
 
-def test_bmp(monkeypatch, capsys):
-    # Test with (fake) BMP hardware attached. Output is checked by just
-    # ensuring certain strings are present. This is not foolproof but just a
-    # basic sanity check.
+def test_iobuf(monkeypatch, capsys):
+    # Test with (fake) contents of the IOBUF.
     mc = mock.Mock()
     mc.get_iobuf.return_value = "This is the correct output."
     info = mock.Mock()

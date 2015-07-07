@@ -21,7 +21,7 @@ def main(args=None):
                         version="%(prog)s {}".format(rig.__version__))
 
     parser.add_argument("hostname", type=str,
-                        help="hostname or IP of SpiNNaker system or BMP")
+                        help="hostname or IP of SpiNNaker system")
 
     parser.add_argument("x", type=int,
                         help="the X coordinate of the chip")
