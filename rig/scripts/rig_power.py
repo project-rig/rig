@@ -82,9 +82,9 @@ def main(args=None):
 
         # Actually send the command
         if args.power_on_delay is None:
-            bc.set_power(state=state, board=boards)
+            bc.set_power(state=state, boards=boards)
         else:
-            bc.set_power(state=state, board=boards,
+            bc.set_power(state=state, boards=boards,
                          post_power_on_delay=args.power_on_delay)
     except TimeoutError:
         sys.stderr.write("{}: error: bmp did not respond to command\n".format(

@@ -72,8 +72,8 @@ class TestBMPControllerLive(object):
     @pytest.mark.no_boot  # Don't run if booting is disabled
     def test_power_cycle(self, live_controller):
         # Power-cycle a board, also checks both types of board listings
-        live_controller.set_power(False, board=0)
-        live_controller.set_power(True, board=[0])
+        live_controller.set_power(False, boards=0)
+        live_controller.set_power(True, boards=[0])
 
     def test_set_led(self, live_controller):
         # Toggle the LEDs
@@ -129,7 +129,7 @@ def test_power_down_on_finished(live_controller):
     The "order" marking on this test ensures that this test unit will run after
     all SpiNNaker hardware tests are complete.
     """
-    live_controller.set_power(False, board=0)
+    live_controller.set_power(False, boards=0)
 
 
 class TestBMPController(object):
@@ -202,23 +202,25 @@ class TestBMPController(object):
         bc = BMPController("localhost")
         bc._send_scp = Mock()
 
-        # Check single device and power down
+        # Check single device and power down (also check always sent to board
+        # 0)
         bc.set_power(False, 0, 0, 2)
         arg1 = 0 << 16 | 0
         arg2 = 1 << 2
         bc._send_scp.assert_called_once_with(
-            0, 0, 2, SCPCommands.power,
+            0, 0, 0, SCPCommands.power,
             arg1=arg1, arg2=arg2, timeout=0.0, expected_args=0
         )
         bc._send_scp.reset_mock()
 
-        # Check multiple device, power on and a delay
+        # Check multiple device, power on and a delay (also check always sent
+        # to board 0)
         bc.set_power(True, 0, 0, [1, 2, 4, 8], delay=0.1,
                      post_power_on_delay=0.0)
         arg1 = 100 << 16 | 1
         arg2 = (1 << 1) | (1 << 2) | (1 << 4) | (1 << 8)
         bc._send_scp.assert_called_once_with(
-            0, 0, 1, SCPCommands.power,
+            0, 0, 0, SCPCommands.power,
             arg1=arg1, arg2=arg2, timeout=consts.BMP_POWER_ON_TIMEOUT,
             expected_args=0
         )
