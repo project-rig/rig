@@ -194,7 +194,7 @@ class BMPController(ContextMixin):
                        buffer_size, sver.arg3, sver.data.decode("utf-8"))
 
     @ContextMixin.use_contextual_arguments()
-    def set_power(self, state, cabinet, frame, boards,
+    def set_power(self, state, cabinet, frame, board,
                   delay=0.0, post_power_on_delay=5.0):
         """Control power to the SpiNNaker chips and FPGAs on a board.
 
@@ -202,7 +202,7 @@ class BMPController(ContextMixin):
         -------
         state : bool
             True for power on, False for power off.
-        boards : int or iterable
+        board : int or iterable
             Specifies the board to control the power of. This may also be an
             iterable of multiple boards (in the same frame). The command will
             actually be sent board 0, regardless of the set of boards
@@ -223,10 +223,10 @@ class BMPController(ContextMixin):
                 boards other than board 0 but wait for the FPGAs to be loaded
                 before responding when board 0 is powered on.
         """
-        if isinstance(boards, int):
-            boards = [boards]
+        if isinstance(board, int):
+            boards = [board]
         else:
-            boards = list(boards)
+            boards = list(board)
 
         arg1 = int(delay * 1000) << 16 | (1 if state else 0)
         arg2 = sum(1 << b for b in boards)

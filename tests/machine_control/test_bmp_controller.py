@@ -72,8 +72,8 @@ class TestBMPControllerLive(object):
     @pytest.mark.no_boot  # Don't run if booting is disabled
     def test_power_cycle(self, live_controller):
         # Power-cycle a board, also checks both types of board listings
-        live_controller.set_power(False, boards=0)
-        live_controller.set_power(True, boards=[0])
+        live_controller.set_power(False, board=0)
+        live_controller.set_power(True, board=[0])
 
     def test_set_led(self, live_controller):
         # Toggle the LEDs
@@ -129,7 +129,7 @@ def test_power_down_on_finished(live_controller):
     The "order" marking on this test ensures that this test unit will run after
     all SpiNNaker hardware tests are complete.
     """
-    live_controller.set_power(False, boards=0)
+    live_controller.set_power(False, board=0)
 
 
 class TestBMPController(object):

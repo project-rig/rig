@@ -66,26 +66,26 @@ def test_timeout_fails(monkeypatch):
 
 @pytest.mark.parametrize("args,options", [
     # Defaults to powering on
-    (["localhost"], {"state": True, "boards": set(range(24))}),
+    (["localhost"], {"state": True, "board": set(range(24))}),
     # Power on
-    (["localhost", "1"], {"state": True, "boards": set(range(24))}),
-    (["localhost", "on"], {"state": True, "boards": set(range(24))}),
+    (["localhost", "1"], {"state": True, "board": set(range(24))}),
+    (["localhost", "on"], {"state": True, "board": set(range(24))}),
     # Power off
-    (["localhost", "0"], {"state": False, "boards": set(range(24))}),
-    (["localhost", "off"], {"state": False, "boards": set(range(24))}),
+    (["localhost", "0"], {"state": False, "board": set(range(24))}),
+    (["localhost", "off"], {"state": False, "board": set(range(24))}),
     # Specify ranges of boards
-    (["localhost", "-b=3"], {"state": True, "boards": {3}}),
-    (["localhost", "--board=0"], {"state": True, "boards": {0}}),
-    (["localhost", "--board=1"], {"state": True, "boards": {1}}),
-    (["localhost", "--board=0,2,3"], {"state": True, "boards": {0, 2, 3}}),
-    (["localhost", "--board=0-0"], {"state": True, "boards": {0}}),
-    (["localhost", "--board=0-2"], {"state": True, "boards": {0, 1, 2}}),
-    (["localhost", "--board=1,5-6"], {"state": True, "boards": {1, 5, 6}}),
+    (["localhost", "-b=3"], {"state": True, "board": {3}}),
+    (["localhost", "--board=0"], {"state": True, "board": {0}}),
+    (["localhost", "--board=1"], {"state": True, "board": {1}}),
+    (["localhost", "--board=0,2,3"], {"state": True, "board": {0, 2, 3}}),
+    (["localhost", "--board=0-0"], {"state": True, "board": {0}}),
+    (["localhost", "--board=0-2"], {"state": True, "board": {0, 1, 2}}),
+    (["localhost", "--board=1,5-6"], {"state": True, "board": {1, 5, 6}}),
     # Power-on delay
     (["localhost", "--power-on-delay=1.0"], {"state": True,
-                                             "boards": set(range(24)),
+                                             "board": set(range(24)),
                                              "post_power_on_delay": 1.0}),
-    (["localhost", "-d=0.0"], {"state": True, "boards": set(range(24)),
+    (["localhost", "-d=0.0"], {"state": True, "board": set(range(24)),
                                "post_power_on_delay": 0.0}),
 ])
 def test_power_options(monkeypatch, args, options):
