@@ -24,17 +24,17 @@ The ``rig-power`` command lets you quickly and easily power on and off
 SpiNNaker systems consisting of SpiNN-5 boards via their Board Management
 Processors (BMP).
 
-For example, to power cycle a single SpiNN-5 board::
+For example, to power cycle a SpiNN-5 board (or a 24-board frame there-of)::
 
     $ rig-power BMP_HOSTNAME
 
-To power-off a single SpiNN-5 board::
+To power-off::
 
     $ rig-power BMP_HOSTNAME off
 
-To power-cycle an entire rack of 24 SpiNN-5 boards::
+To power-cycle board 3 and the last 12 boards in frame::
 
-    $ rig-power BMP_HOSTNAME -b 0-23
+    $ rig-power BMP_HOSTNAME -b 3,12-23
 
 To get a complete listing of available options::
 
