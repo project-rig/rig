@@ -539,6 +539,28 @@ class MachineController(ContextMixin):
         return ProcessorStatus(**state)
 
     @ContextMixin.use_contextual_arguments()
+    def get_iobuf(self, p, x, y):
+        """Read the messages ``io_printf``'d into the ``IOBUF`` buffer on a
+        specified core."""
+        # The IOBUF data is stored in a linked-list of blocks of memory in
+        # SDRAM. The size of each block is given in SV
+        iobuf_size = self.read_struct_field("sv", "iobuf_size", x, y)
+
+        # The first block in the list is given in the core's VCPU field
+        address = self.read_vcpu_struct_field("iobuf", x, y, p)
+
+        iobuf = ""
+
+        while address:
+            # The IOBUF data is proceeded by a header which gives the next
+            # address and also the length of the string in the current buffer.
+            iobuf_data = self.read(address, iobuf_size + 16, x, y)
+            address, time, ms, length = struct.unpack("<4I", iobuf_data[:16])
+            iobuf += iobuf_data[16:16 + length].decode("utf-8")
+
+        return iobuf
+
+    @ContextMixin.use_contextual_arguments()
     def get_router_diagnostics(self, x, y):
         """Get the values of the router diagnostic counters.
 

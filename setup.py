@@ -102,6 +102,8 @@ setup(
             "rig-power = rig.scripts.rig_power:main",
             "rig-info = rig.scripts.rig_info:main",
             "rig-discover = rig.scripts.rig_discover:main",
+            "rig-iobuf = rig.scripts.rig_iobuf:main",
+            "rig-ps = rig.scripts.rig_ps:main",
         ],
     }
 )

@@ -85,6 +85,10 @@ The utilities provided by Rig can be broken down approximately as follows:
     fire?".
   * ``rig-discover``: No-nonsense command line utility for discovering the IP of
     connected, unbooted SpiNNaker boards.
+  * ``rig-iobuf``: No-nonsense command line utility for reading IOBUF messages
+    from a SpiNNaker application.
+  * ``rig-ps``: No-nonsense command line utility for listing all applications
+    (and their locations) in a SpiNNaker machine.
 
 Python Version Support
 ----------------------
