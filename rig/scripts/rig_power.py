@@ -31,7 +31,7 @@ def main(args=None):
     parser.add_argument("state", type=str, default=ON_CHOICES[0], nargs="?",
                         choices=ON_CHOICES + OFF_CHOICES)
 
-    parser.add_argument("-b", "--board", type=str, default="0",
+    parser.add_argument("-b", "--board", type=str, default="0-23",
                         help="board number (e.g. 0) "
                              "or range of boards (e.g.  1,3,4-6)")
 

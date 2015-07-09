@@ -205,7 +205,8 @@ class BMPController(ContextMixin):
         board : int or iterable
             Specifies the board to control the power of. This may also be an
             iterable of multiple boards (in the same frame). The command will
-            actually be sent to the first board in the iterable.
+            actually be sent board 0, regardless of the set of boards
+            specified.
         delay : float
             Number of seconds delay between power state changes of different
             boards.
@@ -214,19 +215,29 @@ class BMPController(ContextMixin):
             command has been carried out. A short delay (default) is useful at
             this point since power-supplies and SpiNNaker chips may still be
             coming on line immediately after the power-on command is sent.
+
+            .. warning::
+                If the set of boards to be powered-on does not include board 0,
+                this timeout should be extended by 2-3 seconds. This is due to
+                the fact that BMPs immediately acknowledge power-on commands to
+                boards other than board 0 but wait for the FPGAs to be loaded
+                before responding when board 0 is powered on.
         """
         if isinstance(board, int):
             boards = [board]
         else:
             boards = list(board)
-            board = boards[0]
 
         arg1 = int(delay * 1000) << 16 | (1 if state else 0)
         arg2 = sum(1 << b for b in boards)
 
         # Allow additional time for response when powering on (since FPGAs must
-        # be loaded)
-        self._send_scp(cabinet, frame, board, SCPCommands.power,
+        # be loaded). Also, always send the command to board 0. This is
+        # required by the BMPs which do not correctly handle the power-on
+        # command being sent to anything but board 0. Though this is a bug in
+        # the BMP firmware, it is considered sufficiently easy to work-around
+        # that no fix is planned.
+        self._send_scp(cabinet, frame, 0, SCPCommands.power,
                        arg1=arg1, arg2=arg2,
                        timeout=consts.BMP_POWER_ON_TIMEOUT if state else 0.0,
                        expected_args=0)
