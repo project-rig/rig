@@ -1,7 +1,7 @@
 """A trivial random placer."""
 
-# This is renamed to ensure that all function correctly use the random number
-# generator passed into them.
+# This is renamed to ensure that the random module isn't accidentally used
+# directly.
 import random as default_random
 
 from rig.place_and_route.constraints import \
@@ -27,10 +27,10 @@ def place(vertices_resources, nets, machine, constraints,
     Parameters
     ----------
     random : :py:class:`random.Random`
-        A Python random number generator. Defaults to ``import random`` but can
-        be set to your own instance of :py:class:`random.Random` to allow you
-        to control the seed and produce deterministic results. For results to
-        be deterministic, vertices_resources must be supplied as an
+        Defaults to ``import random`` but can be set to your own instance of
+        :py:class:`random.Random` to allow you to control the seed and produce
+        deterministic results. For results to be deterministic,
+        vertices_resources must be supplied as an
         :py:class:`collections.OrderedDict`.
     """
     # Within the algorithm we modify the resource availability values in the
@@ -76,7 +76,7 @@ def place(vertices_resources, nets, machine, constraints,
     locations = set(machine)
 
     for vertex in movable_vertices:
-        # Keep chosing random chips until we find one where the vertex fits.
+        # Keep choosing random chips until we find one where the vertex fits.
         while True:
             if len(locations) == 0:
                 raise InsufficientResourceError(
