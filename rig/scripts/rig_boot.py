@@ -12,6 +12,8 @@ from rig.machine_control import boot, MachineController
 
 from rig.machine_control.scp_connection import TimeoutError
 
+from rig.geometry import standard_system_dimensions
+
 BOOT_OPTION_POSTFIX = "_boot_options"
 """Postfix for boot option dicts in boot."""
 
@@ -25,7 +27,9 @@ def main(args=None):
                         help="hostname or IP of SpiNNaker system")
 
     parser.add_argument("width", type=int, default=None, nargs="?",
-                        help="width of SpiNNaker system")
+                        metavar="num_boards|width",
+                        help="number of (SpiNN-5) boards or width "
+                             "of SpiNNaker system")
     parser.add_argument("height", type=int, default=None, nargs="?",
                         help="height of SpiNNaker system")
     parser.add_argument("--hardware-version", type=int, default=None,
@@ -57,10 +61,14 @@ def main(args=None):
     # set of machine parameters was chosen.
     if (args.width is None and args.height is None and
             args.machine_type == {}):
-        parser.error("either width and height must be specified "
-                     "or a predefined boot option selected.")
-    elif (args.width is None) ^ (args.height is None):
-        parser.error("if used, both width and height must be specified")
+        parser.error("either a number of boards or a width and height must "
+                     "be specified or a predefined boot option selected")
+    elif args.width is not None and args.height is None:
+        # A number of boards was given, infer the width and height
+        if args.width % 3 == 0:
+            args.width, args.height = standard_system_dimensions(args.width)
+        else:
+            parser.error("the number of boards must be a multiple of three")
 
     # Accumulate the set of options from the commandline
     options = {
