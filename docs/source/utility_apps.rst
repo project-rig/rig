@@ -8,7 +8,11 @@ For example, to boot a SpiNN-3 board::
 
     $ rig-boot HOSTNAME --spin3
 
-Or to boot a large SpiNNaker machine comprising many boards::
+Or to boot a standard configuration of multiple SpiNN-5 boards::
+
+    $ rig-boot HOSTNAME NUM_BOARDS
+
+Or to boot a SpiNNaker machine with a particular dimensionality::
 
     $ rig-boot HOSTNAME WIDTH HEIGHT
 

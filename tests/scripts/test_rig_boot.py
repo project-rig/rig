@@ -13,11 +13,15 @@ import tempfile
 
 import os
 
-from rig.machine_control.boot import spin3_boot_options
+from rig.machine_control.boot import spin3_boot_options, spin5_boot_options
 
 spin3_boot_options_modified = spin3_boot_options.copy()
 spin3_boot_options_modified["width"] = 8
 spin3_boot_options_modified["height"] = 4
+
+spin5_boot_options_modified = spin5_boot_options.copy()
+spin5_boot_options_modified["width"] = 48
+spin5_boot_options_modified["height"] = 24
 
 
 @pytest.mark.parametrize("arguments", [
@@ -25,9 +29,8 @@ spin3_boot_options_modified["height"] = 4
     [],
     # No width/height/predfined type
     ["localhost"],
-    # No height
+    # Non-multiple-of-three number of boards
     ["localhost", "8"],
-    ["localhost", "8", "--spin3"],
     # Wrong type
     ["localhost", "a", "8"],
     ["localhost", "8", "a"],
@@ -105,6 +108,15 @@ def binary(request):
                                "height": 4,
                                "hardware_version": 0,
                                "led_config": 0x00000001}),
+    # Number of boards only only
+    (["localhost", "3"], {"width": 12,
+                          "height": 12,
+                          "hardware_version": 0,
+                          "led_config": 0x00000001}),
+    (["localhost", "24"], {"width": 48,
+                           "height": 24,
+                           "hardware_version": 0,
+                           "led_config": 0x00000001}),
     # Hardware version set
     (["localhost", "8", "4", "--hardware-version", "2"],
      {"width": 8,
@@ -121,6 +133,7 @@ def binary(request):
     (["localhost", "--spin3"], spin3_boot_options),
     # Preset with explicit options overriding
     (["localhost", "8", "4", "--spin3"], spin3_boot_options_modified),
+    (["localhost", "24", "--spin5"], spin5_boot_options_modified),
 ])
 @pytest.mark.parametrize("specify_binary", [True, False])
 def test_boot_options(monkeypatch, args, options, binary, specify_binary):
