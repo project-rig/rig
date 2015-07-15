@@ -117,6 +117,105 @@ class TestMachine(object):
         m_.chip_resource_exceptions = {(0, 0): {Cores: 1}, (0, 2): {Cores: 3}}
         assert m == m_
 
+    def test_issubset(self):
+        """Ensure subset tests work."""
+        m = Machine(1, 3)
+        m.chip_resources = {Cores: 3}
+        m.chip_resource_exceptions = {(0, 0): {Cores: 1}}
+        m.dead_chips = set([(0, 1)])
+        m.dead_links = set([(0, 0, Links.north)])
+
+        # Should always be a subset of itself
+        assert m.issubset(m)
+
+        # Should compare equal to a copy
+        m_ = m.copy()
+        assert m.issubset(m_)
+
+        # Should be a subset when smaller
+        m_.width = 2
+        assert m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.width = 1
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        m_.height = 2
+        assert m_.issubset(m)
+        assert not m.issubset(m_)
+        m_.height = 3
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        # Should be a subset when resources are lacking
+        m_.chip_resources = {Cores: 10}
+        assert m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.chip_resources = {Cores: 3}
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        # If resources are disjoint, should never be a subset
+        m_.chip_resources = {Cores: 10}
+        m.chip_resources = {Cores: 3, SDRAM: 1}
+        assert not m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.chip_resources = {Cores: 3}
+        m.chip_resources = {Cores: 3}
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        # Same should be true for resource exceptions
+        m_.chip_resource_exceptions = {(0, 0): {Cores: 10}}
+        assert m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.chip_resource_exceptions = {(0, 0): {Cores: 1}}
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        m_.chip_resource_exceptions = {(0, 0): {Cores: 10}}
+        m.chip_resource_exceptions = {(0, 0): {SDRAM: 10}}
+        assert not m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.chip_resource_exceptions = {(0, 0): {Cores: 1}}
+        m.chip_resource_exceptions = {(0, 0): {Cores: 1}}
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        # A dead chip should count as a subset
+        m_.dead_chips = set([])
+        assert m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.dead_chips = set([(0, 1)])
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        # Disjoint sets of dead chips should always differ
+        m_.dead_chips = set([(0, 0)])
+        m.dead_chips = set([(0, 2)])
+        assert not m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.dead_chips = set([(0, 1)])
+        m.dead_chips = set([(0, 1)])
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        # Dead links should count as a subset
+        m_.dead_links = set([])
+        assert m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.dead_links = set([(0, 0, Links.north)])
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
+        # Disjoint sets of dead links should never count as a subset
+        m_.dead_links = set([(0, 0, Links.south)])
+        assert not m.issubset(m_)
+        assert not m_.issubset(m)
+        m_.dead_links = set([(0, 0, Links.north)])
+        assert m.issubset(m_)
+        assert m_.issubset(m)
+
     def test_in(self):
         """Ensure membership tests work."""
         width = 10
