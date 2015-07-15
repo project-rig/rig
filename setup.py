@@ -104,6 +104,7 @@ setup(
             "rig-discover = rig.scripts.rig_discover:main",
             "rig-iobuf = rig.scripts.rig_iobuf:main",
             "rig-ps = rig.scripts.rig_ps:main",
+            "rig-counters = rig.scripts.rig_counters:main",
         ],
     }
 )

@@ -89,6 +89,8 @@ The utilities provided by Rig can be broken down approximately as follows:
     from a SpiNNaker application.
   * ``rig-ps``: No-nonsense command line utility for listing all applications
     (and their locations) in a SpiNNaker machine.
+  * ``rig-counters``: No-nonsense command line utility which can
+    non-intrusively monitor a SpiNNaker system for dropped packets.
 
 Python Version Support
 ----------------------

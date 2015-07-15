@@ -147,3 +147,70 @@ command)::
     X   Y   P   State             Application      App ID
     --- --- --- ----------------- ---------------- ------
       0   0   3 sync0             network_tester       66
+
+
+``rig-counters``
+================
+
+The ``rig-counters`` command reads the router diagnostic counters for all chips
+in a SpiNNaker system and reports any changes in value. This can be useful, for
+example, when checking if (and where) an application is dropping packets.
+
+In the simplest use case, simply call ``rig-counters`` with a SpiNNaker
+hostname as an argument, run your application and then press enter to see how
+many packets were dropped::
+
+    $ rig-counters HOSTNAME
+    time,dropped_multicast
+    <press enter>
+    8.7,234
+
+In the example above, 234 packets were dropped. Note that the output is in the
+form of a CSV file. You can give the `--multiple`` option to allow multiple
+samples to be captured. In the example below we capture four samples::
+
+    $ rig-counters HOSTNAME --multiple > out.csv
+    <press enter>
+    <press enter>
+    <press enter>
+    <press enter>
+    <press enter> ^C
+    $ cat out.csv
+    time,dropped_multicast
+    1.0,12
+    1.4,34
+    2.3,23
+    2.7,11
+
+Instead of manually pressing enter to trigger a sample, you can use the
+``--command`` argument to report the number of dropped packets during the
+execution of your program::
+
+    $ rig-counters HOSTNAME --command ./my_program my_args
+    time,dropped_multicast
+    10.4,102
+
+You can also report each router's counter values individually using the
+``--detailed`` option::
+
+    $ rig-counters HOSTNAME --detailed
+    time,x,y,dropped_multicast
+    <press enter>
+    10.4,0,0,10
+    10.4,0,1,2
+    10.4,0,2,5
+    ...
+
+Other router counter values can be reported too, see ``rig-counters --help``
+for more details.
+
+.. warning::
+
+    ``rig-counters`` works by polling the router in every chip in a SpiNNaker
+    machine. This process takes some time (i.e. it isn't monotonic) and also
+    results in P2P messages being sent through the SpiNNaker network.
+
+    The system is polled once when the utility is started and then once more
+    for each sample requested (e.g. every time you press enter). As a result,
+    you should be careful to only start or trigger a poll when the machine is
+    otherwise idle, for example, before or after your application runs.
