@@ -218,6 +218,23 @@ class Machine(object):
                 self.dead_chips == other.dead_chips and
                 self.dead_links == other.dead_links)
 
+    def issubset(self, other):
+        """Test whether the resources available in this machine description are
+        a (non-strict) subset of those available in another machine.
+
+        .. note::
+
+            This test being False does not imply that the this machine is
+            a superset of the other machine; machines may have disjoint
+            resources.
+        """
+        return (set(self).issubset(set(other)) and
+                set(self.iter_links()).issubset(set(other.iter_links())) and
+                all(set(self[chip]).issubset(other[chip]) and
+                    all(self[chip][r] <= other[chip][r]
+                        for r in self[chip])
+                    for chip in self))
+
     def __contains__(self, chip_or_link):
         """Test if a given chip or link is present and alive.
 
