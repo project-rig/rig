@@ -6,7 +6,8 @@ import mock
 
 import rig.scripts.rig_ps as rig_ps
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.scp_connection import \
+    TimeoutError, FatalReturnCodeError
 
 from rig.machine import Machine, Cores
 
@@ -82,6 +83,28 @@ def test_get_process_list():
     ]
 
 
+def test_get_process_list_dead_chip():
+    mc = mock.Mock()
+
+    machine = Machine(1, 1, chip_resources={Cores: 2})
+    mc.get_machine.return_value = machine
+
+    mc.get_processor_status.side_effect = FatalReturnCodeError(0x88)
+
+    # Should list the failiure
+    ps = list(rig_ps.get_process_list(mc))
+    assert len(ps) == 2
+    for x, y, p, app_state, rte, name, app_id in ps:
+        assert x == 0
+        assert y == 0
+        assert 0 <= p < 2
+        assert app_state.name == \
+            "FatalReturnCodeError: RC_CPU: Bad CPU number."
+        assert bool(rte) is False
+        assert name == ""
+        assert app_id == -1
+
+
 def test_bad_args():
     # No hostname
     with pytest.raises(SystemExit):
@@ -101,7 +124,7 @@ def test_bad_args():
 def test_no_machine(monkeypatch):
     # Should fail if nothing responds
     mc = mock.Mock()
-    mc.get_software_version = mock.Mock(side_effect=TimeoutError)
+    mc.get_software_version = mock.Mock(side_effect=TimeoutError())
 
     MC = mock.Mock()
     MC.return_value = mc

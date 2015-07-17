@@ -13,7 +13,7 @@ import re
 
 from rig.machine_control import MachineController
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.scp_connection import SCPError, TimeoutError
 
 from rig.machine import Cores
 
@@ -56,17 +56,25 @@ def get_process_list(mc, x_=None, y_=None, p_=None,
             if p_ is not None and p_ != p:
                 continue
 
-            status = mc.get_processor_status(x=x, y=y, p=p)
-            keep = (match(str(status.app_id), app_ids) and
-                    match(status.app_name, applications) and
-                    match(status.cpu_state.name, states))
+            try:
+                status = mc.get_processor_status(x=x, y=y, p=p)
+                keep = (match(str(status.app_id), app_ids) and
+                        match(status.app_name, applications) and
+                        match(status.cpu_state.name, states))
 
-            if keep:
-                yield (x, y, p,
-                       status.cpu_state,
-                       status.rt_code,
-                       status.app_name,
-                       status.app_id)
+                if keep:
+                    yield (x, y, p,
+                           status.cpu_state,
+                           status.rt_code,
+                           status.app_name,
+                           status.app_id)
+            except SCPError as e:
+                # If an error occurs while communicating with a chip, we bodge
+                # it into the "cpu_status" field and continue (note that it
+                # will never get filtered out).
+                class DeadStatus(object):
+                    name = "{}: {}".format(e.__class__.__name__, str(e))
+                yield (x, y, p, DeadStatus(), None, "", -1)
 
 
 def main(args=None):
