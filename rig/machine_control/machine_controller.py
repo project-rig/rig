@@ -14,6 +14,8 @@ from .consts import SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
 from . import boot, consts, regions, struct_file
 from .scp_connection import SCPConnection
 
+from rig.machine_control.scp_connection import SCPError
+
 from rig import routing_table
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 
@@ -1328,7 +1330,7 @@ class MachineController(ContextMixin):
         """Return the number of working cores, including the monitor."""
         return self.read_struct_field("sv", "num_cpus", x, y)
 
-    def get_machine(self, default_num_cores=18):
+    def get_machine(self, x=0, y=0, default_num_cores=18):
         """Probe the machine to discover which cores and links are working.
 
         .. note::
@@ -1342,7 +1344,12 @@ class MachineController(ContextMixin):
 
         .. note::
             The size of the SDRAM and SysRAM heaps is assumed to be the same
-            for all chips and is only checked on chip (0, 0).
+            for all chips and is only checked on chip (x, y).
+
+        .. note::
+            The chip (x, y) supplied is the one which will be where the search
+            for working chips begins. Selecting anything other than (0, 0), the
+            default, may be useful when debugging very broken machines.
 
         Parameters
         ----------
@@ -1364,19 +1371,19 @@ class MachineController(ContextMixin):
             :py:data:`~rig.machine.SRAM`
                 The size of the SysRAM heap.
         """
-        p2p_tables = self.get_p2p_routing_table(0, 0)
+        p2p_tables = self.get_p2p_routing_table(x, y)
 
         # Calculate the extent of the system
-        max_x = max(x for (x, y), r in iteritems(p2p_tables)
+        max_x = max(x_ for (x_, y_), r in iteritems(p2p_tables)
                     if r != consts.P2PTableEntry.none)
-        max_y = max(y for (x, y), r in iteritems(p2p_tables)
+        max_y = max(y_ for (x_, y_), r in iteritems(p2p_tables)
                     if r != consts.P2PTableEntry.none)
 
         # Discover the heap sizes available for memory allocation
-        sdram_start = self.read_struct_field("sv", "sdram_heap", 0, 0)
-        sdram_end = self.read_struct_field("sv", "sdram_sys", 0, 0)
-        sysram_start = self.read_struct_field("sv", "sysram_heap", 0, 0)
-        sysram_end = self.read_struct_field("sv", "vcpu_base", 0, 0)
+        sdram_start = self.read_struct_field("sv", "sdram_heap", x, y)
+        sdram_end = self.read_struct_field("sv", "sdram_sys", x, y)
+        sysram_start = self.read_struct_field("sv", "sysram_heap", x, y)
+        sysram_end = self.read_struct_field("sv", "vcpu_base", x, y)
 
         chip_resources = {Cores: default_num_cores,
                           SDRAM: sdram_end - sdram_start,
@@ -1391,17 +1398,23 @@ class MachineController(ContextMixin):
                 if p2p_route == consts.P2PTableEntry.none:
                     dead_chips.add((x, y))
                 else:
-                    num_working_cores = self.get_num_working_cores(x, y)
-                    working_links = self.get_working_links(x, y)
+                    try:
+                        num_working_cores = self.get_num_working_cores(x, y)
+                        working_links = self.get_working_links(x, y)
 
-                    if num_working_cores < default_num_cores:
-                        resource_exception = chip_resources.copy()
-                        resource_exception[Cores] = min(default_num_cores,
-                                                        num_working_cores)
-                        chip_resource_exceptions[(x, y)] = resource_exception
+                        if num_working_cores < default_num_cores:
+                            resource_exception = chip_resources.copy()
+                            resource_exception[Cores] = min(default_num_cores,
+                                                            num_working_cores)
+                            chip_resource_exceptions[(x, y)] = \
+                                resource_exception
 
-                    for link in set(Links) - working_links:
-                        dead_links.add((x, y, link))
+                        for link in set(Links) - working_links:
+                            dead_links.add((x, y, link))
+                    except SCPError:
+                        # The chip was listed in the P2P table but is not
+                        # responding. Assume it is dead anyway.
+                        dead_chips.add((x, y))
 
         return Machine(max_x + 1, max_y + 1,
                        chip_resources,

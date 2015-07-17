@@ -17,7 +17,8 @@ from rig.machine_control.machine_controller import (
     unpack_routing_table_entry
 )
 from rig.machine_control.packets import SCPPacket
-from rig.machine_control.scp_connection import SCPConnection
+from rig.machine_control.scp_connection import \
+    SCPConnection, FatalReturnCodeError
 from rig.machine_control import regions, consts, struct_file
 
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
@@ -1762,7 +1763,7 @@ class TestMachineController(object):
         cn.read_struct_field.side_effect = read_struct_field
 
         # Return a set of p2p tables where an 8x8 set of chips is alive with
-        # all chips with (3,3) being dead.
+        # all except (3,3) being dead.
         cn.get_p2p_routing_table = mock.Mock()
         cn.get_p2p_routing_table.return_value = {
             (x, y): (consts.P2PTableEntry.north
@@ -1773,10 +1774,13 @@ class TestMachineController(object):
         }
 
         # Return 18 working cores except for (2, 2) which will have only 3
-        # cores.
+        # cores and (5, 5) which will fail to respond.
 
         def get_num_working_cores(x, y):
-            return 18 if (x, y) != (2, 2) else 3
+            if (x, y) == (5, 5):
+                raise FatalReturnCodeError(0)
+            else:
+                return 18 if (x, y) != (2, 2) else 3
         cn.get_num_working_cores = mock.Mock()
         cn.get_num_working_cores.side_effect = get_num_working_cores
 
@@ -1791,7 +1795,7 @@ class TestMachineController(object):
         cn.get_working_links = mock.Mock()
         cn.get_working_links.side_effect = get_working_links
 
-        m = cn.get_machine()
+        m = cn.get_machine(x=3, y=2)
 
         # Check that the machine is correct
         assert isinstance(m, Machine)
@@ -1809,24 +1813,24 @@ class TestMachineController(object):
                 SRAM: vcpu_base - sysram_heap,
             },
         }
-        assert m.dead_chips == set([(3, 3)])
+        assert m.dead_chips == set([(3, 3), (5, 5)])
         assert m.dead_links == set([(4, 4, Links.north)])
 
         # Check that only the expected calls were made to mocks
         cn.read_struct_field.assert_has_calls([
-            mock.call("sv", "sdram_heap", 0, 0),
-            mock.call("sv", "sdram_sys", 0, 0),
-            mock.call("sv", "sysram_heap", 0, 0),
-            mock.call("sv", "vcpu_base", 0, 0),
+            mock.call("sv", "sdram_heap", 3, 2),
+            mock.call("sv", "sdram_sys", 3, 2),
+            mock.call("sv", "sysram_heap", 3, 2),
+            mock.call("sv", "vcpu_base", 3, 2),
         ], any_order=True)
-        cn.get_p2p_routing_table.assert_called_once_with(0, 0)
+        cn.get_p2p_routing_table.assert_called_once_with(3, 2)
         cn.get_num_working_cores.assert_has_calls([
             mock.call(x, y) for x in range(8) for y in range(8)
             if (x, y) != (3, 3)
         ], any_order=True)
         cn.get_working_links.assert_has_calls([
             mock.call(x, y) for x in range(8) for y in range(8)
-            if (x, y) != (3, 3)
+            if (x, y) != (3, 3) and (x, y) != (5, 5)
         ], any_order=True)
 
     @pytest.mark.parametrize("app_id", [66, 12])
