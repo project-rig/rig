@@ -429,12 +429,12 @@ class SCPError(IOError):
         specific packet was involved.
     """
 
-    def __init__(self, message, packet=None):
+    def __init__(self, message="", packet=None):
         self.packet = packet
         if self.packet is not None:
             message = "{} (Packet: {})".format(message, packet)
 
-        super(SCPError, self).__init__(message)
+        super(SCPError, self).__init__(message.lstrip())
 
 
 class TimeoutError(SCPError):
