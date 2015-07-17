@@ -50,7 +50,6 @@ class scpcall(collections.namedtuple("_scpcall", "x, y, p, cmd, arg1, arg2, "
 class SCPConnection(object):
     """Implements the SCP protocol for communicating with a SpiNNaker chip.
     """
-    error_codes = {}
 
     def __init__(self, spinnaker_host, port=consts.SCP_PORT,
                  n_tries=5, timeout=0.5):
@@ -81,15 +80,6 @@ class SCPConnection(object):
 
         # Sequence values
         self.seq = seqs()
-
-    @classmethod
-    def _register_error(cls, cmd_rc):
-        """Register an Exception class as belonging to a certain CMD_RC value.
-        """
-        def err_(err):
-            cls.error_codes[cmd_rc] = err
-            return err
-        return err_
 
     def send_scp(self, buffer_size, x, y, p, cmd, arg1=0, arg2=0, arg3=0,
                  data=b'', expected_args=3, timeout=0.0):
@@ -176,12 +166,13 @@ class SCPConnection(object):
         class TransmittedPacket(object):
             """A packet which has been transmitted and still awaits a response.
             """
-            __slots__ = ["callback", "packet", "n_tries",
+            __slots__ = ["callback", "packet", "bytestring", "n_tries",
                          "timeout", "timeout_time"]
 
             def __init__(self, callback, packet, timeout):
                 self.callback = callback
                 self.packet = packet
+                self.bytestring = packet.bytestring
                 self.n_tries = 1
                 self.timeout = timeout
                 self.timeout_time = time.time() + self.timeout
@@ -226,12 +217,12 @@ class SCPConnection(object):
                     # expecting a response for it and can retransmit it if
                     # necessary.
                     outstanding_packets[seq] = TransmittedPacket(
-                        args.callback, packet.bytestring,
+                        args.callback, packet,
                         self.default_timeout + args.timeout
                     )
 
                     # Actually send the packet
-                    self.sock.send(outstanding_packets[seq].packet)
+                    self.sock.send(outstanding_packets[seq].bytestring)
 
             # Listen on the socket for an acknowledgement packet, there may not
             # be one.
@@ -260,18 +251,19 @@ class SCPConnection(object):
                                              consts.SDP_HEADER_LENGTH + 2)
 
                 # If the code is an error then we respond immediately
-                if rc != consts.SCP_RC_OK:
-                    if rc in consts.SCP_RC_TIMEOUT:
+                if rc != consts.SCPReturnCodes.ok:
+                    if rc in consts.RETRYABLE_SCP_RETURN_CODES:
                         # If the error is timeout related then treat the packet
                         # as though it timed out, just discard.  This avoids us
                         # hammering the board when it's most vulnerable.
                         pass
-                    elif rc in self.error_codes:
-                        raise self.error_codes[rc]
                     else:
-                        raise SCPError(
-                            "Unhandled exception code {:#2x}".format(rc)
-                        )
+                        # For all other errors, we'll just fall over
+                        # immediately.
+                        packet = outstanding_packets.get(seq)
+                        if packet is not None:
+                            packet = packet.packet
+                        raise FatalReturnCodeError(rc, packet)
                 else:
                     # Look up the sequence index of packet in the list of
                     # outstanding packets.  We may have already processed a
@@ -294,10 +286,13 @@ class SCPConnection(object):
                     # the given number of times then raise a timeout error for
                     # it.
                     if outstanding.n_tries >= self.n_tries:
-                        raise TimeoutError(self.n_tries)
+                        raise TimeoutError(
+                            "No response after {} attempts.".format(
+                                self.n_tries),
+                            outstanding.packet)
 
                     # Otherwise we retransmit it
-                    self.sock.send(outstanding.packet)
+                    self.sock.send(outstanding.bytestring)
                     outstanding.n_tries += 1
                     outstanding.timeout_time = (current_time +
                                                 outstanding.timeout)
@@ -425,8 +420,21 @@ def seqs(mask=0xffff):
 
 
 class SCPError(IOError):
-    """Base Error for SCP return codes."""
-    pass
+    """Base Error for SCP return codes.
+
+    Attributes
+    ----------
+    packet : :py:class:`rig.machine_control.packets.SCPPacket`
+        The packet being processed when the error occurred. May be None if no
+        specific packet was involved.
+    """
+
+    def __init__(self, message, packet=None):
+        self.packet = packet
+        if self.packet is not None:
+            message = "{} (Packet: {})".format(message, packet)
+
+        super(SCPError, self).__init__(message)
 
 
 class TimeoutError(SCPError):
@@ -435,24 +443,23 @@ class TimeoutError(SCPError):
     pass
 
 
-@SCPConnection._register_error(0x81)
-class BadPacketLengthError(SCPError):
-    """Raised when an SCP packet is an incorrect length."""
-    pass
+class FatalReturnCodeError(SCPError):
+    """Raised when an SCP command returns with an error which is connsidered
+    fatal.
 
+    Attributes
+    ----------
+    return_code : :py:class:`rig.machine_control.consts.SCPReturnCodes` or int
+        The return code (will be a raw integer if the code is unrecognised).
+    """
 
-@SCPConnection._register_error(0x83)
-class InvalidCommandError(SCPError):
-    """Raised when an SCP packet contains an invalid command code."""
-    pass
-
-
-@SCPConnection._register_error(0x84)
-class InvalidArgsError(SCPError):
-    """Raised when an SCP packet has an invalid argument."""
-    pass
-
-
-@SCPConnection._register_error(0x87)
-class NoRouteError(SCPError):
-    """Raised when there is no route to the requested core."""
+    def __init__(self, return_code=None, packet=None):
+        try:
+            self.return_code = consts.SCPReturnCodes(return_code)
+            message = "RC_{}: {}".format(
+                self.return_code.name.upper(),
+                consts.FATAL_SCP_RETURN_CODES[self.return_code])
+        except ValueError:
+            self.return_code = return_code
+            message = "Unrecognised return code {:#2X}."
+        super(FatalReturnCodeError, self).__init__(message, packet)

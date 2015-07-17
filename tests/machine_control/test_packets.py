@@ -1,5 +1,7 @@
 from rig.machine_control.packets import SDPPacket, SCPPacket
 
+import sys
+
 
 class TestSDPPacket(object):
     """Test SDPPacket representations."""
@@ -263,3 +265,15 @@ class TestSCPPacket(object):
         # Check that the bytestring this packet creates is the same as the one
         # we specified before.
         assert scp_packet.bytestring == packet
+
+    def test_repr(self):
+        """Test the string representation of an SCP packet makes sense."""
+        scp_packet = SCPPacket(dest_x=10, dest_y=20, dest_cpu=3,
+                               cmd_rc=2, arg1=123, arg2=456,
+                               data=b"foobar")
+        # Note: Python 2 does not have the "b" prefix on byte strings
+        assert repr(scp_packet) == (
+            "<SCPPacket x: 10, y: 20, cpu: 3, "
+            "cmd_rc: 2, arg1: 123, arg2: 456, arg3: None, "
+            "data: {}'foobar'>".format(
+                "b" if sys.version_info >= (3, 0) else ""))

@@ -18,14 +18,6 @@ SCP_SVER_RECEIVE_LENGTH_MAX = 512
 produce (256 + 8 bytes).
 """
 
-SCP_RC_OK = 0x80
-"""SCP response code which indicates that everything was fine."""
-
-SCP_RC_TIMEOUT = {0x8b, 0x8c, 0x8d, 0x8e}
-"""SCP response codes which should be treated as if they were a packet timing
-out.
-"""
-
 SPINNAKER_RTR_BASE = 0xE1000000  # Unbuffered
 """Base address of router hardware registers."""
 
@@ -91,6 +83,58 @@ class SCPCommands(enum.IntEnum):
     bmp_info = 48  # Request various info structs from a BMP
 
     power = 57  # BMP main board power control
+
+
+@add_int_enums_to_docstring
+class SCPReturnCodes(enum.IntEnum):
+    """SCP return codes"""
+    ok = 0x80  # Command completed OK
+    len = 0x81  # Bad packet length (Fatal)
+    sum = 0x82  # Bad checksum (Retryable)
+    cmd = 0x83  # Bad/invalid command (Fatal)
+    arg = 0x84  # Invalid arguments (Fatal)
+    port = 0x85  # Bad port number (Fatal)
+    timeout = 0x86  # Monitor <-> app-core comms timeout (Fatal)
+    route = 0x87  # No P2P route (Fatal)
+    cpu = 0x88  # Bad CPU number (Fatal)
+    dead = 0x89  # SHM dest dead (Fatal)
+    buf = 0x8a  # No free SHM buffers (Fatal)
+    p2p_noreply = 0x8b  # No reply to open (Fatal)
+    p2p_reject = 0x8c  # Open rejected (Fatal)
+    p2p_busy = 0x8d  # Dest busy (Retryable)
+    p2p_timeout = 0x8e  # Eth chip <--> destination comms timeout (Fatal)
+    pkt_tx = 0x8f  # Pkt Tx failed (Fatal)
+
+RETRYABLE_SCP_RETURN_CODES = set([
+    SCPReturnCodes.sum,
+    SCPReturnCodes.p2p_busy,
+])
+"""The set of :py:class:`.SCPReturnCodes` values which indicate a non-fatal
+retryable fault."""
+
+
+FATAL_SCP_RETURN_CODES = {
+    SCPReturnCodes.len: "Bad command length.",
+    SCPReturnCodes.cmd: "Bad/invalid command.",
+    SCPReturnCodes.arg: "Invalid command arguments.",
+    SCPReturnCodes.port: "Bad port number.",
+    SCPReturnCodes.timeout:
+        "Timeout waiting for the application core to respond to "
+        "the monitor core's request.",
+    SCPReturnCodes.route: "No P2P route to the target chip is available.",
+    SCPReturnCodes.cpu: "Bad CPU number.",
+    SCPReturnCodes.dead: "SHM dest dead.",
+    SCPReturnCodes.buf: "No free SHM buffers.",
+    SCPReturnCodes.p2p_noreply:
+        "No response packets from the target reached the "
+        "ethernet connected chip.",
+    SCPReturnCodes.p2p_reject: "The target chip rejected the packet.",
+    SCPReturnCodes.p2p_timeout:
+        "Communications between the ethernet connected chip and target chip "
+        "timedout.",
+    SCPReturnCodes.pkt_tx: "Packet transmission failed.",
+}
+"""The set of fatal SCP errors and a human-readable error."""
 
 
 @add_int_enums_to_docstring
