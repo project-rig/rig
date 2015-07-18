@@ -43,6 +43,11 @@ def mock_conn():
     return conn
 
 
+def test_close(mock_conn):
+    mock_conn.close()
+    assert mock_conn.sock.close.called
+
+
 def test_scpcall():
     """scpcall is a utility for specifying SCP packets and callbacks"""
     call = scpcall(0, 1, 2, 3)

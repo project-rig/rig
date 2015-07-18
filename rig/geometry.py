@@ -5,6 +5,8 @@ import random
 
 from math import sqrt
 
+import numpy as np
+
 
 def to_xyz(xy):
     """Convert a two-tuple (x, y) coordinate into an (x, y, 0) coordinate."""
@@ -214,3 +216,84 @@ def standard_system_dimensions(num_boards):
     # Convert the number of triads into numbers of chips (each triad of boards
     # contributes as 12x12 block of chips).
     return (w * 12, h * 12)
+
+
+def spinn5_eth_coords(width, height):
+    """Generate a list of board coordinates with Ethernet connectivity in a
+    SpiNNaker machine.
+
+    Specifically, generates the coordinates for the Ethernet connected chips of
+    SpiNN-5 boards arranged in a standard torus topology.
+
+    Parameters
+    ----------
+    width : int
+        Width of the system in chips.
+    height : int
+        Height of the system in chips.
+    """
+    # Internally, work with the width and height rounded up to the next
+    # multiple of 12
+    w = ((width + 11) // 12) * 12
+    h = ((height + 11) // 12) * 12
+
+    for x in range(0, w, 12):
+        for y in range(0, h, 12):
+            for dx, dy in ((0, 0), (4, 8), (8, 4)):
+                nx = (x + dx) % w
+                ny = (y + dy) % h
+                # Skip points which are outside the range available
+                if nx < width and ny < height:
+                    yield (nx, ny)
+
+
+def spinn5_local_eth_coord(x, y, w, h):
+    """Get the coordinates of a chip's local ethernet connected chip.
+
+    .. note::
+        This function assumes the system is constructed from SpiNN-5 boards
+        returns the coordinates of the ethernet connected chip on the current
+        board.
+
+    Parameters
+    ----------
+    x : int
+    y : int
+    w : int
+        Width of the system in chips.
+    h : int
+        Height of the system in chips.
+    """
+    dx, dy = SPINN5_ETH_OFFSET[y % 12][x % 12]
+    return ((x + dx) % w), ((y + dy) % h)
+
+
+SPINN5_ETH_OFFSET = np.array([
+    [(vx - x, vy - y) for x, (vx, vy) in enumerate(row)]
+    for y, row in enumerate([
+        # Below is an enumeration of the absolute coordinates of the nearest
+        # ethernet connected chip. Note that the above list comprehension
+        # changes these into offsets to the nearest chip.
+        # X:   0         1         2         3         4         5         6         7         8         9        10        11     # noqa Y:
+        [(+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+4, -4), (+4, -4), (+4, -4), (+4, -4), (+4, -4), (+4, -4), (+4, -4)],  # noqa  0
+        [(+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+4, -4), (+4, -4), (+4, -4), (+4, -4), (+4, -4), (+4, -4)],  # noqa  1
+        [(+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+4, -4), (+4, -4), (+4, -4), (+4, -4), (+4, -4)],  # noqa  2
+        [(+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+4, -4), (+4, -4), (+4, -4), (+4, -4)],  # noqa  3
+        [(-4, +4), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+8, +4), (+8, +4), (+8, +4), (+8, +4)],  # noqa  4
+        [(-4, +4), (-4, +4), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+8, +4), (+8, +4), (+8, +4), (+8, +4)],  # noqa  5
+        [(-4, +4), (-4, +4), (-4, +4), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+8, +4), (+8, +4), (+8, +4), (+8, +4)],  # noqa  6
+        [(-4, +4), (-4, +4), (-4, +4), (-4, +4), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+8, +4), (+8, +4), (+8, +4), (+8, +4)],  # noqa  7
+        [(-4, +4), (-4, +4), (-4, +4), (-4, +4), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+8, +4), (+8, +4), (+8, +4)],  # noqa  8
+        [(-4, +4), (-4, +4), (-4, +4), (-4, +4), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+8, +4), (+8, +4)],  # noqa  9
+        [(-4, +4), (-4, +4), (-4, +4), (-4, +4), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+8, +4)],  # noqa 10
+        [(-4, +4), (-4, +4), (-4, +4), (-4, +4), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8)]   # noqa 11
+    ])
+], dtype=int)
+"""SpiNN-5 ethernet connected chip lookup.
+
+Used by :py:func:`.spinn5_local_eth_coord`. Given an x and y chip position
+modulo 12, return the offset of the board's bottom-left chip from the chip's
+position.
+
+Note: the order of indexes: ``SPINN5_ETH_OFFSET[y][x]``!
+"""

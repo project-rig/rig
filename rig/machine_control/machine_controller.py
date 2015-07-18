@@ -19,6 +19,8 @@ from rig.machine_control.scp_connection import SCPError
 from rig import routing_table
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 
+from rig.geometry import spinn5_eth_coords, spinn5_local_eth_coord
+
 from rig.utils.contexts import ContextMixin, Required
 from rig.utils.docstrings import add_signature_to_docstring
 
@@ -109,10 +111,20 @@ class MachineController(ContextMixin):
                                                         "boot/sark.struct")
             self.structs = struct_file.read_struct_file(struct_data)
 
-        # Create the initial connection
-        self.connections = [
-            SCPConnection(initial_host, scp_port, n_tries, timeout)
-        ]
+        # This dictionary contains a lookup from chip (x, y) to the
+        # SCPConnection associated with that chip. The special entry with the
+        # key None is reserved for the connection initially made to the
+        # machine and is special since it is always known to exist but its
+        # actual position in the network is unknown.
+        self.connections = {
+            None: SCPConnection(initial_host, scp_port, n_tries, timeout)
+        }
+
+        # The dimensions of the system. This is set by discover_connections()
+        # and is used by _get_connection to determine which of the above
+        # connections to use.
+        self._width = None
+        self._height = None
 
     def __call__(self, **context_args):
         """For use with `with`: set default argument values.
@@ -154,9 +166,9 @@ class MachineController(ContextMixin):
         This function is a thin wrapper around
         :py:meth:`rig.machine_control.scp_connection.SCPConnection.send_scp`.
 
-        Future versions of this command will automatically choose the most
-        appropriate connection to use for machines with more than one Ethernet
-        connection.
+        This function will attempt to use the SCP connection nearest the
+        destination of the SCP command if multiple connections have been
+        discovered using :py:meth:`.discover_connections`.
 
         Parameters
         ----------
@@ -175,7 +187,20 @@ class MachineController(ContextMixin):
 
     def _get_connection(self, x, y):
         """Get the appropriate connection for a chip."""
-        return self.connections[0]
+        if self._width is None or self._height is None:
+            return self.connections[None]
+        else:
+            # If possible, use the local Ethernet connected chip
+            eth_chip = spinn5_local_eth_coord(x, y, self._width, self._height)
+            conn = self.connections.get(eth_chip)
+            if conn is not None:
+                return conn
+            else:
+                # If no connection was available to the local board, chose
+                # another arbitrarily.
+                # XXX: This choice will cause lots of contention in systems
+                # with many missing Ethernet connections.
+                return self.connections[None]
 
     def _send_scp(self, x, y, p, *args, **kwargs):
         """Determine the best connection to use to send an SCP packet and use
@@ -252,6 +277,63 @@ class MachineController(ContextMixin):
         assert len(self.structs) > 0
 
     @ContextMixin.use_contextual_arguments()
+    def discover_connections(self, x=0, y=0):
+        """Attempt to discover all available Ethernet connections to a machine.
+
+        After calling this method, :py:class:`.MachineController` will attempt
+        to communicate via the Ethernet connection on the same board as the
+        destination chip for all commands.
+
+        If called multiple times, existing connections will be retained in
+        preference to new ones.
+
+        .. note::
+            The system must be booted for this command to succeed.
+
+        .. note::
+            Currently, only systems comprised of multiple Ethernet-connected
+            SpiNN-5 boards are supported.
+
+        Parameters
+        ----------
+        x : int
+        y : int
+            (Optional) The coordinates of the chip to initially use to query
+            the system for the set of live chips.
+
+        Returns
+        -------
+        int
+            The number of new connections established.
+        """
+        working_chips = set(
+            (x, y)
+            for (x, y), route in iteritems(self.get_p2p_routing_table(x, y))
+            if route != consts.P2PTableEntry.none)
+        self._width = max(x for x, y in working_chips) + 1
+        self._height = max(y for x, y in working_chips) + 1
+
+        num_new_connections = 0
+
+        for x, y in spinn5_eth_coords(self._width, self._height):
+            if (x, y) in working_chips and (x, y) not in self.connections:
+                ip = self.get_ip_address(x, y)
+                if ip is not None:
+                    # Create a connection to the IP
+                    self.connections[(x, y)] = \
+                        SCPConnection(ip, self.scp_port,
+                                      self.n_tries, self.timeout)
+                    # Attempt to use the connection (and remove it if it
+                    # doesn't work)
+                    try:
+                        self.get_software_version(x, y)
+                        num_new_connections += 1
+                    except SCPError:
+                        self.connections.pop((x, y)).close()
+
+        return num_new_connections
+
+    @ContextMixin.use_contextual_arguments()
     def application(self, app_id):
         """Update the context to use the given application ID and stop the
         application when done.
@@ -293,6 +375,24 @@ class MachineController(ContextMixin):
 
         return CoreInfo(p2p_address, pcpu, vcpu, version, buffer_size,
                         sver.arg3, sver.data.decode("utf-8"))
+
+    @ContextMixin.use_contextual_arguments()
+    def get_ip_address(self, x, y):
+        """Get the IP address of a particular SpiNNaker chip's Ethernet link.
+
+        Returns
+        -------
+        str or None
+            The IPv4 address (as a string) of the chip's Ethernet link or None
+            if the chip does not have an Ethernet connection or the link is
+            currently down.
+        """
+        if self.read_struct_field("sv", "eth_up", x=x, y=y):
+            ip = self.read_struct_field("sv", "ip_addr", x=x, y=y)
+            # Convert the IP address to the standard decimal string format
+            return ".".join(str((ip >> i) & 0xFF) for i in range(0, 32, 8))
+        else:
+            return None
 
     @ContextMixin.use_contextual_arguments()
     def write(self, address, data, x, y, p=0):
