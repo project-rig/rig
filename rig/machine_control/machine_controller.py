@@ -629,7 +629,7 @@ class MachineController(ContextMixin):
         return bytes(data)
 
     @ContextMixin.use_contextual_arguments()
-    def read_into(self, address, buffer, length_bytes, x, y, p=0):
+    def readinto(self, address, buffer, length_bytes, x, y, p=0):
         """Read a from an address in memory into the supplied buffer.
 
         Parameters
@@ -645,9 +645,9 @@ class MachineController(ContextMixin):
         """
         # Call the SCPConnection to perform the read on our behalf
         connection = self._get_connection(x, y)
-        connection.read_into(buffer, self.scp_data_length,
-                             self.scp_window_size,
-                             x, y, p, address, length_bytes)
+        connection.readinto(buffer, self.scp_data_length,
+                            self.scp_window_size,
+                            x, y, p, address, length_bytes)
 
     def _get_struct_field_and_address(self, struct_name, field_name):
         field = self.structs[six.b(struct_name)][six.b(field_name)]
@@ -2555,11 +2555,11 @@ class MemoryIO(object):
             return b''
         else:
             data = bytearray(n_bytes)
-            self.read_into(data, n_bytes)
+            self.readinto(data, n_bytes)
             return data
 
     @_if_not_closed
-    def read_into(self, buffer, n_bytes=-1):
+    def readinto(self, buffer, n_bytes=-1):
         """Read a number of bytes from the memory into a supplied buffer.
 
         .. note::
@@ -2583,7 +2583,7 @@ class MemoryIO(object):
             return
         else:
             # Perform the read and increment the offset
-            self._machine_controller.read_into(
+            self._machine_controller.readinto(
                 self.address, buffer, n_bytes, self._x, self._y, 0)
             self._offset += n_bytes
 

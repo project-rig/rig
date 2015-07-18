@@ -327,12 +327,12 @@ class SCPConnection(object):
         """
         # Prepare the buffer to receive the incoming data
         data = bytearray(length_bytes)
-        self.read_into(data, buffer_size, window_size, x, y, p, address,
-                       length_bytes)
+        self.readinto(data, buffer_size, window_size, x, y, p, address,
+                      length_bytes)
         return bytes(data)
 
-    def read_into(self, data, buffer_size, window_size, x, y, p, address,
-                  length_bytes):
+    def readinto(self, data, buffer_size, window_size, x, y, p, address,
+                 length_bytes):
         """Read a bytestring from an address in memory into a supplied buffer.
 
         ..note::
