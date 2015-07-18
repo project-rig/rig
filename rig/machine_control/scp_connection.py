@@ -72,7 +72,6 @@ class SCPConnection(object):
 
         # Create a socket to communicate with the SpiNNaker machine
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(self.default_timeout)
         self.sock.connect((spinnaker_host, port))
 
         # Store the number of tries that will be allowed
@@ -410,6 +409,10 @@ class SCPConnection(object):
 
         # Run the event loop and then return the retrieved data
         self.send_scp_burst(buffer_size, window_size, packets(address, data))
+
+    def close(self):
+        """Close the SCP connection."""
+        self.sock.close()
 
 
 def seqs(mask=0xffff):
