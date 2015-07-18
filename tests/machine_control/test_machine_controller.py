@@ -537,6 +537,34 @@ class TestMachineController(object):
         )
 
     @pytest.mark.parametrize(
+        "buffer_size, window_size, x, y, p, start_address, length, data",
+        [(128, 1, 0, 1, 2, 0x67800000, 100, b"\x00" * 100),
+         (256, 5, 1, 4, 5, 0x67801000, 2, b"\x10\x23"),
+         ]
+    )
+    def test_read_into(self, buffer_size, window_size, x, y, p,
+                       start_address, length, data):
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn._scp_data_length = buffer_size
+        cn._window_size = window_size
+        cn.connections[0] = mock.Mock(spec_set=SCPConnection)
+
+        def mock_read_into(buffer, *args, **kwargs):
+            buffer[:] = data
+        cn.connections[0].read_into.side_effect = mock_read_into
+
+        # Perform the read and ensure that values are passed on as appropriate
+        with cn(x=x, y=y, p=p):
+            read_data = bytearray(length)
+            cn.read_into(start_address, read_data, length)
+            assert data == read_data
+
+        assert len(cn.connections[0].read_into.mock_calls) == 1
+        assert cn.connections[0].read_into.mock_calls[0][1][1:] == \
+            (buffer_size, window_size, x, y, p, start_address, length)
+
+    @pytest.mark.parametrize(
         "iptag, addr, port",
         [(1, "localhost", 54321),
          (3, "127.0.0.1", 65432),
@@ -1865,15 +1893,17 @@ class TestMemoryIO(object):
         calls = []
         offset = 0
         for n_bytes in lengths:
-            sdram_file.read(n_bytes)
+            buf = bytearray(n_bytes)
+            sdram_file.read_into(buf, n_bytes)
             assert sdram_file.tell() == offset + n_bytes
             assert sdram_file.address == start_address + offset + n_bytes
-            calls.append(mock.call(start_address + offset, n_bytes, x, y, 0))
+            calls.append(mock.call(start_address + offset,
+                                   buf, n_bytes, x, y, 0))
             offset = offset + n_bytes
 
         # Check the reads caused the appropriate calls to the machine
         # controller.
-        mock_controller.read.assert_has_calls(calls)
+        mock_controller.read_into.assert_has_calls(calls)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (3, 0)])
     @pytest.mark.parametrize("start_address, length, offset",
@@ -1885,18 +1915,15 @@ class TestMemoryIO(object):
 
         # Assert that reading with no parameter reads the full number of bytes
         sdram_file.seek(offset)
-        sdram_file.read()
-        mock_controller.read.assert_called_one_with(
-            start_address + offset, length - offset, x, y, 0)
+        assert sdram_file._read_n_bytes(-1) == length - offset
 
     def test_read_beyond(self, mock_controller):
         sdram_file = MemoryIO(mock_controller, 0, 0,
                               start_address=0, end_address=10)
-        sdram_file.read(100)
-        mock_controller.read.assert_called_with(0, 10, 0, 0, 0)
+        assert len(sdram_file.read(100)) == 10
 
         assert sdram_file.read(1) == b''
-        assert mock_controller.read.call_count == 1
+        assert mock_controller.read_into.call_count == 1
 
     @pytest.mark.parametrize("x, y", [(4, 2), (255, 1)])
     @pytest.mark.parametrize("start_address", [0x60000004, 0x61000003])
@@ -2114,6 +2141,7 @@ class TestMemoryIO(object):
         "flush_event",
         [lambda filelike: filelike.flush(),
          lambda filelike: filelike.read(1),
+         lambda filelike: filelike.read_into(bytearray(1), 1),
          lambda filelike: filelike.close()]
     )
     def test_coalescing_writes(self, get_node, flush_event):

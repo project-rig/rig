@@ -328,6 +328,39 @@ class SCPConnection(object):
         """
         # Prepare the buffer to receive the incoming data
         data = bytearray(length_bytes)
+        self.read_into(data, buffer_size, window_size, x, y, p, address,
+                       length_bytes)
+        return bytes(data)
+
+    def read_into(self, data, buffer_size, window_size, x, y, p, address,
+                  length_bytes):
+        """Read a bytestring from an address in memory into a supplied buffer.
+
+        ..note::
+            This method is included here to maintain API compatibility with an
+            `alternative implementation of SCP
+            <https://github.com/project-rig/rig-scp>`_.
+
+        Parameters
+        ----------
+        data : bytearray
+            An object into which supports the buffer protocol (e.g. bytearray)
+            into which the data will be read.
+        buffer_size : int
+            Number of bytes held in an SCP buffer by SARK, determines how many
+            bytes will be expected in a socket and how many bytes of data will
+            be read back in each packet.
+        window_size : int
+        x : int
+        y : int
+        p : int
+        address : int
+            The address at which to start reading the data.
+        length_bytes : int
+            The number of bytes to read from memory. Large reads are
+            transparently broken into multiple SCP read commands.
+        """
+        # Prepare the buffer to receive the incoming data
         mem = memoryview(data)
 
         # Create a callback which will write the data from a packet into a
@@ -361,7 +394,6 @@ class SCPConnection(object):
         # Run the event loop and then return the retrieved data
         self.send_scp_burst(buffer_size, window_size,
                             packets(length_bytes, data))
-        return bytes(data)
 
     def write(self, buffer_size, window_size, x, y, p, address, data):
         """Write a bytestring to an address in memory.

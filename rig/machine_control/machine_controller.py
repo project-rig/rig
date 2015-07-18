@@ -341,6 +341,27 @@ class MachineController(ContextMixin):
         return connection.read(self.scp_data_length, self.scp_window_size,
                                x, y, p, address, length_bytes)
 
+    @ContextMixin.use_contextual_arguments()
+    def read_into(self, address, buffer, length_bytes, x, y, p=0):
+        """Read a from an address in memory into the supplied buffer.
+
+        Parameters
+        ----------
+        address : int
+            The address at which to start reading the data.
+        buffer : bytearray
+            A bufferable object (e.g. bytearray) into which the data will be
+            read.
+        length_bytes : int
+            The number of bytes to read from memory. Large reads are
+            transparently broken into multiple SCP read commands.
+        """
+        # Call the SCPConnection to perform the read on our behalf
+        connection = self._get_connection(x, y)
+        connection.read_into(buffer, self.scp_data_length,
+                             self.scp_window_size,
+                             x, y, p, address, length_bytes)
+
     def _get_struct_field_and_address(self, struct_name, field_name):
         field = self.structs[six.b(struct_name)][six.b(field_name)]
         address = self.structs[six.b(struct_name)].base + field.offset
@@ -1734,6 +1755,20 @@ class MemoryIO(object):
         """Exit a block and call :py:meth:`~.close`."""
         self.close()
 
+    def _read_n_bytes(self, n_bytes):
+        """Return the number of bytes to actually read accounting for the
+        cursor position.
+        """
+        # If n_bytes is negative then calculate it as the number of bytes left
+        if n_bytes < 0:
+            n_bytes = self._end_address - self.address
+
+        # Determine how far to read, then read nothing beyond that point.
+        if self.address + n_bytes > self._end_address:
+            n_bytes = min(n_bytes, self._end_address - self.address)
+
+        return n_bytes
+
     @_if_not_closed
     def read(self, n_bytes=-1):
         """Read a number of bytes from the memory.
@@ -1755,22 +1790,42 @@ class MemoryIO(object):
         # Flush this write buffer
         self.flush()
 
-        # If n_bytes is negative then calculate it as the number of bytes left
-        if n_bytes < 0:
-            n_bytes = self._end_address - self.address
-
-        # Determine how far to read, then read nothing beyond that point.
-        if self.address + n_bytes > self._end_address:
-            n_bytes = min(n_bytes, self._end_address - self.address)
-
+        n_bytes = self._read_n_bytes(n_bytes)
         if n_bytes <= 0:
             return b''
+        else:
+            data = bytearray(n_bytes)
+            self.read_into(data, n_bytes)
+            return data
 
-        # Perform the read and increment the offset
-        data = self._machine_controller.read(
-            self.address, n_bytes, self._x, self._y, 0)
-        self._offset += n_bytes
-        return data
+    @_if_not_closed
+    def read_into(self, buffer, n_bytes=-1):
+        """Read a number of bytes from the memory into a supplied buffer.
+
+        .. note::
+            Reads beyond the specified memory range will be truncated.
+
+        Parameters
+        ----------
+        buffer : bytearray
+            A bufferable object (e.g. bytearray) into which the data will be
+            read.
+        n_bytes : int
+            A number of bytes to read.  If the number of bytes is negative or
+            omitted then read all data until the end of memory region.
+        """
+        # Flush this write buffer
+        self.flush()
+
+        n_bytes = self._read_n_bytes(n_bytes)
+
+        if n_bytes <= 0:
+            return
+        else:
+            # Perform the read and increment the offset
+            self._machine_controller.read_into(
+                self.address, buffer, n_bytes, self._x, self._y, 0)
+            self._offset += n_bytes
 
     @_if_not_closed
     def write(self, bytes):
