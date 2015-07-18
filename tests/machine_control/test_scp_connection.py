@@ -446,6 +446,7 @@ class TestBursts(object):
             mock_conn.send_scp_burst(512, 8, packets)
 
 
+@pytest.mark.parametrize("read_into", [True, False])
 @pytest.mark.parametrize(
     "buffer_size, window_size, x, y, p", [(128, 1, 0, 0, 1), (256, 5, 1, 2, 3)]
 )
@@ -469,7 +470,7 @@ class TestBursts(object):
      (256, DataType.word, 0x60000004)
      ])
 def test_read(buffer_size, window_size, x, y, p, n_bytes,
-              data_type, start_address):
+              data_type, start_address, read_into):
     mock_conn = SCPConnection("localhost")
 
     # Construct the expected calls, and hence the expected return packets
@@ -510,8 +511,13 @@ def test_read(buffer_size, window_size, x, y, p, n_bytes,
         send_scp_burst.side_effect = ccs
 
         # Read an amount of memory specified by the size.
-        data = mock_conn.read(buffer_size, window_size, x, y, p,
-                              start_address, n_bytes)
+        if read_into:
+            data = bytearray(n_bytes)
+            mock_conn.read_into(data, buffer_size, window_size, x, y, p,
+                                start_address, n_bytes)
+        else:
+            data = mock_conn.read(buffer_size, window_size, x, y, p,
+                                  start_address, n_bytes)
         assert data == ccs.read_data
 
     # send_burst_scp should have been called once, each element in the iterator
