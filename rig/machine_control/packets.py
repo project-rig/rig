@@ -144,8 +144,9 @@ class SCPPacket(SDPPacket):
         return scp_header + self.data
 
     def __repr__(self):
-        """Produce a human-redaable summary of (the most important parts of)
-        the packet."""
+        """Produce a human-readable summary of (the most important parts of)
+        the packet.
+        """
         return ("<{} x: {}, y: {}, cpu: {}, "
                 "cmd_rc: {}, arg1: {}, arg2: {}, arg3: {}, "
                 "data: {}>".format(self.__class__.__name__,
