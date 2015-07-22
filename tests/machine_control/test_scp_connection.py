@@ -348,9 +348,10 @@ class TestBursts(object):
                 mock.patch("select.select", new=mock_select):
             mock_conn.send_scp_burst(512, 8, packets())
 
+    @pytest.mark.parametrize("wrong_seq_num", [True, False])
     @pytest.mark.parametrize("rc",
                              list(map(int, FATAL_SCP_RETURN_CODES)) + [0x00])
-    def test_errors(self, mock_conn, rc):
+    def test_errors(self, mock_conn, rc, wrong_seq_num):
         """Test that errors are raised when error RCs are returned."""
         # Create an object which returns a packet with an error code
         class ReturnPacket(object):
@@ -359,6 +360,8 @@ class TestBursts(object):
 
             def __call__(self, packet):
                 self.packet = SCPPacket.from_bytestring(packet)
+                if wrong_seq_num:
+                    self.packet.seq += 1
                 self.packet.cmd_rc = rc
                 self.packet.arg1 = None
                 self.packet.arg2 = None
