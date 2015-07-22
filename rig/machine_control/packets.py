@@ -143,6 +143,18 @@ class SCPPacket(SDPPacket):
         # Return the SCP header and the rest of the data
         return scp_header + self.data
 
+    def __repr__(self):
+        """Produce a human-readable summary of (the most important parts of)
+        the packet.
+        """
+        return ("<{} x: {}, y: {}, cpu: {}, "
+                "cmd_rc: {}, arg1: {}, arg2: {}, arg3: {}, "
+                "data: {}>".format(self.__class__.__name__,
+                                   self.dest_x, self.dest_y, self.dest_cpu,
+                                   self.cmd_rc,
+                                   self.arg1, self.arg2, self.arg3,
+                                   repr(self.data)))
+
 
 def _unpack_sdp_into_packet(packet, bytestring):
     """Unpack the SDP header from a bytestring into a packet.

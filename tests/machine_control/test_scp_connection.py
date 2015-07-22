@@ -4,9 +4,12 @@ import pytest
 import struct
 import time
 
-from rig.machine_control.consts import SCPCommands, DataType, SDP_HEADER_LENGTH
+from rig.machine_control.consts import \
+    SCPCommands, DataType, SDP_HEADER_LENGTH, RETRYABLE_SCP_RETURN_CODES, \
+    FATAL_SCP_RETURN_CODES
 from rig.machine_control.packets import SCPPacket
-from rig.machine_control.scp_connection import SCPConnection, scpcall
+from rig.machine_control.scp_connection import \
+    SCPConnection, scpcall, FatalReturnCodeError
 from rig.machine_control import scp_connection
 
 
@@ -193,10 +196,11 @@ class TestBursts(object):
         # times we specified.
         assert mock_conn.sock.send.call_count == mock_conn.n_tries
 
-    @pytest.mark.parametrize("err_code", [0x8b, 0x8c, 0x8d, 0x8e])
-    def test_single_packet_fails_with_RC_P2P_ERROR(self, mock_conn, err_code):
+    @pytest.mark.parametrize("err_code", RETRYABLE_SCP_RETURN_CODES)
+    def test_single_packet_fails_with_retryable_error(self, mock_conn,
+                                                      err_code):
         """Test correct operation for transmitting a single packet which is
-        always acknowledged with one of the RC_P2P error codes.
+        always acknowledged with one of the retryable error codes.
         """
         # Create a packet to send
         packets = [scpcall(3, 5, 0, 12)]
@@ -344,14 +348,10 @@ class TestBursts(object):
                 mock.patch("select.select", new=mock_select):
             mock_conn.send_scp_burst(512, 8, packets())
 
-    @pytest.mark.parametrize(
-        "rc, error",
-        [(0x81, scp_connection.BadPacketLengthError),
-         (0x83, scp_connection.InvalidCommandError),
-         (0x84, scp_connection.InvalidArgsError),
-         (0x87, scp_connection.NoRouteError),
-         (0x00, Exception)])
-    def test_errors(self, mock_conn, rc, error):
+    @pytest.mark.parametrize("wrong_seq_num", [True, False])
+    @pytest.mark.parametrize("rc",
+                             list(map(int, FATAL_SCP_RETURN_CODES)) + [0x00])
+    def test_errors(self, mock_conn, rc, wrong_seq_num):
         """Test that errors are raised when error RCs are returned."""
         # Create an object which returns a packet with an error code
         class ReturnPacket(object):
@@ -360,6 +360,8 @@ class TestBursts(object):
 
             def __call__(self, packet):
                 self.packet = SCPPacket.from_bytestring(packet)
+                if wrong_seq_num:
+                    self.packet.seq += 1
                 self.packet.cmd_rc = rc
                 self.packet.arg1 = None
                 self.packet.arg2 = None
@@ -374,7 +376,7 @@ class TestBursts(object):
 
         # Send an SCP command and check that the correct error is raised
         packets = [scpcall(3, 5, 0, 12)]
-        with pytest.raises(error), \
+        with pytest.raises(FatalReturnCodeError), \
                 mock.patch("select.select", new=mock_select):
             mock_conn.send_scp_burst(256, 1, iter(packets))
 
