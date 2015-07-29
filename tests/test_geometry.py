@@ -1,9 +1,12 @@
 import pytest
 
+from rig.machine import Links
+
 from rig.geometry import concentric_hexagons, to_xyz, minimise_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \
     shortest_torus_path_length, shortest_torus_path, \
-    standard_system_dimensions
+    standard_system_dimensions, spinn5_eth_coords, spinn5_local_eth_coord, \
+    spinn5_chip_coord, spinn5_fpga_link
 
 
 def test_concentric_hexagons():
@@ -337,3 +340,136 @@ def test_standard_system_dimensions():
     assert standard_system_dimensions(3 * 1 * 3) == (36, 12)
     assert standard_system_dimensions(3 * 2 * 4) == (48, 24)
     assert standard_system_dimensions(3 * 1 * 17) == (204, 12)
+
+
+def test_spinn5_eth_coords():
+    # Minimal system
+    assert set(spinn5_eth_coords(12, 12)) == set([(0, 0), (4, 8), (8, 4)])
+
+    # Larger, non-square systems
+    assert set(spinn5_eth_coords(24, 12)) == set([
+        (0, 0), (4, 8), (8, 4), (12, 0), (16, 8), (20, 4)])
+    assert set(spinn5_eth_coords(12, 24)) == set([
+        (0, 0), (4, 8), (8, 4), (0, 12), (4, 20), (8, 16)])
+
+    # Larger square system
+    assert set(spinn5_eth_coords(24, 24)) == set([
+        (0, 0), (4, 8), (8, 4),
+        (12, 0), (16, 8), (20, 4),
+        (0, 12), (4, 20), (8, 16),
+        (12, 12), (16, 20), (20, 16)
+    ])
+
+    # Subsets for non multiples of 12 (i.e. non-spinn-5 based things)
+    assert set(spinn5_eth_coords(2, 2)) == set([(0, 0)])
+    assert set(spinn5_eth_coords(8, 8)) == set([(0, 0)])
+
+
+def test_spinn5_local_eth_coord():
+    # Points lie on actual eth chips
+    assert spinn5_local_eth_coord(0, 0, 12, 12) == (0, 0)
+    assert spinn5_local_eth_coord(4, 8, 12, 12) == (4, 8)
+    assert spinn5_local_eth_coord(8, 4, 12, 12) == (8, 4)
+
+    assert spinn5_local_eth_coord(12, 0, 24, 12) == (12, 0)
+    assert spinn5_local_eth_coord(16, 8, 24, 12) == (16, 8)
+    assert spinn5_local_eth_coord(20, 4, 24, 12) == (20, 4)
+
+    assert spinn5_local_eth_coord(0, 12, 12, 24) == (0, 12)
+    assert spinn5_local_eth_coord(8, 16, 12, 24) == (8, 16)
+    assert spinn5_local_eth_coord(4, 20, 12, 24) == (4, 20)
+
+    assert spinn5_local_eth_coord(12, 12, 24, 24) == (12, 12)
+    assert spinn5_local_eth_coord(16, 20, 24, 24) == (16, 20)
+    assert spinn5_local_eth_coord(20, 16, 24, 24) == (20, 16)
+
+    # Exhaustive check for a 12x12 system
+    cases = [
+        # X:   0         1         2         3         4         5         6         7         8         9        10        11     # noqa Y:
+        [(+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8)],  # noqa  0
+        [(+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8)],  # noqa  1
+        [(+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8)],  # noqa  2
+        [(+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+4, +8), (+4, +8), (+4, +8), (+4, +8)],  # noqa  3
+        [(+8, +4), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+8, +4), (+8, +4), (+8, +4), (+8, +4)],  # noqa  4
+        [(+8, +4), (+8, +4), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+8, +4), (+8, +4), (+8, +4), (+8, +4)],  # noqa  5
+        [(+8, +4), (+8, +4), (+8, +4), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+8, +4), (+8, +4), (+8, +4), (+8, +4)],  # noqa  6
+        [(+8, +4), (+8, +4), (+8, +4), (+8, +4), (+0, +0), (+0, +0), (+0, +0), (+0, +0), (+8, +4), (+8, +4), (+8, +4), (+8, +4)],  # noqa  7
+        [(+8, +4), (+8, +4), (+8, +4), (+8, +4), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+8, +4), (+8, +4), (+8, +4)],  # noqa  8
+        [(+8, +4), (+8, +4), (+8, +4), (+8, +4), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+8, +4), (+8, +4)],  # noqa  9
+        [(+8, +4), (+8, +4), (+8, +4), (+8, +4), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+8, +4)],  # noqa 10
+        [(+8, +4), (+8, +4), (+8, +4), (+8, +4), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8), (+4, +8)]   # noqa 11
+    ]
+    for y, row in enumerate(cases):
+        for x, eth_coord in enumerate(row):
+            assert spinn5_local_eth_coord(x, y, 12, 12) == eth_coord
+
+    # Still works for non multiples of 12
+    assert spinn5_local_eth_coord(0, 0, 2, 2) == (0, 0)
+    assert spinn5_local_eth_coord(0, 1, 2, 2) == (0, 0)
+    assert spinn5_local_eth_coord(1, 0, 2, 2) == (0, 0)
+    assert spinn5_local_eth_coord(1, 1, 2, 2) == (0, 0)
+
+
+@pytest.mark.parametrize("dx", [0, 12, 24, 36])
+@pytest.mark.parametrize("dy", [0, 12, 24, 36])
+def test_spinn5_chip_coord(dx, dy):
+    # Should work within a board
+    assert spinn5_chip_coord(0 + dx, 0 + dy) == (0, 0)
+    assert spinn5_chip_coord(4 + dx, 0 + dy) == (4, 0)
+    assert spinn5_chip_coord(0 + dx, 3 + dy) == (0, 3)
+    assert spinn5_chip_coord(7 + dx, 3 + dy) == (7, 3)
+    assert spinn5_chip_coord(4 + dx, 7 + dy) == (4, 7)
+    assert spinn5_chip_coord(7 + dx, 7 + dy) == (7, 7)
+    assert spinn5_chip_coord(4 + dx, 4 + dy) == (4, 4)
+
+    # Should work when wrapping around
+    assert spinn5_chip_coord(5 + dx, 0 + dy) == (1, 4)
+    assert spinn5_chip_coord(8 + dx, 3 + dy) == (4, 7)
+    assert spinn5_chip_coord(8 + dx, 4 + dy) == (0, 0)
+    assert spinn5_chip_coord(8 + dx, 7 + dy) == (0, 3)
+    assert spinn5_chip_coord(8 + dx, 8 + dy) == (4, 0)
+    assert spinn5_chip_coord(4 + dx, 8 + dy) == (0, 0)
+    assert spinn5_chip_coord(3 + dx, 7 + dy) == (7, 3)
+    assert spinn5_chip_coord(0 + dx, 4 + dy) == (4, 0)
+
+
+def test_spinn5_fpga_link():
+    # Check that all outer chips in a SpiNN-5 board are reported as having
+    # FPGA links.
+    spinn5_chips = set([  # noqa
+                                        (4, 7), (5, 7), (6, 7), (7, 7),
+                                (3, 6), (4, 6), (5, 6), (6, 6), (7, 6),
+                        (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5),
+                (1, 4), (2, 4), (3, 4), (4, 4), (5, 4), (6, 4), (7, 4),
+        (0, 3), (1, 3), (2, 3), (3, 3), (4, 3), (5, 3), (6, 3), (7, 3),
+        (0, 2), (1, 2), (2, 2), (3, 2), (4, 2), (5, 2), (6, 2),
+        (0, 1), (1, 1), (2, 1), (3, 1), (4, 1), (5, 1),
+        (0, 0), (1, 0), (2, 0), (3, 0), (4, 0),
+    ])
+    for x, y in spinn5_chips:
+        for link in Links:
+            xx = x + link.to_vector()[0]
+            yy = y + link.to_vector()[1]
+            if (xx, yy) in spinn5_chips:
+                assert spinn5_fpga_link(x, y, link) is None
+            else:
+                assert spinn5_fpga_link(x, y, link) is not None
+
+    # Check a representative subset of the links get the correct numbers
+    assert spinn5_fpga_link(0, 0, Links.south_west) == (1, 0)
+    assert spinn5_fpga_link(0, 0, Links.south) == (0, 15)
+
+    assert spinn5_fpga_link(0, 3, Links.west) == (1, 7)
+    assert spinn5_fpga_link(0, 3, Links.north) == (1, 8)
+
+    assert spinn5_fpga_link(4, 7, Links.west) == (1, 15)
+    assert spinn5_fpga_link(4, 7, Links.north) == (2, 0)
+
+    assert spinn5_fpga_link(7, 7, Links.north_east) == (2, 7)
+    assert spinn5_fpga_link(7, 7, Links.east) == (2, 8)
+
+    assert spinn5_fpga_link(7, 3, Links.north_east) == (2, 15)
+    assert spinn5_fpga_link(7, 3, Links.east) == (0, 0)
+
+    assert spinn5_fpga_link(4, 0, Links.south) == (0, 7)
+    assert spinn5_fpga_link(4, 0, Links.south_west) == (0, 8)
