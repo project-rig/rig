@@ -240,7 +240,10 @@ class NumpyFloatToFixConverter(object):
         vals *= 2.0 ** self.n_frac
         vals = np.round(vals)
 
-        return self.dtype(vals)
+        # **NOTE** for some reason just casting resulted in shape
+        # being zeroed on some indeterminate selection of OSes,
+        # architectures, Python and Numpy versions"
+        return np.array(vals, copy=True, dtype=self.dtype)
 
 
 class NumpyFixToFloatConverter(object):
