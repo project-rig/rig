@@ -1,5 +1,6 @@
 """A high level interface for controlling a SpiNNaker system."""
 
+import sys
 import collections
 import functools
 import os
@@ -10,6 +11,9 @@ import struct
 import time
 import pkg_resources
 import warnings
+import traceback
+
+from threading import Thread, Lock, Event
 
 from rig.machine_control.consts import \
     SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
@@ -133,6 +137,15 @@ class MachineController(ContextMixin):
         # connections to use.
         self._width = None
         self._height = None
+
+        # Postponed operation queues for reads/writes issued with the postponed
+        # argument set. These are listed per-connection and are flushed by the
+        # flush_postponed_io method. Each queue contains a list of
+        # zero-argument function which carries out the required I/O operation.
+        #
+        # {connection: deque([f, ...]), ...}
+        self._postponed = collections.defaultdict(collections.deque)
+        self._postponed_lock = Lock()
 
     def __call__(self, **context_args):
         """For use with `with`: set default argument values.
@@ -461,7 +474,7 @@ class MachineController(ContextMixin):
             return None
 
     @ContextMixin.use_contextual_arguments()
-    def write(self, address, data, x, y, p=0):
+    def write(self, address, data, x, y, p=0, postpone=False):
         """Write a bytestring to an address in memory.
 
         It is strongly encouraged to only read and write to blocks of memory
@@ -476,17 +489,40 @@ class MachineController(ContextMixin):
             The address at which to start writing the data. Addresses are given
             within the address space of a SpiNNaker core. See the SpiNNaker
             datasheet for more information.
-        data : :py:class:`bytes`
+        data : :py:class:`bytes` or callable
             Data to write into memory. Writes are automatically broken into a
             sequence of SCP write commands.
+
+            If a callable is given, it will be called when the write is about
+            to be carried out and must return a bytearray (or similar) to be
+            written.
+        postpone : bool
+            If False (the default), writes are performed straight away and this
+            function returns once the write completes.
+
+            If True, the write will be queued and carried out in parallel when
+            :py:meth:`.flush_postponed_io` is called. The data object must
+            remain valid until this function returns. If a callable is passed
+            as the data argument, the callable may be called from another
+            thread and with in specific order with respect to other calls to
+            this function.
         """
         # Call the SCPConnection to perform the write on our behalf
         connection = self._get_connection(x, y)
-        return connection.write(self.scp_data_length, self.scp_window_size,
-                                x, y, p, address, data)
+
+        def f():
+            connection.write(self.scp_data_length, self.scp_window_size,
+                             x, y, p, address,
+                             data() if callable(data) else data)
+
+        if postpone:
+            self._postponed[connection].append(f)
+        else:
+            f()
 
     @ContextMixin.use_contextual_arguments()
-    def read(self, address, length_bytes, x, y, p=0):
+    def read(self, address, length_bytes, x, y, p=0,
+             on_read=None, postpone=False):
         """Read a bytestring from an address in memory.
 
         Parameters
@@ -496,16 +532,54 @@ class MachineController(ContextMixin):
         length_bytes : int
             The number of bytes to read from memory. Large reads are
             transparently broken into multiple SCP read commands.
+        on_read : callable
+            If supplied, this is called with the read data as an argument when
+            the read completes. Otherwise, the read data is returned directly.
+        postpone : bool
+            If False (the default), the read will occur immediately and the
+            read value returned or used as an argument to on_read.
+
+            If True, the read will be performed when
+            :py:meth:`.flush_postponed_io` is called and an uninitialised
+            bytearray will be returned. When the read actually occurs, this
+            bytearray will be populated and the on_read method called with
+            a reference to the bytearray. Note that on_read may be called from
+            another thread and the order of calls to on_read is not guaranteed.
 
         Returns
         -------
-        :py:class:`bytes`
-            The data is read back from memory as a bytestring.
+        :py:class:`bytearray` or None
+            If on_read is not given, the data read back from memory is returned
+            if postpone is False. If postpone is True, an uninitialised
+            bytearray will be returned. The bytearray will be populated when
+            :py:meth:`.flush_postponed_io` is called.
+
+            If on_read is given, this method returns None.
         """
         # Call the SCPConnection to perform the read on our behalf
         connection = self._get_connection(x, y)
-        return connection.read(self.scp_data_length, self.scp_window_size,
-                               x, y, p, address, length_bytes)
+        if on_read is not None:
+            data = None
+            f = (lambda: on_read(connection.read(self.scp_data_length,
+                                                 self.scp_window_size,
+                                                 x, y, p,
+                                                 address, length_bytes)))
+        else:
+            data = bytearray(length_bytes)
+
+            def f():
+                connection.readinto(data, self.scp_data_length,
+                                    self.scp_window_size,
+                                    x, y, p,
+                                    address, length_bytes)
+
+        if postpone:
+            with self._postponed_lock:
+                self._postponed[connection].append(f)
+        else:
+            f()
+
+        return data
 
     @ContextMixin.use_contextual_arguments()
     def write_across_link(self, address, data, x, y, link):
@@ -629,25 +703,53 @@ class MachineController(ContextMixin):
         return bytes(data)
 
     @ContextMixin.use_contextual_arguments()
-    def readinto(self, address, buffer, length_bytes, x, y, p=0):
+    def readinto(self, address, buffer, length_bytes, x, y, p=0,
+                 on_read=None, postpone=False):
         """Read a from an address in memory into the supplied buffer.
 
         Parameters
         ----------
         address : int
             The address at which to start reading the data.
-        buffer : bytearray
-            A bufferable object (e.g. bytearray) into which the data will be
-            read.
+        buffer : bytearray or callable
+            A bufferable object (e.g. bytearray) of at least length_bytes in
+            size into which the data will be read.
+
+            If a callable is supplied, this will be called with no arguments
+            just before the read is carried out and the function must return a
+            bufferable object into which the result will be written.
         length_bytes : int
             The number of bytes to read from memory. Large reads are
             transparently broken into multiple SCP read commands.
+        on_read : callable
+            If supplied, this is called with supplied buffer as an argument
+            when the read completes.
+        postpone : bool
+            If False (the default), the read will occur immediately and the
+            read value will be placed into the supplied buffer.
+
+            If True, the read will be performed when
+            :py:meth:`.flush_postponed_io` is called. Note that on_read and
+            buffer may be called from another thread and the order of other
+            calls to buffer and on_read is not guaranteed.
         """
         # Call the SCPConnection to perform the read on our behalf
         connection = self._get_connection(x, y)
-        connection.readinto(buffer, self.scp_data_length,
-                            self.scp_window_size,
-                            x, y, p, address, length_bytes)
+
+        def f():
+            buf = buffer() if callable(buffer) else buffer
+            connection.readinto(buf,
+                                self.scp_data_length, self.scp_window_size,
+                                x, y, p,
+                                address, length_bytes)
+            if on_read is not None:
+                on_read(buf)
+
+        if postpone:
+            with self._postponed_lock:
+                self._postponed[connection].append(f)
+        else:
+            f()
 
     def _get_struct_field_and_address(self, struct_name, field_name):
         field = self.structs[six.b(struct_name)][six.b(field_name)]
@@ -690,7 +792,8 @@ class MachineController(ContextMixin):
         length = struct.calcsize(pack_chars)
 
         # Perform the read
-        data = self.read(address, length, x, y, p)
+        data = self.read(address, length, x, y, p,
+                         on_read=None, postpone=False)
 
         # Unpack the data
         unpacked = struct.unpack(pack_chars, data)
@@ -701,7 +804,8 @@ class MachineController(ContextMixin):
             return unpacked
 
     @ContextMixin.use_contextual_arguments()
-    def write_struct_field(self, struct_name, field_name, values, x, y, p=0):
+    def write_struct_field(self, struct_name, field_name, values, x, y, p=0,
+                           postpone=False):
         """Write a value into a struct.
 
         This method is particularly useful for writing values into the ``sv``
@@ -716,6 +820,12 @@ class MachineController(ContextMixin):
             Name of the field to write, e.g., `"random"`
         values :
             Value(s) to be written into the field.
+        postpone : bool
+            If False (the default), writes are performed straight away and this
+            function returns once the write completes.
+
+            If True, the write will be queued and carried out in parallel when
+            :py:meth:`.flush_postponed_io` is called.
 
         .. warning::
             Fields which are arrays must currently be written in their
@@ -732,7 +842,7 @@ class MachineController(ContextMixin):
             data = struct.pack(pack_chars, values)
 
         # Perform the write
-        self.write(address, data, x, y, p)
+        self.write(address, data, x, y, p, postpone=postpone)
 
     def _get_vcpu_field_and_address(self, field_name, x, y, p):
         """Get the field and address for a VCPU struct field."""
@@ -768,7 +878,7 @@ class MachineController(ContextMixin):
 
         # Perform the read
         length = struct.calcsize(pack_chars)
-        data = self.read(address, length, x, y)
+        data = self.read(address, length, x, y, on_read=None, postpone=False)
 
         # Unpack and return
         unpacked = struct.unpack(pack_chars, data)
@@ -785,7 +895,8 @@ class MachineController(ContextMixin):
             return unpacked  # pragma: no cover
 
     @ContextMixin.use_contextual_arguments()
-    def write_vcpu_struct_field(self, field_name, value, x, y, p):
+    def write_vcpu_struct_field(self, field_name, value, x, y, p,
+                                postpone=True):
         """Write a value to the VCPU struct for a specific core.
 
         Parameters
@@ -794,6 +905,12 @@ class MachineController(ContextMixin):
             Name of the field to write (e.g. `"user0"`)
         value :
             Value to write to this field.
+        postpone : bool
+            If False (the default), writes are performed straight away and this
+            function returns once the write completes.
+
+            If True, the write will be queued and carried out in parallel when
+            :py:meth:`.flush_postponed_io` is called.
         """
         field, address, pack_chars = \
             self._get_vcpu_field_and_address(field_name, x, y, p)
@@ -809,7 +926,7 @@ class MachineController(ContextMixin):
             data = struct.pack(pack_chars, *value)  # pragma: no cover
 
         # Perform the write
-        self.write(address, data, x, y)
+        self.write(address, data, x, y, postpone=postpone)
 
     @ContextMixin.use_contextual_arguments()
     def get_processor_status(self, p, x, y):
@@ -825,7 +942,8 @@ class MachineController(ContextMixin):
                    self.structs[b"vcpu"].size * p)
 
         # Get the VCPU data
-        data = self.read(address, self.structs[b"vcpu"].size, x, y)
+        data = self.read(address, self.structs[b"vcpu"].size, x, y,
+                         on_read=None, postpone=False)
 
         # Build the kwargs that describe the current state
         state = {
@@ -864,7 +982,8 @@ class MachineController(ContextMixin):
         while address:
             # The IOBUF data is proceeded by a header which gives the next
             # address and also the length of the string in the current buffer.
-            iobuf_data = self.read(address, iobuf_size + 16, x, y)
+            iobuf_data = self.read(address, iobuf_size + 16, x, y,
+                                   on_read=False, postpone=False)
             address, time, ms, length = struct.unpack("<4I", iobuf_data[:16])
             iobuf += iobuf_data[16:16 + length].decode("utf-8")
 
@@ -880,7 +999,8 @@ class MachineController(ContextMixin):
             Description of the state of the counters.
         """
         # Read the block of memory
-        data = self.read(0xe1000300, 64, x=x, y=y)
+        data = self.read(0xe1000300, 64, x=x, y=y,
+                         on_read=None, postpone=False)
 
         # Convert to 16 ints, then process that as the appropriate tuple type
         return RouterDiagnostics(*struct.unpack("<16I", data))
@@ -1070,7 +1190,8 @@ class MachineController(ContextMixin):
 
     @ContextMixin.use_contextual_arguments()
     def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
-                                app_id=Required, buffer_size=0, clear=False):
+                                app_id=Required, buffer_size=0, clear=False,
+                                postpone=False):
         """Like :py:meth:`.sdram_alloc` but returns a :py:class:`file-like
         object <.MemoryIO>` which allows safe reading and writing to the block
         that is allocated.
@@ -1082,6 +1203,12 @@ class MachineController(ContextMixin):
             If this is set to anything but `0` (the default) then
             :py:meth:`~.MemoryIO.flush` should be called to ensure that all
             writes are completed.
+        postpone : bool
+            If False (the default), reads and (flushed) writes to the returned
+            object are carried out immediately.
+
+            If True, any reads/(flushed) writes will be queued and carried out
+            in parallel when :py:meth:`.flush_postponed_io` is called.
 
         Returns
         -------
@@ -1122,7 +1249,7 @@ class MachineController(ContextMixin):
         start_address = self.sdram_alloc(size, tag, x, y, app_id, clear)
 
         return MemoryIO(self, x, y, start_address, start_address + size,
-                        buffer_size=buffer_size)
+                        buffer_size=buffer_size, postpone=postpone)
 
     def _get_next_nn_id(self):
         """Get the next nearest neighbour ID."""
@@ -1650,7 +1777,7 @@ class MachineController(ContextMixin):
 
             struct.pack_into(consts.RTE_PACK_STRING, data, i*16,
                              i, 0, route, entry.key, entry.mask)
-        self.write(buf, data, x, y)
+        self.write(buf, data, x, y, postpone=False)
 
         # Perform the load of the data into the router
         self._send_scp(
@@ -1673,7 +1800,8 @@ class MachineController(ContextMixin):
         # Determine where to read from, perform the read
         rtr_addr = self.read_struct_field("sv", "rtr_copy", x, y)
         read_size = struct.calcsize(consts.RTE_PACK_STRING)
-        rtr_data = self.read(rtr_addr, consts.RTR_ENTRIES * read_size, x, y)
+        rtr_data = self.read(rtr_addr, consts.RTR_ENTRIES * read_size, x, y,
+                             on_read=None, postpone=False)
 
         # Read each routing table entry in turn
         table = list()
@@ -1720,7 +1848,8 @@ class MachineController(ContextMixin):
             raw_table_col = self.read(
                 consts.SPINNAKER_RTR_P2P + (((256 * col) // 8) * 4),
                 col_words,
-                x, y
+                x, y,
+                on_read=None, postpone=False,
             )
 
             row = 0
@@ -1913,6 +2042,83 @@ class MachineController(ContextMixin):
 
         system_info = self.get_system_info(x, y)
         return build_machine(system_info)
+
+    @ContextMixin.use_contextual_arguments()
+    def flush_postponed_io(self, max_num_connections=24):
+        """Carry out all postponed I/O operations in parallel.
+
+        Parameters
+        ----------
+        max_num_connections : int
+            Gives the maximum number of simultaneous connections to use.
+            Setting this too high may result in this process becoming CPU bound
+            and thus not achieving high throughput.
+        """
+        with self._postponed_lock:
+            num_threads = min(max_num_connections, len(self._postponed))
+
+        # A flag which is set if one of the threads encounter an error.
+        terminate_now = Event()
+
+        # This list is populated with all exception objects raised in any of
+        # the worker threads
+        exceptions = []
+        exceptions_lock = Lock()
+
+        def queue_processor():
+            """Attempts to process all postponed events for a particular
+            connection queue, deleting the queue when it empties."""
+            while not terminate_now.is_set():
+                # Get the next queue to be processed
+                try:
+                    with self._postponed_lock:
+                        connection, queue = self._postponed.popitem()
+                except KeyError:
+                    # There are no more queues which need processing, terminate
+                    # this thread.
+                    return
+
+                # Process that queue
+                while not terminate_now.is_set():
+                    try:
+                        with self._postponed_lock:
+                            f = queue.popleft()
+                    except IndexError:
+                        # The queue is empty, move on to the next one
+                        break
+
+                    # Run the current queue entry handling failures sensibly
+                    try:
+                        f()
+                    except Exception as e:
+                        sys.stderr.write(
+                            "Exception while processing a queued I/O "
+                            "operation:\n")
+                        traceback.print_exc()
+                        terminate_now.set()
+
+                        with exceptions_lock:
+                            exceptions.append(e)
+
+        threads = []
+        for _ in range(num_threads):
+            threads.append(Thread(target=queue_processor))
+
+        try:
+            for thread in threads:
+                thread.start()
+
+            # Wait for the threads to complete
+            for thread in threads:
+                thread.join()
+        finally:
+            # If something goes wrong in the above, trigger the termination of
+            # all threads and attempt to wait for this
+            terminate_now.set()
+            for thread in threads:
+                thread.join()
+
+        return exceptions
 
 
 class CoreInfo(collections.namedtuple(
@@ -2400,7 +2606,7 @@ class MemoryIO(object):
     """
 
     def __init__(self, machine_controller, x, y, start_address, end_address,
-                 buffer_size=0, _write_buffer=None):
+                 buffer_size=0, postpone=False, _write_buffer=None):
         """Create a file-like view onto a subset of the memory-space of a chip.
 
         Parameters
@@ -2418,6 +2624,13 @@ class MemoryIO(object):
             End address in memory.
         buffer_size : int
             Number of bytes to store in the write buffer.
+        postpone : bool
+            If False (the default), reads and (flushed) writes are performed
+            immediately and their result returned to the caller.
+
+            If True, reads and (flushed) writes will be placed in a queue and
+            executed in parallel when
+            :py:meth:`.MachineController.flush_postponed_io` is called.
         _write_buffer : :py:class:`._WriteBufferChild`
             Internal use only, the write buffer to use to combine writes.
 
@@ -2429,11 +2642,12 @@ class MemoryIO(object):
         self._x = x
         self._y = y
         self._machine_controller = machine_controller
+        self._postpone = postpone
 
         # Get, or create, a write buffer
         if _write_buffer is None:
             _write_buffer = _WriteBuffer(x, y, 0, machine_controller,
-                                         buffer_size)
+                                         buffer_size, self._postpone)
         self._write_buffer = _write_buffer
 
         # Store and clip the addresses
@@ -2498,6 +2712,7 @@ class MemoryIO(object):
             return type(self)(
                 self._machine_controller, self._x, self._y,
                 start_address, end_address,
+                self._postpone,
                 _write_buffer=self._write_buffer
             )
         else:
@@ -2530,7 +2745,7 @@ class MemoryIO(object):
         return n_bytes
 
     @_if_not_closed
-    def read(self, n_bytes=-1):
+    def read(self, n_bytes=-1, on_read=None):
         """Read a number of bytes from the memory.
 
         .. note::
@@ -2541,25 +2756,45 @@ class MemoryIO(object):
         n_bytes : int
             A number of bytes to read.  If the number of bytes is negative or
             omitted then read all data until the end of memory region.
+        on_read : callable
+            If supplied, this is called with the read data as an argument when
+            the read completes. Otherwise, the read data is returned directly.
 
         Returns
         -------
-        :py:class:`bytes`
-            Data read from SpiNNaker as a bytestring.
+        :py:class:`bytes` or None
+            If on_read is not given and postpone is set to False for this
+            MemoryIO, the data read from SpiNNaker is returned.
+
+            If on_read is not given and postpone is set to True for this
+            MemoryIO, an uninitialised bytearray is returned which will be
+            populated with the read data when
+            :py:meth:`.MachineController.flush_postponed_io` is called.
+
+            If on_read is supplied, this function will return None and when the
+            read completes, the read data will be given as an argument to
+            on_read. Note that on_read may be called from another thread and
+            the order of calls to on_read is not guaranteed.
         """
         # Flush this write buffer
         self.flush()
 
         n_bytes = self._read_n_bytes(n_bytes)
         if n_bytes <= 0:
+            if callable(on_read):
+                on_read(b'')
             return b''
         else:
-            data = bytearray(n_bytes)
-            self.readinto(data, n_bytes)
-            return data
+            # Note: the offset is updated before the read (and the read address
+            # compensated) such that if the on_read callback interacts with
+            # this MemoryIO, the addresses are kept consistent.
+            self._offset += n_bytes
+            return self._machine_controller.read(
+                self.address - n_bytes, n_bytes, self._x, self._y, 0,
+                on_read=on_read, postpone=self._postpone)
 
     @_if_not_closed
-    def readinto(self, buffer, n_bytes=-1):
+    def readinto(self, buffer, n_bytes=-1, on_read=None):
         """Read a number of bytes from the memory into a supplied buffer.
 
         .. note::
@@ -2567,12 +2802,24 @@ class MemoryIO(object):
 
         Parameters
         ----------
-        buffer : bytearray
-            A bufferable object (e.g. bytearray) into which the data will be
-            read.
+        buffer : bytearray or callable
+            A bufferable object (e.g. bytearray) of at least n_bytes in size
+            into which the data will be read.
+
+            If a callable is supplied, this will be called with no arguments
+            just before the read is carried out and the function must return a
+            bufferable object into which the result will be written.
+
+            If postpone is set to False for this MemoryIO, the read will be
+            completed before this method returns. If set to True, the read will
+            actually occur when
+            :py:meth:`.MachineController.flush_postponed_io` is called.
         n_bytes : int
             A number of bytes to read.  If the number of bytes is negative or
             omitted then read all data until the end of memory region.
+        on_read : callable
+            If supplied, this is called with supplied buffer as an argument
+            when the read completes.
         """
         # Flush this write buffer
         self.flush()
@@ -2580,15 +2827,22 @@ class MemoryIO(object):
         n_bytes = self._read_n_bytes(n_bytes)
 
         if n_bytes <= 0:
+            if callable(on_read):
+                on_read(buffer() if callable(buffer) else buffer)
+            elif callable(buffer):
+                buffer()
             return
         else:
-            # Perform the read and increment the offset
-            self._machine_controller.readinto(
-                self.address, buffer, n_bytes, self._x, self._y, 0)
+            # Note: the offset is updated before the read (and the read address
+            # compensated) such that if the on_read callback interacts with
+            # this MemoryIO, the addresses are kept consistent.
             self._offset += n_bytes
+            self._machine_controller.readinto(
+                self.address - n_bytes, buffer, n_bytes, self._x, self._y, 0,
+                on_read=on_read, postpone=self._postpone)
 
     @_if_not_closed
-    def write(self, bytes):
+    def write(self, bytes, n_bytes=None):
         """Write data to the memory.
 
         .. warning::
@@ -2602,26 +2856,53 @@ class MemoryIO(object):
 
         Parameters
         ----------
-        bytes : :py:class:`bytes`
-            Data to write to the memory as a bytestring.
+        bytes : :py:class:`bytes` or callable
+            Data to write into memory.
+
+            If a callable is given, it will be called when the write is about
+            to be carried out and must return a bytearray (or similar) to be
+            written. Note that at present write data supplied as a callable is
+            never buffered and writing a callable causes the write buffer to be
+            flushed.
+
+            For non-callables, if the buffer size is non-zero, the data will be
+            buffered immediately. If the buffer size is zero, or the data
+            written is too large to fit in the buffer, the write will be passed
+            directly to :py:meth:`.MachineController.write`. This means that if
+            postpone is set to False for this MemoryIO, the write will be
+            complete before this method returns but if it is set to True, the
+            write will actually occur when
+            :py:meth:`.MachineController.flush_postponed_io` is called.
+        n_bytes : int
+            The number of bytes to write. This field is optional when bytes
+            supports the `len` operator but is mandatory when it does not.
 
         Returns
         -------
-        int
-            Number of bytes written.
+        int or None
+            Number of bytes written or buffered.
         """
-        if self.address + len(bytes) > self._end_address:
-            n_bytes = min(len(bytes), self._end_address - self.address)
+        n_bytes = n_bytes if n_bytes is not None else len(bytes)
+
+        if self.address + n_bytes > self._end_address:
+            n_bytes = min(n_bytes, self._end_address - self.address)
 
             if n_bytes <= 0:
+                if callable(bytes):
+                    bytes()
                 return 0
 
-            bytes = bytes[:n_bytes]
+            if callable(bytes):
+                bytes_ = (lambda: bytes()[:n_bytes])
+            else:
+                bytes_ = bytes[:n_bytes]
+        else:
+            bytes_ = bytes
 
         # Perform the write and increment the offset
-        self._write_buffer.add_new_write(self.address, bytes)
-        self._offset += len(bytes)
-        return len(bytes)
+        self._offset += n_bytes
+        self._write_buffer.add_new_write(self.address - n_bytes, bytes_)
+        return n_bytes
 
     @_if_not_closed
     def flush(self):
@@ -2629,6 +2910,11 @@ class MemoryIO(object):
 
         This must be called to ensure that all writes to SpiNNaker made using
         this file-like object (and its siblings, if any) are completed.
+
+        If postpone is set to False for this MemoryIO, the writes will be
+        completed before this method returns. If set to True, the writes will
+        actually occur when :py:meth:`.MachineController.flush_postponed_io` is
+        called.
         """
         self._write_buffer.flush()
 
@@ -2688,11 +2974,12 @@ class _WriteBuffer(object):
     together.
     """
 
-    def __init__(self, x, y, p, controller, buffer_size=0):
+    def __init__(self, x, y, p, controller, buffer_size=0, postpone=False):
         self.x = x
         self.y = y
         self.p = p
         self.controller = controller
+        self.postpone = postpone
 
         # A buffer of writes
         self.buffer = bytearray(buffer_size)
@@ -2703,11 +2990,14 @@ class _WriteBuffer(object):
 
     def add_new_write(self, start_address, data):
         """Add a new write to the buffer."""
-        if len(data) > self.buffer_size:
-            # Perform the write if we couldn't buffer it at all
+        if callable(data) or len(data) > self.buffer_size:
+            # Perform the write if we couldn't buffer it at all. Unbufferable
+            # writes are those too large to fit in the buffer and those
+            # provided via callback.
             self.flush()  # Flush to ensure ordering is preserved
             self.controller.write(start_address, data,
-                                  self.x, self.y, self.p)
+                                  self.x, self.y, self.p,
+                                  postpone=self.postpone)
             return
 
         if self.start_address is None:
@@ -2756,12 +3046,17 @@ class _WriteBuffer(object):
             # Write out all the values from the buffer
             self.controller.write(
                 self.start_address, self.buffer[:self.current_end],
-                self.x, self.y, self.p
+                self.x, self.y, self.p, postpone=self.postpone
             )
 
             # Reset the buffer
             self.start_address = None
             self.current_end = 0
+
+            # If postponed writes are in use, create a new buffer since the old
+            # one will be used at an undetermined point in the future.
+            if self.postpone:
+                self.buffer = bytearray(self.buffer_size)
 
 
 def unpack_routing_table_entry(packed):
