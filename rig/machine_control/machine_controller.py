@@ -852,7 +852,7 @@ class MachineController(ContextMixin):
             fills = regions.compress_flood_fill_regions(targets)
 
             # Load the APLX data
-            with open(aplx, "rb+") as f:
+            with open(aplx, "rb") as f:
                 aplx_data = f.read()
             n_blocks = ((len(aplx_data) + self.scp_data_length - 1) //
                         self.scp_data_length)
