@@ -1,5 +1,12 @@
+Standalone Utility Applications
+===============================
+
+The following command-line utility applications are installed alongside the Rig
+Python library. These utilities are simple wrappers around the Rig API with an
+emphasis on common system and debug tasks.
+
 ``rig-boot``
-============
+------------
 
 The ``rig-boot`` command lets you quickly and easily boot SpiNNaker systems
 from the command line.
@@ -22,7 +29,7 @@ type::
     $ rig-boot --help
 
 ``rig-power``
-=============
+-------------
 
 The ``rig-power`` command lets you quickly and easily power on and off
 SpiNNaker systems consisting of SpiNN-5 boards via their Board Management
@@ -45,7 +52,7 @@ To get a complete listing of available options::
     $ rig-power --help
 
 ``rig-info``
-============
+------------
 
 The ``rig-info`` command displays basic information about (booted) SpiNNaker
 systems and BMPs. The command accepts a single hostname as an argument and
@@ -84,7 +91,7 @@ And for BMPs::
 
 
 ``rig-discover``
-================
+----------------
 
 The ``rig-discover`` command listens for any attached unbooted SpiNNaker
 boards on the network. This can be used to determine the IP address of a
@@ -98,7 +105,7 @@ without printing anything.
 
 
 ``rig-iobuf``
-================
+----------------
 
 The ``rig-iobuf`` command prints the messages printed by an application's calls
 to ``io_printf(IOBUF, ...)``. For example, printing the IOBUF for core 1 on
@@ -109,7 +116,7 @@ chip 0, 0::
 
 
 ``rig-ps``
-================
+----------------
 
 The ``rig-ps`` command enumerates every application running on a machine. For
 example::
@@ -150,7 +157,7 @@ command)::
 
 
 ``rig-counters``
-================
+----------------
 
 The ``rig-counters`` command reads the router diagnostic counters for all chips
 in a SpiNNaker system and reports any changes in value. This can be useful, for
@@ -207,8 +214,8 @@ for more details.
 .. warning::
 
     ``rig-counters`` works by polling the router in every chip in a SpiNNaker
-    machine. This process takes some time (i.e. it isn't monotonic) and also
-    results in P2P messages being sent through the SpiNNaker network.
+    machine. This process takes some time, is not atomic and also results in
+    P2P messages being sent through the SpiNNaker network.
 
     The system is polled once when the utility is started and then once more
     for each sample requested (e.g. every time you press enter). As a result,
