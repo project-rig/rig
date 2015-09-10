@@ -198,6 +198,7 @@ class RouterOperations(enum.IntEnum):
 class NNCommands(enum.IntEnum):
     """Nearest Neighbour operations."""
     flood_fill_start = 6
+    flood_fill_core_select = 7
     flood_fill_end = 15
 
 

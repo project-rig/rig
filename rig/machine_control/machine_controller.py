@@ -731,15 +731,37 @@ class MachineController(ContextMixin):
         self._nn_id = self._nn_id + 1 if self._nn_id < 126 else 1
         return self._nn_id * 2
 
-    def _send_ffs(self, pid, region, n_blocks, fr):
-        """Send a flood-fill start packet."""
+    def _send_ffs(self, pid, n_blocks, fr):
+        """Send a flood-fill start packet.
+
+        The cores and regions that the application should be loaded to will be
+        specified by a stream of flood-fill core select packets (FFCS).
+        """
         sfr = fr | (1 << 31)
         self._send_scp(
             0, 0, 0, SCPCommands.nearest_neighbour_packet,
             (NNCommands.flood_fill_start << 24) | (pid << 16) |
-            (n_blocks << 8),
-            region, sfr
+            (n_blocks << 8), 0x0, sfr
         )
+
+    def _send_ffcs(self, region, core_mask, fr):
+        """Send a flood-fill core select packet.
+
+        This packet was added in a patched SC&MP 1.34*. Each packet includes a
+        region and a core mask; every core that is in the region ORs the core
+        mask with a mask it stores locally. On receiving a flood-fill end (FFE)
+        packet the application is loaded to the cores specified by this
+        composed core mask.
+
+        FFCS packets should be sent in ascending order of
+        `(region << 18) | core`.
+
+        * See https://bitbucket.org/mundya/scamp/branch/new-ff2
+        """
+        arg1 = (NNCommands.flood_fill_core_select << 24) | core_mask
+        arg2 = region
+        self._send_scp(0, 0, 0, SCPCommands.nearest_neighbour_packet,
+                       arg1, arg2, fr)
 
     def _send_ffd(self, pid, aplx_data, address):
         """Send flood-fill data packets."""
@@ -764,10 +786,15 @@ class MachineController(ContextMixin):
             address += data_size
             pos += data_size
 
-    def _send_ffe(self, pid, app_id, app_flags, cores, fr):
-        """Send a flood-fill end packet."""
+    def _send_ffe(self, pid, app_id, app_flags, fr):
+        """Send a flood-fill end packet.
+
+        The cores and regions that the application should be loaded to will
+        have been specified by a stream of flood-fill core select packets
+        (FFCS).
+        """
         arg1 = (NNCommands.flood_fill_end << 24) | pid
-        arg2 = (app_id << 24) | (app_flags << 18) | (cores & 0x3ffff)
+        arg2 = (app_id << 24) | (app_flags << 18)
         self._send_scp(0, 0, 0, SCPCommands.nearest_neighbour_packet,
                        arg1, arg2, fr)
 
@@ -848,8 +875,10 @@ class MachineController(ContextMixin):
         # Load each APLX in turn
         for (aplx, targets) in iteritems(application_map):
             # Determine the minimum number of flood-fills that are necessary to
-            # load the APLX using level-3 regions.
-            fills = regions.compress_flood_fill_regions(targets)
+            # load the APLX. The regions and cores should be sorted into
+            # ascending order.
+            fills = list(regions.compress_flood_fill_regions(targets))
+            fills.sort(key=lambda rc: (rc[0] << 18) | rc[1])
 
             # Load the APLX data
             with open(aplx, "rb") as f:
@@ -857,21 +886,24 @@ class MachineController(ContextMixin):
             n_blocks = ((len(aplx_data) + self.scp_data_length - 1) //
                         self.scp_data_length)
 
-            # Perform each flood-fill.
+            # Start the flood fill for this application
+            # Get an index for the nearest neighbour operation
+            pid = self._get_next_nn_id()
+
+            # Send the flood-fill start packet
+            self._send_ffs(pid, n_blocks, fr)
+
+            # Send the core select packets
             for (region, cores) in fills:
-                # Get an index for the nearest neighbour operation
-                pid = self._get_next_nn_id()
+                self._send_ffcs(region, cores, fr)
 
-                # Send the flood-fill start packet
-                self._send_ffs(pid, region, n_blocks, fr)
+            # Send the data
+            base_address = self.read_struct_field(
+                "sv", "sdram_sys", 0, 0)
+            self._send_ffd(pid, aplx_data, base_address)
 
-                # Send the data
-                base_address = self.read_struct_field(
-                    "sv", "sdram_sys", 0, 0)
-                self._send_ffd(pid, aplx_data, base_address)
-
-                # Send the flood-fill END packet
-                self._send_ffe(pid, app_id, flags, cores, fr)
+            # Send the flood-fill END packet
+            self._send_ffe(pid, app_id, flags, fr)
 
     @ContextMixin.use_contextual_arguments(app_id=Required, n_tries=2,
                                            wait=False,

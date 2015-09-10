@@ -1092,7 +1092,7 @@ class TestMachineController(object):
 
         # Assert that the transmitted packets were sensible, do this by
         # decoding each call to send_scp.
-        assert cn._send_scp.call_count == n_blocks + 2
+        assert cn._send_scp.call_count == n_blocks + 2 + len(targets)
         # Flood-fill start
         (x, y, p, cmd, arg1, arg2, arg3) = cn._send_scp.call_args_list[0][0]
         assert x == y == p == 0
@@ -1102,9 +1102,24 @@ class TestMachineController(object):
         blocks = (arg1 & 0x0000ff00) >> 8
         assert blocks == n_blocks
 
-        assert arg2 == regions.get_region_for_chip(0, 1, level=3)
+        assert arg2 == 0  # Used to be region now 0 to indicate that using FFCS
 
         assert arg3 & 0x80000000  # Assert that we allocate ID on SpiNNaker
+        assert arg3 & 0x0000ff00 == NNConstants.forward << 8
+        assert arg3 & 0x000000ff == NNConstants.retry
+
+        # Flood fill core select
+        (x, y, p, cmd, arg1, arg2, arg3) = cn._send_scp.call_args_list[1][0]
+
+        assert x == y == p == 0
+        assert cmd == SCPCommands.nearest_neighbour_packet
+        op = (arg1 & 0xff000000) >> 24
+        assert op == NNCommands.flood_fill_core_select
+        cores = arg1 & 0x0003ffff
+        assert cores == coremask
+
+        assert arg2 == regions.get_region_for_chip(0, 1, level=3)
+
         assert arg3 & 0x0000ff00 == NNConstants.forward << 8
         assert arg3 & 0x000000ff == NNConstants.retry
 
@@ -1117,7 +1132,7 @@ class TestMachineController(object):
 
             # Check the sent SCP packet
             (x_, y_, p_, cmd, arg1, arg2, arg3, data) = \
-                cn._send_scp.call_args_list[n+1][0]
+                cn._send_scp.call_args_list[n+2][0]
 
             # Assert the x, y and p are the same
             assert x_ == x and y_ == y and p_ == p
@@ -1141,12 +1156,51 @@ class TestMachineController(object):
         assert cmd == SCPCommands.nearest_neighbour_packet
         assert arg1 & 0xff000000 == NNCommands.flood_fill_end << 24
         assert arg2 & 0xff000000 == app_id << 24
-        assert arg2 & 0x0003ffff == coremask
+        assert arg2 & 0x0003ffff == 0  # 0 because we're using FFCS
 
         exp_flags = 0x00000000
         if wait:
             exp_flags |= consts.AppFlags.wait
         assert arg2 & 0x00fc0000 == exp_flags << 18
+
+    def test_flood_fill_aplx_ordered_regions(self, cn, aplx_file):
+        """Test that flood-fill regions and core masks are sent in ascending
+        order.
+        """
+        BASE_ADDRESS = 0x68900000
+        # Create the mock controller
+        cn._send_scp = mock.Mock()
+        cn.read_struct_field = mock.Mock(return_value = BASE_ADDRESS)
+
+        # Override _send_ffcs such that it ensures increasing values of
+        # ((region << 18) | cores)
+        class SendFFCS(object):
+            def __init__(self):
+                self.last_sent = 0
+
+            def __call__(self, region, cores, fr):
+                # Create the ID for the packet
+                x = (region << 18) | cores
+                assert x > self.last_sent
+                self.last_sent = x
+
+        cn._send_ffcs = mock.Mock(side_effect=SendFFCS())
+
+        # Empty targets because we'll override "compress_flood_fill_regions" to
+        # return values out-of-order.
+        targets = dict()
+        regions_cores = [(100, 2), (100, 1), (10, 3)]
+
+        # Attempt to load
+        with mock.patch("rig.machine_control.machine_controller.regions."
+                        + "compress_flood_fill_regions") as cffr:
+            # Set the targets
+            cffr.return_value = iter(regions_cores)
+
+            # Perform the flood fille
+            cn.flood_fill_aplx({aplx_file: targets})
+
+        assert cn._send_ffcs.call_count == len(regions_cores)
 
     def test_load_and_check_succeed_use_count(self):
         """Test that APLX loading doesn't take place multiple times if the core
