@@ -61,7 +61,7 @@ setup(
     name="rig",
     version=__version__,
     packages=find_packages(),
-    package_data={'rig': ['boot/sark.struct', 'boot/scamp.boot',
+    package_data={'rig': ['boot/sark.struct', 'boot/scamp-1-34.boot',
                           'binaries/*.aplx']
                   },
 

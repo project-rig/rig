@@ -116,7 +116,8 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
     """
     # Get the boot data if not specified.
     if boot_data is None:  # pragma: no branch
-        boot_data = pkg_resources.resource_string("rig", "boot/scamp.boot")
+        boot_data = pkg_resources.resource_string("rig",
+                                                  "boot/scamp-1-34.boot")
 
     # Read the struct file and modify the "sv" struct to contain the
     # configuration values and write this into the boot data.
