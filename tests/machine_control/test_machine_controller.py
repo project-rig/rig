@@ -1170,7 +1170,7 @@ class TestMachineController(object):
         BASE_ADDRESS = 0x68900000
         # Create the mock controller
         cn._send_scp = mock.Mock()
-        cn.read_struct_field = mock.Mock(return_value = BASE_ADDRESS)
+        cn.read_struct_field = mock.Mock(return_value=BASE_ADDRESS)
 
         # Override _send_ffcs such that it ensures increasing values of
         # ((region << 18) | cores)
