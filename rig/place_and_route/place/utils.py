@@ -2,6 +2,11 @@
 
 from six import iteritems, itervalues
 
+from rig.netlist import Net
+
+from rig.place_and_route.constraints import \
+    LocationConstraint, SameChipConstraint, RouteEndpointConstraint
+
 from rig.place_and_route.exceptions import InsufficientResourceError
 
 
@@ -86,3 +91,151 @@ def apply_reserve_resource_constraint(machine, constraint):
         if overallocated(machine[constraint.location]):
             raise InsufficientResourceError(
                 "Cannot meet {}".format(constraint))
+
+
+class MergedVertex(object):
+    """A group of vertices which have been merged together for use inside a
+    placement algorithm."""
+
+    def __init__(self, vertices):
+        self.vertices = list(vertices)
+
+    def __repr__(self):
+        return "{}({})".format(self.__class__.__name__, repr(self.vertices))
+
+
+def apply_same_chip_constraints(vertices_resources, nets, constraints):
+    """Modify a set of vertices_resources, nets and constraints to account for
+    all SameChipConstraints.
+
+    To allow placement algorithms to handle SameChipConstraints without any
+    special cases, Vertices identified in a SameChipConstraint are merged into
+    a new vertex whose vertices_resources are the sum total of their parts
+    which may be placed as if a single vertex. Once placed, the placement can
+    be expanded into a full placement of all the original vertices using
+    :py:func:`finalise_same_chip_constraints`.
+
+    A typical use pattern might look like::
+
+        def my_placer(vertices_resources, nets, machine, constraints):
+            # Should be done first thing since this may redefine
+            # vertices_resources, nets and constraints.
+            vertices_resources, nets, constraints, substitutions = \\
+                apply_same_chip_constraints(vertices_resources,
+                                            nets, constraints)
+
+            # ...deal with other types of constraint...
+
+            # ...perform placement...
+
+            finalise_same_chip_constraints(substitutions, placements)
+            return placements
+
+    Note that this function does not modify its arguments but rather returns
+    new copies of the structures supplied.
+
+    Parameters
+    ----------
+    vertices_resources : {vertex: {resource: quantity, ...}, ...}
+    nets : [:py:class:`~rig.netlist.Net`, ...]
+    constraints : [constraint, ...]
+
+    Returns
+    -------
+    (vertices_resources, nets, constraints, substitutions)
+        The vertices_resources, nets and constraints values contain modified
+        copies of the supplied data structures modified to contain a single
+        vertex in place of the individual constrained vertices.
+
+        substitutions is a list of :py:class:`MergedVertex` objects which
+        resulted from the combining of the constrained vertices. The order of
+        the list is the order the substitutions were carried out. The
+        :py:func:`finalise_same_chip_constraints` function can be used to
+        expand a set of substitutions.
+    """
+    # Make a copy of the basic structures to be modified by this function
+    vertices_resources = vertices_resources.copy()
+    nets = nets[:]
+    constraints = constraints[:]
+
+    substitutions = []
+
+    for same_chip_constraint in constraints:
+        if not isinstance(same_chip_constraint, SameChipConstraint):
+            continue
+
+        # Skip constraints which don't actually merge anything...
+        if len(same_chip_constraint.vertices) <= 1:
+            continue
+
+        # The new (merged) vertex to replace the constrained vertices with
+        merged_vertex = MergedVertex(same_chip_constraint.vertices)
+        substitutions.append(merged_vertex)
+
+        # Remove the merged vertices from the set of vertices resources and
+        # accumulate the total resources consumed. Note add_resources is not
+        # used since we don't know if the resources consumed by each vertex are
+        # overlapping.
+        total_resources = {}
+        for vertex in same_chip_constraint.vertices:
+            resources = vertices_resources.pop(vertex)
+            for resource, value in iteritems(resources):
+                total_resources[resource] = (total_resources.get(resource, 0) +
+                                             value)
+        vertices_resources[merged_vertex] = total_resources
+
+        # A set containing the set of vertices to be merged (for efficient
+        # lookup purposes)
+        merged_vertices = set(same_chip_constraint.vertices)
+
+        # Update any nets which pointed to a merged vertex
+        for net_num, net in enumerate(nets):
+            net_changed = False
+
+            # Change net sources
+            if net.source in merged_vertices:
+                if not net_changed:
+                    net = Net(net.source, net.sinks, net.weight)
+                net_changed = True
+                net.source = merged_vertex
+
+            # Change net sinks
+            for sink_num, sink in enumerate(net.sinks):
+                if sink in merged_vertices:
+                    if not net_changed:
+                        net = Net(net.source, net.sinks, net.weight)
+                    net_changed = True
+                    net.sinks[sink_num] = merged_vertex
+
+            if net_changed:
+                nets[net_num] = net
+
+        # Update any constraints which refer to a merged vertex
+        for constraint_num, constraint in enumerate(constraints):
+            if isinstance(constraint, LocationConstraint):
+                if constraint.vertex in merged_vertices:
+                    constraints[constraint_num] = LocationConstraint(
+                        merged_vertex, constraint.location)
+            elif isinstance(constraint, SameChipConstraint):
+                if not set(constraint.vertices).isdisjoint(merged_vertices):
+                    constraints[constraint_num] = SameChipConstraint([
+                        merged_vertex if v in merged_vertices else v
+                        for v in constraint.vertices
+                    ])
+            elif isinstance(constraint, RouteEndpointConstraint):
+                if constraint.vertex in merged_vertices:
+                    constraints[constraint_num] = RouteEndpointConstraint(
+                        merged_vertex, constraint.route)
+
+    return (vertices_resources, nets, constraints, substitutions)
+
+
+def finalise_same_chip_constraints(substitutions, placements):
+    """Given a set of placements containing the supplied
+    :py:class:`MergedVertex`, remove the merged vertices replacing them with
+    their constituent vertices (changing the placements inplace).
+    """
+    for merged_vertex in reversed(substitutions):
+        placement = placements.pop(merged_vertex)
+        for v in merged_vertex.vertices:
+            placements[v] = placement

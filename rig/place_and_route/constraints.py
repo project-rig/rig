@@ -22,6 +22,20 @@ class LocationConstraint(object):
         self.location = location
 
 
+class SameChipConstraint(object):
+    """Ensure that a group of vertices is always placed on the same chip.
+
+    Attributes
+    ----------
+    vertices : [object, ...]
+        The list of user-supplied objects representing the vertices to be
+        placed together.
+    """
+
+    def __init__(self, vertices):
+        self.vertices = vertices
+
+
 class ReserveResourceConstraint(object):
     """Reserve a range of a resource on all or a specific chip.
 

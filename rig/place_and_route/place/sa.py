@@ -17,7 +17,8 @@ from rig.place_and_route.exceptions import \
 
 from rig.place_and_route.place.utils import \
     add_resources, subtract_resources, overallocated, \
-    apply_reserve_resource_constraint
+    apply_reserve_resource_constraint, apply_same_chip_constraints, \
+    finalise_same_chip_constraints
 
 
 """
@@ -542,6 +543,8 @@ def place(vertices_resources, nets, machine, constraints,
     fixed_vertices = {}
 
     # Handle constraints
+    vertices_resources, nets, constraints, substitutions = \
+        apply_same_chip_constraints(vertices_resources, nets, constraints)
     for constraint in constraints:
         if isinstance(constraint, LocationConstraint):
             # Location constraints are handled by recording the set of fixed
@@ -586,6 +589,7 @@ def place(vertices_resources, nets, machine, constraints,
     # * No effort is to be made
     # * There are no nets (and moving things has no effect)
     if len(movable_vertices) == 0 or effort == 0.0 or len(nets) == 0:
+        finalise_same_chip_constraints(substitutions, placements)
         return placements
 
     # Location-to-Vertices: A lookup {(x, y): [vertex, ...], ...} giving the
@@ -723,5 +727,7 @@ def place(vertices_resources, nets, machine, constraints,
 
     logger.info("Anneal terminated after %d iterations with final cost %0.1f.",
                 iteration_count, current_cost)
+
+    finalise_same_chip_constraints(substitutions, placements)
 
     return placements

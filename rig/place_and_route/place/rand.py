@@ -12,7 +12,8 @@ from rig.place_and_route.exceptions import \
 
 from rig.place_and_route.place.utils import \
     subtract_resources, overallocated, \
-    apply_reserve_resource_constraint
+    apply_reserve_resource_constraint, apply_same_chip_constraints, \
+    finalise_same_chip_constraints
 
 
 def place(vertices_resources, nets, machine, constraints,
@@ -43,6 +44,8 @@ def place(vertices_resources, nets, machine, constraints,
     placements = {}
 
     # Handle constraints
+    vertices_resources, nets, constraints, substitutions = \
+        apply_same_chip_constraints(vertices_resources, nets, constraints)
     for constraint in constraints:
         if isinstance(constraint, LocationConstraint):
             # Location constraints are handled by recording the set of fixed
@@ -97,5 +100,7 @@ def place(vertices_resources, nets, machine, constraints,
                 placements[vertex] = location
                 machine[location] = resources_if_placed
                 break
+
+    finalise_same_chip_constraints(substitutions, placements)
 
     return placements

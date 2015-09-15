@@ -12,7 +12,8 @@ from ..exceptions import InsufficientResourceError, InvalidConstraintError
 from ..constraints import LocationConstraint, ReserveResourceConstraint
 
 from .utils import \
-    subtract_resources, overallocated, apply_reserve_resource_constraint
+    subtract_resources, overallocated, apply_reserve_resource_constraint, \
+    apply_same_chip_constraints, finalise_same_chip_constraints
 
 
 def hilbert(level, angle=1, s=None):
@@ -94,13 +95,14 @@ def place(vertices_resources, nets, machine, constraints):
     """
     placements = {}
 
-    unplaced_vertices = set(vertices_resources)
-
     # Working copy of machine which will be updated to account for effects of
     # constraints.
     machine = machine.copy()
 
     # Handle constraints
+    vertices_resources, nets, constraints, substitutions = \
+        apply_same_chip_constraints(vertices_resources, nets, constraints)
+    unplaced_vertices = set(vertices_resources)
     for constraint in constraints:
         if isinstance(constraint, LocationConstraint):
             # Flag resources consumed for the specified chip
@@ -179,5 +181,7 @@ def place(vertices_resources, nets, machine, constraints):
             if vertex in net:
                 vertex_queue.append(net.source)
                 vertex_queue.extend(net.sinks)
+
+    finalise_same_chip_constraints(substitutions, placements)
 
     return placements
