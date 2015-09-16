@@ -83,12 +83,20 @@ Constraint
     Vertices which consume no cores are typically only useful when describing
     external devices connected to the SpiNNaker system.
     
-    Vertices which consume more than one core are typically only useful when a
-    vertex represents a group of applications which share memory. This is
-    because vertices will always be placed on a single SpiNNaker chip: they
-    cannot be split across many chips. If an application requires this type of
-    behaviour, users must perform this step in an application-defined process
-    prior to placement.
+    Vertices which consume more than one core are unlikely to be used
+    frequently:
+    
+    * Vertices will always be placed on a single SpiNNaker chip: they cannot
+      be split across many chips. If an application requires this type of
+      behaviour, users must perform this step in an application-defined process
+      prior to placement.
+    
+    * If several cores' applications must share some on-chip resource
+      (e.g. SDRAM) and must be placed on the same chip, a
+      :py:class:`~rig.place_and_route.constraints.SameChipConstraint` can be
+      used to enforce this requirement. Unlike a vertex with multiple cores,
+      each individual vertex (core) can have independent routes directly to and
+      from them.
 
 :py:func:`~rig.place_and_route.wrapper`: common case wrapper
 ------------------------------------------------------------

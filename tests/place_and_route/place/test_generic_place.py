@@ -8,6 +8,8 @@ placers can handle.
 
 import pytest
 
+import random
+
 from six import iteritems
 
 from rig.netlist import Net
@@ -18,7 +20,7 @@ from rig.place_and_route.exceptions import InsufficientResourceError
 from rig.place_and_route.exceptions import InvalidConstraintError
 
 from rig.place_and_route.constraints import LocationConstraint, \
-    ReserveResourceConstraint
+    ReserveResourceConstraint, SameChipConstraint
 
 from rig.place_and_route import place as default_place
 from rig.place_and_route.place.hilbert import place as hilbert_place
@@ -341,3 +343,35 @@ def test_reserve_resource_constraint(algorithm, kwargs):
         used_chips.add(placements[vertex])
     assert len(placements) == 4
     assert len(used_chips) == 4
+
+
+@pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
+def test_same_chip_constraint(algorithm, kwargs):
+    """Test that the SameChipConstraint is respected."""
+    # Should be able to cause two vertices to be colocated in an impossible
+    # manner
+    machine = Machine(2, 1, chip_resources={Cores: 1})
+    v0 = object()
+    v1 = object()
+    constraints = [SameChipConstraint([v0, v1])]
+    with pytest.raises(InsufficientResourceError):
+        algorithm({v0: {Cores: 1}, v1: {Cores: 1}}, [], machine, constraints,
+                  **kwargs)
+
+    # Create a number of random networks and make sure that constrained
+    # vertices are always placed together (chance would ensure they otherwise
+    # would not since nothing particularly will pull them together)
+    for _ in range(10):
+        machine = Machine(2, 2, chip_resources={Cores: 3})
+        vertices = [object() for _ in range(9)]
+        vertices_resources = {v: {Cores: 1} for v in vertices}
+        nets = [Net(v, random.choice(vertices)) for v in vertices]
+        constraints = [SameChipConstraint(vertices[:2])]
+        placements = algorithm(vertices_resources, nets, machine, constraints,
+                               **kwargs)
+
+        # No extra vertices should have apppeared
+        assert set(placements) == set(vertices)
+
+        # The placement of the two constrained vertices should be conincident
+        assert placements[vertices[0]] == placements[vertices[1]]
