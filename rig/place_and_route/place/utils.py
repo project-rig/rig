@@ -168,7 +168,8 @@ def apply_same_chip_constraints(vertices_resources, nets, constraints):
         if len(same_chip_constraint.vertices) <= 1:
             continue
 
-        # The new (merged) vertex to replace the constrained vertices with
+        # The new (merged) vertex with which to replace the constrained
+        # vertices
         merged_vertex = MergedVertex(same_chip_constraint.vertices)
         substitutions.append(merged_vertex)
 
@@ -194,10 +195,8 @@ def apply_same_chip_constraints(vertices_resources, nets, constraints):
 
             # Change net sources
             if net.source in merged_vertices:
-                if not net_changed:
-                    net = Net(net.source, net.sinks, net.weight)
                 net_changed = True
-                net.source = merged_vertex
+                net = Net(merged_vertex, net.sinks, net.weight)
 
             # Change net sinks
             for sink_num, sink in enumerate(net.sinks):
