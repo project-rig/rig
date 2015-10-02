@@ -1941,7 +1941,8 @@ class _WriteBuffer(object):
             # new write
             self.flush()
             self.add_new_write(start_address, data)
-        elif start_offset <= self.current_end and end_offset <= self.buffer_size:
+        elif (start_offset <= self.current_end and
+                end_offset <= self.buffer_size):
             # The write is entirely contained within the buffer and starts
             # within the area of the buffer which already contains data, so we
             # can just modify the buffer.
