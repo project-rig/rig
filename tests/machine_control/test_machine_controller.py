@@ -2214,6 +2214,27 @@ class TestMemoryIO(object):
             mock.call(4, b'\x30\x40', 9, 2, 0),
         ])
 
+    def test_coalescing_writes_flushes_on_non_coalesced_write_2(self):
+        """Tests that writes from multiple slices of the same file-like view of
+        memory are buffered until a non-contiguous write occurs.
+        """
+        # Set up
+        cn = mock.Mock(spec_set=MachineController)
+        parent = MemoryIO(cn, 9, 2, 0, 8, buffer_size=8)
+
+        with parent:
+            child_0 = parent[:4]
+            child_1 = parent[4:]
+
+            child_1.write(b'\x30\x40')
+            child_0.write(b'\x12')  # Does not meet child 1
+
+        # The writes should have been performed
+        cn.write.assert_has_calls([
+            mock.call(4, b'\x30\x40', 9, 2, 0),
+            mock.call(0, b'\x12', 9, 2, 0),
+        ])
+
     def test_buffer_overflows(self):
         """Tests that writes from multiple slices of the same file-like view of
         memory are buffered until a non-contiguous write occurs.
