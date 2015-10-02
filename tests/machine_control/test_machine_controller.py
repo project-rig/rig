@@ -1940,7 +1940,7 @@ class TestMemoryIO(object):
         # Assert that reading with no parameter reads the full number of bytes
         sdram_file.seek(offset)
         sdram_file.read()
-        mock_controller.read.assert_called_one_with(
+        mock_controller.read.assert_called_once_with(
             start_address + offset, length - offset, x, y, 0)
 
     def test_read_beyond(self, mock_controller):
@@ -2209,7 +2209,7 @@ class TestMemoryIO(object):
             child_1.write(b'\x30\x40')
 
         # The writes should have been performed
-        cn.write.assert_any_calls([
+        cn.write.assert_has_calls([
             mock.call(0, b'\x12', 9, 2, 0),
             mock.call(4, b'\x30\x40', 9, 2, 0),
         ])
