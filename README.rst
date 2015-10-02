@@ -99,6 +99,7 @@ Rig is tested against the following versions of Python:
 
 * 2.7
 * 3.4
+* 3.5
 
 Other versions may or may not work.
 
