@@ -1945,7 +1945,8 @@ class _WriteBuffer(object):
         else:
             # The write either starts outside the used area of the buffer, or
             # would overflow the buffer.
-            if start_offset < self.buffer_size:
+            if (start_offset < self.buffer_size and
+                    start_offset <= self.current_end):
                 # We would overflow the buffer, so store as much into the
                 # buffer as possible.
                 end = self.buffer_size - start_offset
