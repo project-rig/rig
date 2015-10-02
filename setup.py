@@ -1,6 +1,7 @@
 import io
 import re
 from setuptools import setup, find_packages
+import sys
 
 
 def read_file(filename, **kwargs):
@@ -57,6 +58,12 @@ def replace_local_hyperlinks(
 with open("rig/version.py", "r") as f:
     exec(f.read())
 
+# The requirements vary depending on the version of Python
+requirements = ["numpy>1.6", "six", "sentinel", "pytz"]
+if sys.version_info < (3, 4, 0):
+    # Python versions < 3.4 require "enum34" to be installed
+    requirements.append("enum34")
+
 setup(
     name="rig",
     version=__version__,
@@ -93,7 +100,7 @@ setup(
     keywords="spinnaker placement routing graph fixed-point",
 
     # Requirements
-    install_requires=["numpy>1.6", "six", "enum34", "sentinel", "pytz"],
+    install_requires=requirements,
 
     # Scripts
     entry_points={
