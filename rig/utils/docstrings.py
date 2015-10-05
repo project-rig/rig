@@ -36,7 +36,10 @@ def add_int_enums_to_docstring(enum):
         b = 1
         <BLANKLINE>
     """
-    if enum.__doc__ is None:
+    # The enum34 library (used for compatibility with Python < v3.4) rather
+    # oddly set its docstring to None rather than some senible but empty
+    # default...
+    if enum.__doc__ is None:  # pragma: nocover
         enum.__doc__ = ""
 
     enum.__doc__ += ("\n\n"

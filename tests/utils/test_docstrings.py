@@ -18,11 +18,11 @@ def test_add_int_enums_to_docstring_empty():
     class EmptyIntEnumWithDocstring(IntEnum):
         """An empty IntEnum."""
 
-    assert EmptyIntEnum.__doc__ == (
+    assert EmptyIntEnum.__doc__.endswith(
         "\n\n"
         "Attributes\n"
         "----------\n")
-    assert EmptyIntEnumWithDocstring.__doc__ == (
+    assert EmptyIntEnumWithDocstring.__doc__.endswith(
         "An empty IntEnum.\n"
         "\n"
         "Attributes\n"
@@ -42,13 +42,13 @@ def test_add_int_enums_to_docstring():
         a = 1
         b = 2
 
-    assert MyIntEnum.__doc__ == (
+    assert MyIntEnum.__doc__.endswith(
         "\n\n"
         "Attributes\n"
         "----------\n"
         "a = 1\n"
         "b = 2\n")
-    assert MyIntEnumWithDocstring.__doc__ == (
+    assert MyIntEnumWithDocstring.__doc__.endswith(
         "A populated IntEnum.\n"
         "\n"
         "Attributes\n"

@@ -3,6 +3,7 @@ language: python
 python:
         - 2.7
         - 3.4
+        - 3.5
 install:
         - python setup.py install
         - pip install -r requirements-test.txt
@@ -24,11 +25,11 @@ script:
                     --cov tests \
                     --durations=10
         # Run doctests in code
-        - py.test rig/
+        - py.test rig/ --doctest-modules
         # Run doctests in documentation
-        - py.test docs/
+        - py.test docs/ --doctest-glob='*_doctest.rst'
         # Code quality check
-        - flake8 rig
+        - flake8 rig tests
 after_success:
         - coveralls
 after_script:
