@@ -118,10 +118,8 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
         # Take the longest dimension first route.
         last_node = route[neighbour]
         for direction, (x, y) in ldf:
-            this_node = route.get((x, y), None)
-            if this_node is None:
-                this_node = RoutingTree((x, y))
-                route[(x, y)] = this_node
+            this_node = RoutingTree((x, y))
+            route[(x, y)] = this_node
 
             last_node.children.add((Routes(direction), this_node))
             last_node = this_node
