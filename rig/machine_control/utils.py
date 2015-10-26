@@ -4,7 +4,8 @@ from ..machine import Cores, SDRAM
 
 def sdram_alloc_for_vertices(controller, placements, allocations,
                              core_as_tag=True, buffer_size=0,
-                             sdram_resource=SDRAM, cores_resource=Cores):
+                             sdram_resource=SDRAM, cores_resource=Cores,
+                             clear=False):
     """Allocate and return a file-like view of a region of SDRAM for each
     vertex which uses SDRAM as a resource.
 
@@ -40,6 +41,10 @@ def sdram_alloc_for_vertices(controller, placements, allocations,
         When `core_as_tag=True`, the tag allocated will be the ID of the first
         core used by the vertex (indicated by the `cores_resource`, default
         :py:class:`~rig.machine.Cores`), otherwise the tag will be set to 0.
+    clear : bool
+        If True the requested memory will be filled with zeros before the
+        pointer is returned.  If False (the default) the memory will be left
+        as-is.
 
     Other Parameters
     ----------------
@@ -85,7 +90,7 @@ def sdram_alloc_for_vertices(controller, placements, allocations,
 
             # Get the memory
             vertex_memory[vertex] = controller.sdram_alloc_as_filelike(
-                size, tag, x=x, y=y, buffer_size=buffer_size
+                size, tag, x=x, y=y, buffer_size=buffer_size, clear=clear
             )
 
     return vertex_memory

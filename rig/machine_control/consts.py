@@ -67,6 +67,8 @@ class SCPCommands(enum.IntEnum):
     read = 2  # Read data
     write = 3  # Write data
 
+    fill = 5  # Fill a number of words with a given value
+
     link_read = 17  # Send a NN (or FPGA reg) read command
     link_write = 18  # Send a NN (or FPGA reg) write command
 
