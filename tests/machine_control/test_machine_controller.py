@@ -339,13 +339,25 @@ class TestMachineControllerLive(object):
                 if neighbour not in nominal_live_chips:
                     assert (x, y, link) in m.dead_links
 
+    # NOTE: "Hello, SpiNNaker" is 4 words, it is important that one test is a
+    # whole number of words and that another isn't.
     @pytest.mark.parametrize("data", [b"Hello, SpiNNaker",
                                       b"Bonjour SpiNNaker"])
-    def test_sdram_alloc_as_filelike_read_write(self, controller, data):
+    @pytest.mark.parametrize("clear", (False, True))
+    def test_sdram_alloc_as_filelike_read_write(self, controller, data, clear):
         # Allocate some memory, write to it and check that we can read back
         with controller(x=1, y=0):
-            mem = controller.sdram_alloc_as_filelike(len(data))
+            mem = controller.sdram_alloc_as_filelike(len(data), clear=clear)
+
+            # Check the memory was cleared if we requested it to be
+            if clear:
+                assert mem.read() == b'\x00' * len(data)
+
+            # Write the data
+            mem.seek(0)
             assert mem.write(data) == len(data)
+
+            # Read back the data
             mem.seek(0)
             assert mem.read(len(data)) == data
 
@@ -664,11 +676,38 @@ class TestMachineController(object):
         assert call == (x, y, 0, SCPCommands.led)
         assert kwargs["arg1"] == sum(led_action << (led * 2) for led in leds)
 
+    @pytest.mark.parametrize("addr", [0x1, 0x4])
+    @pytest.mark.parametrize("size", [3, 16])
+    @pytest.mark.parametrize("data", [0x0, 0x2])
+    @pytest.mark.parametrize("x, y, p", [(1, 2, 3), (7, 1, 9)])
+    def test_fill(self, addr, size, data, x, y, p):
+        """Check filling a region of memory."""
+        # Create the mock controller
+        cn = MachineController("localhost")
+
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                                              0x80, 0, addr, None, None, b"")
+        cn.write = mock.Mock()
+
+        # Perform the fill
+        cn.fill(addr, data, size, x, y, p)
+
+        if size % 4 or addr % 4:
+            # If the size is not a whole number of words or is not word
+            # aligned then use write to empty the memory
+            cn.write.assert_called_once_with(
+                addr, struct.pack("<B", data)*size, x, y, p)
+        else:
+            # Otherwise use FILL to clear the memory
+            cn._send_scp.assert_any_call(x, y, p, 5, addr, data, size)
+
     @pytest.mark.parametrize("app_id", [30, 33])
-    @pytest.mark.parametrize("size", [8, 200])
+    @pytest.mark.parametrize("size", [7, 8, 200])
     @pytest.mark.parametrize("tag", [0, 2])
-    @pytest.mark.parametrize("addr", [0x67000000, 0x61000000])
-    def test_sdram_alloc_success(self, app_id, size, tag, addr):
+    @pytest.mark.parametrize("addr", [0x1, 0x67000000, 0x61000000])
+    @pytest.mark.parametrize("clear", (False, True))
+    def test_sdram_alloc_success(self, app_id, size, tag, addr, clear):
         """Check allocating a region of SDRAM.
 
         Outgoing:
@@ -683,16 +722,22 @@ class TestMachineController(object):
         cn._send_scp = mock.Mock()
         cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
                                               0x80, 0, addr, None, None, b"")
+        cn.fill = mock.Mock()
 
         # Try the allocation
-        address = cn.sdram_alloc(size, tag, 1, 2, app_id=app_id)
+        x = 1
+        y = 2
+        address = cn.sdram_alloc(size, tag, x, y, app_id=app_id, clear=clear)
 
         # Check the return value
         assert address == addr
 
         # Check the packet was sent as expected
-        cn._send_scp.assert_called_once_with(1, 2, 0, 28, app_id << 8,
-                                             size, tag)
+        cn._send_scp.assert_any_call(x, y, 0, 28, app_id << 8, size, tag)
+
+        # If clear then check that write was called
+        if clear:
+            cn.fill.assert_called_once_with(addr, 0x0, size, x, y, 0)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (5, 6)])
     @pytest.mark.parametrize("size, tag", [(8, 0), (200, 2)])
@@ -703,9 +748,10 @@ class TestMachineController(object):
         cn._send_scp = mock.Mock()
         cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
                                               0x80, 0, 0, None, None, b"")
+        cn.write = mock.Mock()
 
         with pytest.raises(SpiNNakerMemoryError) as excinfo:
-            cn.sdram_alloc(size, tag=tag, x=x, y=y, app_id=30)
+            cn.sdram_alloc(size, tag=tag, x=x, y=y, app_id=30, clear=True)
 
         assert str((x, y)) in str(excinfo.value)
         assert str(size) in str(excinfo.value)
@@ -716,21 +762,30 @@ class TestMachineController(object):
             assert "tag" in str(excinfo.value)
             assert str(tag) in str(excinfo.value)
 
+        # NO write OR fill should have occurred
+        assert cn._send_scp.call_count == 1  # No fill
+        assert not cn.write.called  # No write
+
     @pytest.mark.parametrize(
         "x, y, app_id, tag, addr, size, buffer_size",
         [(0, 1, 30, 8, 0x67800000, 100, 20),
          (3, 4, 33, 2, 0x12134560, 300, 100)]
     )
+    @pytest.mark.parametrize("clear", (True, False))
     def test_sdram_alloc_as_filelike(self, app_id, size, tag, addr, x, y,
-                                     buffer_size):
+                                     buffer_size, clear):
         """Test allocing and getting a file-like object returned."""
         # Create the mock controller
         cn = MachineController("localhost")
         cn.sdram_alloc = mock.Mock(return_value=addr)
+        cn.write = mock.Mock()
 
         # Try the allocation
         fp = cn.sdram_alloc_as_filelike(size, tag, x, y, app_id=app_id,
-                                        buffer_size=buffer_size)
+                                        buffer_size=buffer_size, clear=clear)
+
+        # Check that the arguments were passed on correctly
+        cn.sdram_alloc.assert_called_once_with(size, tag, x, y, app_id, clear)
 
         # Check the fp has the expected start and end
         assert fp._start_address == addr
@@ -1899,7 +1954,7 @@ class TestMachineController(object):
         # app_id=app_id
         with cn.application(app_id):
             cn.sdram_alloc_as_filelike(128, tag=0, x=0, y=0)
-            cn.sdram_alloc.assert_called_once_with(128, 0, 0, 0, app_id)
+            cn.sdram_alloc.assert_called_once_with(128, 0, 0, 0, app_id, False)
 
         # Exiting the context should result in calling app_stop
         cn.send_signal.assert_called_once_with("stop")

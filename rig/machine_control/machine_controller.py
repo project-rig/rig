@@ -655,8 +655,34 @@ class MachineController(ContextMixin):
         self._send_scp(x, y, 0, SCPCommands.led, arg1=arg1, expected_args=0)
 
     @ContextMixin.use_contextual_arguments()
+    def fill(self, address, data, size, x, y, p):
+        """Fill a region of memory with the specified byte.
+
+        Parameters
+        ----------
+        data : int
+            Data with which to fill memory. If `address` and `size` are word
+            aligned then `data` is assumed to be a word; otherwise it is
+            assumed to be a byte.
+
+        Notes
+        -----
+        If the address and size are word aligned then a fast fill method will
+        be used, otherwise a much slower write will be incurred.
+        """
+        if size % 4 or address % 4:
+            # If neither the size nor the address are word aligned we have to
+            # use `write` as `sark_word_set` can only work with words.
+            # Convert the data into a string and then write:
+            data = struct.pack('<B', data) * size
+            self.write(address, data, x, y, p)
+        else:
+            # We can perform a fill, this will call `sark_word_set` internally.
+            self._send_scp(x, y, p, SCPCommands.fill, address, data, size)
+
+    @ContextMixin.use_contextual_arguments()
     def sdram_alloc(self, size, tag=0, x=Required, y=Required,
-                    app_id=Required):
+                    app_id=Required, clear=False):
         """Allocate a region of SDRAM for an application.
 
         Requests SARK to allocate a block of SDRAM for an application. This
@@ -670,6 +696,10 @@ class MachineController(ContextMixin):
             8-bit (chip-wide) tag that can be looked up by a SpiNNaker
             application to discover the address of the allocated block.  If `0`
             then no tag is applied.
+        clear : bool
+            If True the requested memory will be filled with zeros before the
+            pointer is returned.  If False (the default) the memory will be
+            left as-is.
 
         Returns
         -------
@@ -692,11 +722,19 @@ class MachineController(ContextMixin):
         if rv.arg1 == 0:
             # Allocation failed
             raise SpiNNakerMemoryError(size, x, y, tag)
-        return rv.arg1
+
+        # Get the address
+        address = rv.arg1
+
+        if clear:
+            # Clear the memory if so desired
+            self.fill(address, 0, size, x, y, 0)
+
+        return address
 
     @ContextMixin.use_contextual_arguments()
     def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
-                                app_id=Required, buffer_size=0):
+                                app_id=Required, buffer_size=0, clear=False):
         """Like :py:meth:`.sdram_alloc` but returns a file-like object which
         allows safe reading and writing to the block that is allocated.
 
@@ -721,7 +759,7 @@ class MachineController(ContextMixin):
             invalid.
         """
         # Perform the malloc
-        start_address = self.sdram_alloc(size, tag, x, y, app_id)
+        start_address = self.sdram_alloc(size, tag, x, y, app_id, clear)
 
         return MemoryIO(self, x, y, start_address, start_address + size,
                         buffer_size=buffer_size)

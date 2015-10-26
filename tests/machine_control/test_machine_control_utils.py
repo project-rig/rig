@@ -9,7 +9,8 @@ from rig.machine import Cores, SDRAM
 
 @pytest.mark.parametrize("core_as_tag", [True, False])
 @pytest.mark.parametrize("buffer_size", [None, 400])
-def test_sdram_alloc_for_vertices(core_as_tag, buffer_size):
+@pytest.mark.parametrize("clear", [True, False])
+def test_sdram_alloc_for_vertices(core_as_tag, buffer_size, clear):
     """Test allocing and getting a map of vertices to file-like objects
     when multiple blocks of memory are requested.
     """
@@ -29,7 +30,7 @@ def test_sdram_alloc_for_vertices(core_as_tag, buffer_size):
     # Create the controller
     cn = MachineController("localhost")
 
-    def sdram_alloc(size, tag, x, y, app_id):
+    def sdram_alloc(size, tag, x, y, app_id, clear):
         return {
             (0, 0, 1): 0x67800000,
             (0, 0, 2): 0x60000000,
@@ -43,7 +44,7 @@ def test_sdram_alloc_for_vertices(core_as_tag, buffer_size):
 
     # Perform the SDRAM allocation
     with cn(app_id=33):
-        kwargs = dict(core_as_tag=core_as_tag)
+        kwargs = dict(core_as_tag=core_as_tag, clear=clear)
         if buffer_size is not None:
             kwargs["buffer_size"] = buffer_size
 
@@ -52,9 +53,9 @@ def test_sdram_alloc_for_vertices(core_as_tag, buffer_size):
 
     # Ensure the correct calls were made to sdram_alloc
     cn.sdram_alloc.assert_has_calls([
-        mock.call(400, 1 if core_as_tag else 0, 0, 0, 33),
-        mock.call(200, 2 if core_as_tag else 0, 0, 0, 33),
-        mock.call(100, 1 if core_as_tag else 0, 1, 1, 33),
+        mock.call(400, 1 if core_as_tag else 0, 0, 0, 33, clear),
+        mock.call(200, 2 if core_as_tag else 0, 0, 0, 33, clear),
+        mock.call(100, 1 if core_as_tag else 0, 1, 1, 33, clear),
     ], any_order=True)
 
     # Ensure that every vertex has a memory file-like
