@@ -1,5 +1,7 @@
+import pytest
+
 from rig.place_and_route.utils import build_application_map, \
-    build_routing_tables
+    build_routing_tables, MultisourceRouteError
 
 from rig.machine import Cores
 
@@ -197,70 +199,116 @@ def test_build_routing_tables():
     assert entries == [e0, e1] or entries == [e1, e0]
 
 
-def test_build_routing_tables_repeated_key_mask():
-    # Multiple nets with the same key should be merged together
-    n0 = Net(object(), object())
-    r0 = RoutingTree((0, 0), set([(Routes.core_6, n0.sinks[0])]))
-    n1 = Net(object(), object())
-    r1 = RoutingTree((0, 0), set([(Routes.core_5, n1.sinks[0])]))
-    routes = {n0: r0, n1: r1}
-    net_keys = {n0: (0xCAFE, 0xFFFF), n1: (0xCAFE, 0xFFFF)}
-    assert build_routing_tables(routes, net_keys) == {
-        (0, 0): [RoutingTableEntry(set([Routes.core_5, Routes.core_6]),
-                                   0xCAFE, 0xFFFF)]
+def test_build_routing_tables_repeated_key_mask_merge_allowed():
+    """Nets with the same key and mask are allowed to MERGE into a SpiNNaker
+    node provided that they have the same outgoing route.
+
+
+    e.g.,
+
+        (0, 1) ----> (1, 1) ----> (2, 1)
+
+        PLUS:
+
+                     (1, 1) ----> (2, 1)
+
+                       ^
+                       |
+                       |
+
+                     (1, 0)
+
+        EQUALS:
+
+
+        (0, 1) ----> (1, 1) ----> (2, 1)
+
+                       ^
+                       |
+                       |
+
+                     (1, 0)
+    """
+    # Create the nets
+    sink = object()
+    net0 = Net(object(), sink)
+    net1 = Net(object(), sink)
+
+    # Create the routing trees
+    r0 = RoutingTree((2, 1), {(Routes.core(1), sink)})
+    r1 = RoutingTree((1, 1), {(Routes.west, r0)})
+    routes = {
+        net0: RoutingTree((0, 1), {(Routes.west, r1)}),
+        net1: RoutingTree((1, 0), {(Routes.north, r1)}),
     }
 
-
-def test_build_routing_tables_repeated_key_mask_not_default():
-    """The routes illustrated below have the same key and mask but should NOT
-    BE marked as default routes, despite the fact that each alone could be.
-
-                (1, 2)
-                  ^
-                  |
-                  |
-    (0, 1) ---> (1, 1) ---> (2, 1)
-                  ^
-                  |
-                  |
-                (1, 0)
-    """
-    n0 = Net(object(), object())
-    r0 = \
-        RoutingTree((0, 1), set([
-            (Routes.east, RoutingTree((1, 1), set([
-                (Routes.east, RoutingTree((2, 1), set([
-                    (Routes.core_1, n0.sinks[0])
-                ])))
-            ])))
-        ]))
-
-    n1 = Net(object(), object())
-    r1 = \
-        RoutingTree((1, 0), set([
-            (Routes.north, RoutingTree((1, 1), set([
-                (Routes.north, RoutingTree((1, 2), set([
-                    (Routes.core_2, n1.sinks[0])
-                ])))
-            ])))
-        ]))
-
-    routes = {n0: r0, n1: r1}
-    net_keys = {n0: (0xCAFE, 0xFFFF), n1: (0xCAFE, 0xFFFF)}
+    # Create the keys
+    net_keys = {net: (0x0, 0xf) for net in (net0, net1)}
 
     # Build the routing tables
     routing_tables = build_routing_tables(routes, net_keys)
 
+    # Check that the routing tables are correct
     assert routing_tables[(0, 1)] == [
-        RoutingTableEntry(set([Routes.east]), 0xCAFE, 0xFFFF)]
-    assert routing_tables[(1, 0)] == [
-        RoutingTableEntry(set([Routes.north]), 0xCAFE, 0xFFFF)]
-
-    assert routing_tables[(2, 1)] == [
-        RoutingTableEntry(set([Routes.core_1]), 0xCAFE, 0xFFFF)]
-    assert routing_tables[(1, 2)] == [
-        RoutingTableEntry(set([Routes.core_2]), 0xCAFE, 0xFFFF)]
-
-    # (1, 1) SHOULD contain 1 entry
+        RoutingTableEntry({Routes.west}, 0x0, 0xf),
+    ]
     assert routing_tables[(1, 1)] == [
-        RoutingTableEntry(set([Routes.east, Routes.north]), 0xCAFE, 0xFFFF)]
+        RoutingTableEntry({Routes.west}, 0x0, 0xf),
+    ]
+    assert routing_tables[(2, 1)] == [
+        RoutingTableEntry({Routes.core(1)}, 0x0, 0xf),
+    ]
+    assert routing_tables[(1, 0)] == [
+        RoutingTableEntry({Routes.north}, 0x0, 0xf),
+    ]
+
+
+def test_build_routing_tables_repeated_key_mask_fork_not_allowed():
+    """Two nets with the same key and mask are NEVER allowed to FORK at a
+    SpiNNaker node.
+
+    e.g.,
+
+        (0, 1) ----> (1, 1) ----> (2, 1)
+
+        PLUS:
+
+                     (1, 1) ----> (2, 1)
+
+                       |
+                       |
+                       v
+
+                     (1, 0)
+
+        IS NOT ALLOWED!
+    """
+    # Create the nets
+    sink0 = object()
+    sink1 = object()
+
+    net0 = Net(object(), sink0)
+    net1 = Net(object(), [sink0, sink1])
+
+    # Create the routing trees
+    r_west = RoutingTree((2, 1), {(Routes.core(1), sink0)})
+    routes = {
+        net0: RoutingTree((0, 1), {
+            (Routes.west, RoutingTree((1, 1), {(Routes.west, r_west)})),
+        }),
+        net1: RoutingTree((1, 1), {
+            (Routes.west, r_west),
+            (Routes.south, RoutingTree((1, 0), {(Routes.core(1), sink1)})),
+        }),
+    }
+
+    # Create the keys
+    net_keys = {net: (0x0, 0xf) for net in (net0, net1)}
+
+    # Build the routing tables
+    with pytest.raises(MultisourceRouteError) as err:
+        build_routing_tables(routes, net_keys)
+
+    assert "(1, 1)" in str(err)  # Co-ordinate of the fork
+    assert "0x00000000" in str(err)  # Key that causes the problem
+    assert "0x0000000f" in str(err)  # Mask that causes the problem
