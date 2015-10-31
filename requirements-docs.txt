@@ -1,6 +1,6 @@
 sphinx
 numpydoc
 six
-enum34
+enum-compat
 sentinel
 mock
