@@ -52,13 +52,22 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
 
     This command produces routing tables with entries optionally omitted when
     the route does not change direction (i.e. when default routing can be
-    used). Entries with identical keys and masks will be merged.
+    used).
 
-    Note: The routing trees provided are assumed to be correct and continuous
-    (not missing any hops). If this is not the case, the output is undefined.
+    .. warning::
+        A :py:exception:`~rig.place_and_route.utils.MultisourceRouteError` will
+        be raised if entries with identical keys and masks but with differing
+        routes are generated. This is not a perfect test, entries which would
+        otherwise collide are not spotted.
 
-    Note: If a routing tree has a teriminating vertex whose route is set to
-    None, that vertex is ignored.
+    .. warning::
+        The routing trees provided are assumed to be correct and continuous
+        (not missing any hops). If this is not the case, the output is
+        undefined.
+
+    .. note::
+        If a routing tree has a terminating vertex whose route is set to None,
+        that vertex is ignored.
 
     Parameters
     ----------
@@ -111,9 +120,14 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
 
             # Add a routing entry when the direction changes
             if (key, mask) in route_sets[(x, y)]:
-                # Update the existing route set if possible
+                # If there is an existing route set raise an error if the out
+                # directions are not equivalent.
+                if route_sets[(x, y)][(key, mask)].outs != out_directions:
+                    raise MultisourceRouteError(key, mask, (x, y))
+
+                # Otherwise, add the input directions as this represents a
+                # merge of the routes.
                 route_sets[(x, y)][(key, mask)].ins.add(direction)
-                route_sets[(x, y)][(key, mask)].outs.update(out_directions)
             else:
                 # Otherwise create a new route set
                 route_sets[(x, y)][(key, mask)] = _InOutPair(
@@ -136,3 +150,18 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
             )
 
     return routing_tables
+
+
+class MultisourceRouteError(Exception):
+    """Indicates that two nets with the same key and mask would cause packets
+    to become duplicated.
+    """
+    def __init__(self, key, mask, coordinate):
+        self.key = key
+        self.mask = mask
+        self.x, self.y = coordinate
+
+    def __str__(self):
+        return ("Two different nets with the same key ({0.key:#010x}) and "
+                "mask ({0.mask:#010x}) fork differently at ({0.x}, {0.y})".
+                format(self))
