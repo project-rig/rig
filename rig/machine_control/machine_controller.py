@@ -10,9 +10,10 @@ import struct
 import time
 import pkg_resources
 
-from .consts import SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
-from . import boot, consts, regions, struct_file
-from .scp_connection import SCPConnection
+from rig.machine_control.consts import \
+    SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
+from rig.machine_control import boot, consts, regions, struct_file
+from rig.machine_control.scp_connection import SCPConnection
 
 from rig.machine_control.scp_connection import SCPError
 
