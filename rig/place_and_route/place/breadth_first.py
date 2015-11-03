@@ -18,6 +18,8 @@ def breadth_first_vertex_order(vertices_resources, nets):
     # Enumerate the set of nets attached to each vertex
     vertex_neighbours = defaultdict(set)
     for net in nets:
+        # Note: Iterating over a Net object produces the set of vertices
+        # involved in the net.
         vertex_neighbours[net.source].update(net)
         for sink in net.sinks:
             vertex_neighbours[sink].update(net)
