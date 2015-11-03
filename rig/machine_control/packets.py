@@ -11,18 +11,46 @@ class SDPPacket(object):
     __slots__ = ["reply_expected", "tag", "dest_port", "dest_cpu", "src_port",
                  "src_cpu", "dest_x", "dest_y", "src_x", "src_y", "data"]
 
-    def __init__(self, reply_expected=False, tag=None,
-                 dest_port=None, dest_cpu=None, src_port=None, src_cpu=None,
-                 dest_x=None, dest_y=None, src_x=None, src_y=None, data=b''):
+    def __init__(self, reply_expected=False, tag=0xff,
+                 dest_port=None, dest_cpu=None, src_port=7, src_cpu=31,
+                 dest_x=None, dest_y=None, src_x=0, src_y=0, data=b''):
         """Create a new SDPPacket.
 
         Parameters
         ----------
+        dest_x : int (0-255)
+            x co-ordinate of the chip to which the packet should be sent.
+        dest_y : int (0-255)
+            y co-ordinate of the chip to which the packet should be sent.
+        dest_cpu : int (0-17)
+            Index of the core which should receive the packet.
+        dest_port : int (0-7)
+            Port which should receive the packet (0 is reserved for debugging).
+        data : bytes
+            Data to append to the packet.
         reply_expected : bool
-            True if a reply is expected, otherwise False.
+            True if a response to this packet is expected, if False (the
+            default) no response is expected.
+
+        Other Parameters
+        ----------------
         tag : int
-            An integer representing the IPTag that should be used to transmit
-            the packer over an IPv4 network.
+            IPTag used to determine where to send packets over IPv4. The
+            default (``0xff``) indicates a packet being transmitted into
+            SpiNNaker.
+        src_port : int
+            Source port of the packet.
+        src_cpu : int
+            Source CPU of the packet.
+        src_x : int
+            Source x co-ordinate of the packet.
+        src_y : int
+        `   Source y co-ordinate of the packet.
+
+        .. note::
+            The default values for `tag`, `src_port`, `src_cpu`, `src_x` and
+            `src_y` indicate a packet being transmitted to SpiNNaker over the
+            network and will not require changing for this use.
         """
         self.reply_expected = reply_expected
         self.tag = tag
@@ -74,10 +102,60 @@ class SCPPacket(SDPPacket):
     """An SCP Packet"""
     __slots__ = ["cmd_rc", "seq", "arg1", "arg2", "arg3"]
 
-    def __init__(self, reply_expected=False, tag=None,
-                 dest_port=None, dest_cpu=None, src_port=None, src_cpu=None,
-                 dest_x=None, dest_y=None, src_x=None, src_y=None, cmd_rc=None,
-                 seq=None, arg1=None, arg2=None, arg3=None, data=b''):
+    def __init__(self, reply_expected=False, tag=0xff,
+                 dest_port=None, dest_cpu=None, src_port=7, src_cpu=31,
+                 dest_x=None, dest_y=None, src_x=0, src_y=0, cmd_rc=None,
+                 seq=0, arg1=None, arg2=None, arg3=None, data=b''):
+        """Create a new SCP formatted packet.
+
+        Parameters
+        ----------
+        dest_x : int (0-255)
+            x co-ordinate of the chip to which the packet should be sent.
+        dest_y : int (0-255)
+            y co-ordinate of the chip to which the packet should be sent.
+        dest_cpu : int (0-17)
+            Index of the core which should receive the packet.
+        dest_port : int (0-7)
+            Port which should receive the packet (0 is reserved for debugging).
+        cmd_rc : int (1 word)
+            Command/return code of the packet. This will determine what action
+            occurs if the packet is handled by SARK or SCAMP.
+        arg1 : int (1 word) or None
+            If None then ignored.
+        arg2 : int (1 word) or None
+            If None then ignored.
+        arg3 : int (1 word) or None
+            If None then ignored.
+        data : bytes
+            Data to append to the packet after `arg1`, `arg2` and `arg3`.
+        reply_expected : bool
+            True if a response to this packet is expected, if False (the
+            default) no response is expected.
+
+        Other Parameters
+        ----------------
+        tag : int
+            IPTag used to determine where to send packets over IPv4. The
+            default (``0xff``) indicates a packet being transmitted into
+            SpiNNaker.
+        src_port : int
+            Source port of the packet.
+        src_cpu : int
+            Source CPU of the packet.
+        src_x : int
+            Source x co-ordinate of the packet.
+        src_y : int
+        `   Source y co-ordinate of the packet.
+        seq : int
+            Sequence number of the packet, used when communicating the SCAMP or
+            SARK.
+
+        .. note::
+            The default values for `tag`, `src_port`, `src_cpu`, `src_x` and
+            `src_y` indicate a packet being transmitted to SpiNNaker over the
+            network and will not require changing for this use.
+        """
         super(SCPPacket, self).__init__(
             reply_expected, tag, dest_port, dest_cpu, src_port,
             src_cpu, dest_x, dest_y, src_x, src_y, data)
