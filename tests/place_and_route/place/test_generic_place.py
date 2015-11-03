@@ -23,6 +23,9 @@ from rig.place_and_route.constraints import LocationConstraint, \
     ReserveResourceConstraint, SameChipConstraint
 
 from rig.place_and_route import place as default_place
+from rig.place_and_route.place.sequential import place as sequential_place
+from rig.place_and_route.place.breadth_first \
+    import place as breadth_first_place
 from rig.place_and_route.place.hilbert import place as hilbert_place
 from rig.place_and_route.place.sa import place as sa_place
 from rig.place_and_route.place.rand import place as rand_place
@@ -30,7 +33,10 @@ from rig.place_and_route.place.rand import place as rand_place
 # This dictionary should be updated to contain all implemented algorithms along
 # with applicable keyword arguments.
 ALGORITHMS_UNDER_TEST = [(default_place, {}),
+                         (sequential_place, {}),
                          (hilbert_place, {}),
+                         (hilbert_place, {"breadth_first": False}),
+                         (breadth_first_place, {}),
                          (sa_place, {}),
                          # Testing with effort = 0 tests the initial (random)
                          # placement solutions of the SA placer.

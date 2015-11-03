@@ -55,7 +55,7 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     used).
 
     .. warning::
-        A :py:exception:`~rig.place_and_route.utils.MultisourceRouteError` will
+        A :py:exc:`rig.place_and_route.utils.MultisourceRouteError` will
         be raised if entries with identical keys and masks but with differing
         routes are generated. This is not a perfect test, entries which would
         otherwise collide are not spotted.

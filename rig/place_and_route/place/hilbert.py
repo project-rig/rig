@@ -1,19 +1,10 @@
 """A minimal and dumb placement algorithm.
 """
 
-from six import next
-
 from math import log, ceil
 
-from collections import deque
-
-from ..exceptions import InsufficientResourceError, InvalidConstraintError
-
-from ..constraints import LocationConstraint, ReserveResourceConstraint
-
-from .utils import \
-    subtract_resources, overallocated, apply_reserve_resource_constraint, \
-    apply_same_chip_constraints, finalise_same_chip_constraints
+from rig.place_and_route.place.sequential import place as sequential_place
+from rig.place_and_route.place.breadth_first import breadth_first_vertex_order
 
 
 def hilbert(level, angle=1, s=None):
@@ -89,99 +80,36 @@ def hilbert(level, angle=1, s=None):
     s.dx, s.dy = s.dy*-angle, s.dx*angle
 
 
-def place(vertices_resources, nets, machine, constraints):
-    """Places vertices greedily and dumbly along a Hilbert-curve through the
-    machine.
+def hilbert_chip_order(machine):
+    """A generator which iterates over a set of chips in a machine in a hilbert
+    path.
+
+    For use as a chip ordering for the sequential placer.
     """
-    placements = {}
-
-    # Working copy of machine which will be updated to account for effects of
-    # constraints.
-    machine = machine.copy()
-
-    # Handle constraints
-    vertices_resources, nets, constraints, substitutions = \
-        apply_same_chip_constraints(vertices_resources, nets, constraints)
-    unplaced_vertices = set(vertices_resources)
-    for constraint in constraints:
-        if isinstance(constraint, LocationConstraint):
-            # Flag resources consumed for the specified chip
-            loc = constraint.location
-            if loc not in machine:
-                raise InvalidConstraintError(
-                    "Chip requested by {} unavailable".format(constraint))
-            vertex_resources = vertices_resources[constraint.vertex]
-            machine[loc] = subtract_resources(machine[loc], vertex_resources)
-            if overallocated(machine[loc]):
-                raise InsufficientResourceError(
-                    "Cannot meet {}".format(constraint))
-
-            # Place the vertex
-            unplaced_vertices.remove(constraint.vertex)
-            placements[constraint.vertex] = loc
-        elif isinstance(constraint,  # pragma: no branch
-                        ReserveResourceConstraint):
-            apply_reserve_resource_constraint(machine, constraint)
-
-    # Allocate chips along a Hilbert curve large enough to cover the whole
-    # system
     max_dimen = max(machine.width, machine.height)
     hilbert_levels = int(ceil(log(max_dimen, 2.0))) if max_dimen >= 1 else 0
-    hilbert_iter = hilbert(hilbert_levels)
+    return hilbert(hilbert_levels)
 
-    # A coordinates of the current chip and a copy of its resources which will
-    # be decremented as vertices are placed. Since we don't allow back-tracking
-    # this means there is no need to log resource usage for anything but the
-    # current chip.
-    cur_chip = None
-    cur_chip_resources = None
 
-    # Perform a breadth-first iteration over the vertices (a simple heuristic
-    # for placing related nodes in proximal locations).
-    vertex_queue = deque()
-    while vertex_queue or unplaced_vertices:
-        # If out of vertices in the queue, grab an unplaced one arbitrarily
-        if not vertex_queue:
-            vertex_queue.append(next(iter(unplaced_vertices)))
+def place(vertices_resources, nets, machine, constraints, breadth_first=True):
+    """Places vertices in breadth-first order along a hilbert-curve path
+    through the chips in the machine.
 
-        vertex = vertex_queue.popleft()
-        if vertex not in unplaced_vertices:
-            continue
+    This is a thin wrapper around the :py:func:`sequential
+    <rig.place_and_route.place.sequential.place>` placement algorithm which
+    optionally uses the :py:func:`breadth_first_vertex_order` vertex ordering
+    (if the breadth_first argument is True, the default) and
+    :py:func:`hilbert_chip_order` for chip ordering.
 
-        resources = vertices_resources[vertex]
-
-        # Attempt to find a chip with free resources
-        while True:
-            try:
-                if cur_chip is None:
-                    cur_chip = next(hilbert_iter)
-                    if cur_chip not in machine:
-                        cur_chip = None
-                        continue
-                    cur_chip_resources = machine[cur_chip].copy()
-            except StopIteration:
-                raise InsufficientResourceError(
-                    "Ran out of chips while "
-                    "{} vertices remain unplaced".format(
-                        len(unplaced_vertices)))
-            cur_chip_resources = subtract_resources(
-                cur_chip_resources, resources)
-            if not overallocated(cur_chip_resources):
-                break
-            else:
-                cur_chip = None
-                continue
-
-        # Affect the placement
-        unplaced_vertices.remove(vertex)
-        placements[vertex] = cur_chip
-
-        # Continue the iteration breadth-first through the vertices
-        for net in nets:
-            if vertex in net:
-                vertex_queue.append(net.source)
-                vertex_queue.extend(net.sinks)
-
-    finalise_same_chip_constraints(substitutions, placements)
-
-    return placements
+    Parameters
+    ----------
+    breadth_first : bool
+        Should vertices be placed in breadth first order rather than the
+        iteration order of vertices_resources. True by default.
+    """
+    return sequential_place(vertices_resources, nets,
+                            machine, constraints,
+                            (None if not breadth_first else
+                             breadth_first_vertex_order(vertices_resources,
+                                                        nets)),
+                            hilbert_chip_order(machine))

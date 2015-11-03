@@ -66,7 +66,7 @@ def resources_after_reservation(res, constraint):
 
 
 def apply_reserve_resource_constraint(machine, constraint):
-    """Apply the changes inplied by a reserve resource constraint to a
+    """Apply the changes implied by a reserve resource constraint to a
     machine model."""
     if constraint.location is None:
         # Compensate for globally reserved resources

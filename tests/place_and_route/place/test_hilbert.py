@@ -1,6 +1,8 @@
 import pytest
 
-from rig.place_and_route.place.hilbert import hilbert
+from rig.place_and_route.place.hilbert import hilbert, hilbert_chip_order
+
+from rig.machine import Machine
 
 
 class TestHilbert(object):
@@ -28,3 +30,10 @@ class TestHilbert(object):
             reference.remove(xy)
 
         assert len(reference) == 0
+
+
+@pytest.mark.parametrize("w,h", [(1, 1), (2, 2), (2, 4), (4, 2), (7, 15)])
+def test_hilbert_chip_order(w, h):
+    """Make sure the iterator covers the whole machine."""
+    machine = Machine(w, h)
+    assert set(hilbert_chip_order(machine)).issuperset(set(machine))

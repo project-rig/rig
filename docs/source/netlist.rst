@@ -3,5 +3,6 @@
 
 .. automodule:: rig.netlist
     :members:
+    :special-members:
 
 
