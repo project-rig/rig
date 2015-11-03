@@ -13,9 +13,7 @@ import pkg_resources
 from rig.machine_control.consts import \
     SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
 from rig.machine_control import boot, consts, regions, struct_file
-from rig.machine_control.scp_connection import SCPConnection
-
-from rig.machine_control.scp_connection import SCPError
+from rig.machine_control.scp_connection import SCPConnection, SCPError
 
 from rig import routing_table
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
@@ -200,27 +198,19 @@ class MachineController(ContextMixin):
         connection = self._get_connection(x, y)
         return connection.send_scp(length, x, y, p, *args, **kwargs)
 
-    def boot(self, width, height, **boot_kwargs):
+    def boot(self, width, height,
+             only_if_needed=True, check_booted=True, **boot_kwargs):
         """Boot a SpiNNaker machine of the given size.
 
-        The system will be booted from the chip whose hostname was given as the
-        argument to the MachineController.
+        The system will be booted from the Ethernet connected chip whose
+        hostname was given as the argument to the MachineController. With the
+        default arguments this method will only boot systems which have not
+        already been booted and will check to ensure that the machine was
+        successfuly booted. See
 
-        This method is a thin wrapper around
-        :py:func:`rig.machine_control.boot.boot`.
-
-        After booting, the structs in this MachineController will be set to
-        those used to boot the machine.
-
-        .. warning::
-            This function does not check that the system has been booted
-            successfully. This can be checked by ensuring that
-            :py:meth:`.MachineController.get_software_version` returns a
-            sensible value.
-
-        .. warning::
-            If the system has already been booted, this command will not cause
-            the system to 'reboot' using the supplied firmware.
+        This method is a wrapper around
+        :py:func:`rig.machine_control.boot.boot` which sets the structs in this
+        MachineController will be set to those used to boot the machine.
 
         .. warning::
             Booting the system over the open internet is likely to fail due to
@@ -233,8 +223,40 @@ class MachineController(ContextMixin):
         ----------
         width : int
             Width of the machine (0 < w < 256)
+
         height : int
             Height of the machine (0 < h < 256)
+
+        only_if_needed : bool
+            If ``only_if_needed`` is True (the default), this method checks to
+            see if the machine is already booted and only attempts to boot the
+            machine if neccessary.
+
+            If ``only_if_needed`` is False, the boot commands will be sent to
+            the target machine without checking if it is already booted or not.
+
+            .. warning::
+
+                If the machine has already been booted, sending the boot
+                commands again will not 'reboot' the machine with the newly
+                supplied boot image, even if ``only_if_needed`` is False.
+
+        check_booted : bool
+            If ``check_booted`` is True this method checks if the machine was
+            successfully booted. If False, this check is skipped.
+
+        Returns
+        -------
+        bool
+            Returns True if the machine was sent boot commands, False if the
+            machine was already booted.
+
+        Raises
+        ------
+        rig.machine_control.machine_controller.SpiNNakerBootError
+            Raised when ``check_booted`` is True and the boot process was
+            unable to boot the machine. Also raised when ``only_if_needed`` is
+            True and the remote host is a BMP.
 
         Notes
         -----
@@ -247,10 +269,42 @@ class MachineController(ContextMixin):
         LED 0 are required by an application since by default, only LED 0 is
         enabled.
         """
+        # Check to see if the machine is already booted first
+        if only_if_needed:
+            # We create a new MachineController which fails quickly if it
+            # doesn't receieve a reply (since typically the machine is already
+            # booted).
+            quick_fail_mc = MachineController(self.initial_host, n_tries=1)
+            try:
+                info = quick_fail_mc.get_software_version(0, 0, 0)
+                if "SpiNNaker" not in info.version_string:
+                    raise SpiNNakerBootError(
+                        "Remote host is not a SpiNNaker machine and so cannot "
+                        "be booted. (Are you using a BMP IP/hostname?)")
+
+                # Machine did not need booting
+                return False
+            except SCPError:
+                # The machine is not responding to SCP so it needs booting.
+                pass
+
+        # Actually boot the machine
         boot_kwargs.setdefault("boot_port", self.boot_port)
         self.structs = boot.boot(self.initial_host, width=width, height=height,
                                  **boot_kwargs)
         assert len(self.structs) > 0
+
+        # Check the machine is now booted
+        if check_booted:
+            try:
+                self.get_software_version(0, 0, 0)
+            except SCPError:
+                # Machine did not respond
+                raise SpiNNakerBootError(
+                    "The remote machine could not be booted.")
+
+        # The machine was sent boot commands
+        return True
 
     @ContextMixin.use_contextual_arguments()
     def application(self, app_id):
@@ -1610,6 +1664,11 @@ class IPTag(collections.namedtuple("IPTag",
 
         return cls(ip_addr, mac, port, timeout, flags, count, rx_port,
                    spin_addr, spin_port)
+
+
+class SpiNNakerBootError(Exception):
+    """Raised when attempting to boot a SpiNNaker machine has failed."""
+    pass
 
 
 class SpiNNakerMemoryError(Exception):

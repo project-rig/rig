@@ -3,7 +3,7 @@ arguments are given."""
 
 import pytest
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.machine_controller import SpiNNakerBootError
 
 import rig.scripts.rig_boot as rig_boot
 
@@ -45,45 +45,16 @@ def test_bad_args(arguments):
 
 def test_already_booted(monkeypatch):
     # Should fail if system already booted
-    MC = mock.Mock()
-    mc = mock.Mock()
-    MC.return_value = mc
-    monkeypatch.setattr(rig_boot, "MachineController", MC)
-
-    info = mock.Mock()
-    mc.get_software_version.return_value = info
-    info.version_string = "Mock/SpiNNaker"
-    info.version = 1.337
-
-    assert rig_boot.main(["localhost", "8", "8"]) != 0
-
-
-def test_not_spinnaker(monkeypatch):
-    # Should fail if system responds to initial sver with non-SpiNNaker machine
-    # type.
-    mc = mock.Mock()
-    info = mock.Mock()
-    info.version_string = "Mock/Tester"
-    info.version = 1.337
-    mc.get_software_version.return_value = info
-
-    MC = mock.Mock()
-    MC.return_value = mc
-    monkeypatch.setattr(rig_boot, "MachineController", MC)
-
+    monkeypatch.setattr(rig_boot.MachineController, "boot",
+                        mock.Mock(return_value=False))
     assert rig_boot.main(["localhost", "8", "8"]) != 0
 
 
 def test_boot_fails(monkeypatch):
     # Should fail if system responds to initial sver with non-SpiNNaker machine
-    # type.
-    mc = mock.Mock()
-    mc.get_software_version = mock.Mock(side_effect=TimeoutError)
-
-    MC = mock.Mock()
-    MC.return_value = mc
-    monkeypatch.setattr(rig_boot, "MachineController", MC)
-
+    # type or booting fails.
+    monkeypatch.setattr(rig_boot.MachineController, "boot",
+                        mock.Mock(side_effect=SpiNNakerBootError))
     assert rig_boot.main(["localhost", "8", "8"]) != 0
 
 
@@ -140,25 +111,8 @@ def test_boot_options(monkeypatch, args, options, binary, specify_binary):
     # Test that the correct boot command is called for the options given
 
     # Make it look as if the boot succeded
-    mc = mock.Mock()
-    first_call = [True]
-
-    def get_software_version(x, y):
-        assert x == 0
-        assert y == 0
-        if first_call[0]:
-            first_call[0] = False
-            raise TimeoutError()
-        else:
-            info = mock.Mock()
-            info.version_string = "MockBoot/SpiNNaker"
-            info.version = 1.337
-            return info
-    mc.get_software_version = mock.Mock(side_effect=get_software_version)
-
-    MC = mock.Mock()
-    MC.return_value = mc
-    monkeypatch.setattr(rig_boot, "MachineController", MC)
+    monkeypatch.setattr(rig_boot.MachineController, "boot",
+                        mock.Mock(return_value=True))
 
     args = args[:]
     if specify_binary:
@@ -167,6 +121,8 @@ def test_boot_options(monkeypatch, args, options, binary, specify_binary):
     # Check the boot occurred
     assert rig_boot.main(args) == 0
     if specify_binary:
-        mc.boot.assert_called_once_with(boot_data=binary[1], **options)
+        rig_boot.MachineController.boot.assert_called_once_with(
+            boot_data=binary[1], **options)
     else:
-        mc.boot.assert_called_once_with(boot_data=None, **options)
+        rig_boot.MachineController.boot.assert_called_once_with(
+            boot_data=None, **options)
