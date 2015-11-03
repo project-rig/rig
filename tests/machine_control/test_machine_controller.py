@@ -12,14 +12,14 @@ from test_scp_connection import SendReceive, mock_conn  # noqa
 from rig.machine_control.consts import (
     SCPCommands, LEDAction, NNCommands, NNConstants)
 from rig.machine_control.machine_controller import (
-    MachineController, SpiNNakerMemoryError, MemoryIO, SpiNNakerRouterError,
-    SpiNNakerLoadingError, CoreInfo, ProcessorStatus,
+    MachineController, SpiNNakerBootError, SpiNNakerMemoryError, MemoryIO,
+    SpiNNakerRouterError, SpiNNakerLoadingError, CoreInfo, ProcessorStatus,
     unpack_routing_table_entry
 )
 from rig.machine_control.packets import SCPPacket
 from rig.machine_control.scp_connection import \
-    SCPConnection, FatalReturnCodeError
-from rig.machine_control import regions, consts, struct_file
+    SCPConnection, FatalReturnCodeError, SCPError
+from rig.machine_control import boot, regions, consts, struct_file
 
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 
@@ -72,13 +72,18 @@ def aplx_file(request):
 @pytest.mark.no_boot  # Don't run if booting is disabled
 def test_boot(controller, spinnaker_width, spinnaker_height):
     """Test that the board can be booted."""
-    # Assuming a 4-node board! Change this as required.
-    # Boot the board
+    # Boot the board (which will throw an exception if the board could not be
+    # booted)
     controller.boot(width=spinnaker_width, height=spinnaker_height)
 
-    # Assert that the board is booted, messy!
+    # To ensure that the check worked, also explicitly check that the board is
+    # booted, messy!
     sver = controller.get_software_version(0, 0, 0)
+    assert "SpiNNaker" in sver.version_string
     assert sver.version >= 1.3
+
+    # Make sure if we try and boot again, it is not re-booted
+    assert not controller.boot(width=spinnaker_width, height=spinnaker_height)
 
 
 @pytest.mark.order_id("spinnaker_hw_test")
@@ -452,6 +457,99 @@ class TestMachineController(object):
         with cn(x=3, y=2, p=0):
             cn.send_scp(SCPCommands.sver, p=4)
         cn._send_scp.assert_called_with(3, 2, 4, SCPCommands.sver)
+
+    @pytest.mark.parametrize("only_if_needed", [True, False])
+    @pytest.mark.parametrize("check_booted", [True, False])
+    @pytest.mark.parametrize("already_booted", [True, False])
+    @pytest.mark.parametrize("boot_succeeds", [True, False])
+    def test_boot(self, only_if_needed, check_booted, already_booted,
+                  boot_succeeds, monkeypatch):
+        """Make sure the 'smart' behaviour of the boot method works
+        correctly.
+        """
+        # If the machine is already booted the boot cannot fail so this test
+        # combination can be skipped since it makes no sense.
+        if already_booted and not boot_succeeds:
+            return
+
+        working_core_info = CoreInfo(
+            (0, 0), 0, 0, 1.3, 256, 0, "SpiNNaker Test")
+
+        # Make a mock version of get_software_version which responds according
+        # to the parameters of this test.
+        get_software_version_responses = []
+        if only_if_needed:
+            # Respond to the first working_core_info request with a core info
+            # if already booted, otherwise throw an SCPError as if the command
+            # failed because the system was unbooted
+            if already_booted:
+                get_software_version_responses.append(working_core_info)
+            else:
+                get_software_version_responses.append(SCPError())
+        if check_booted:
+            # If we check for the working system we should return working core
+            # info only if the boot succeeds
+            if boot_succeeds:
+                get_software_version_responses.append(working_core_info)
+            else:
+                get_software_version_responses.append(SCPError())
+        mock_get_software_version = mock.Mock(
+            side_effect=get_software_version_responses)
+        monkeypatch.setattr(MachineController, "get_software_version",
+                            mock_get_software_version)
+
+        mc = MachineController("localhost")
+
+        # The fake boot command should simply return some structs, in this case
+        # the mock just hands back the structs already loaded by the
+        # MachineController.
+        mock_boot = mock.Mock(return_value=mc.structs)
+        monkeypatch.setattr(boot, "boot", mock_boot)
+
+        if boot_succeeds or not check_booted:
+            did_boot = mc.boot(2, 4,
+                               only_if_needed=only_if_needed,
+                               check_booted=check_booted)
+
+            # The machine should only get sent a boot command if it was not
+            # already booted or we forced it
+            assert did_boot == mock_boot.called
+            assert did_boot == (not (already_booted and only_if_needed))
+        else:
+            # If the boot fails (and we checked) an exception should be thrown
+            with pytest.raises(SpiNNakerBootError):
+                mc.boot(2, 4,
+                        only_if_needed=only_if_needed,
+                        check_booted=check_booted)
+
+        # If the machine should have been booted, make sure it was called with
+        # the arguments we passed in
+        if not (already_booted and only_if_needed):
+            assert mock_boot.called_once_with("localhost", 2, 4)
+
+        # Check the correct number of get_software_version calls are made
+        if only_if_needed and check_booted and not already_booted:
+            assert len(mock_get_software_version.mock_calls) == 2
+        elif not (only_if_needed or check_booted):
+            assert len(mock_get_software_version.mock_calls) == 0
+        else:
+            assert len(mock_get_software_version.mock_calls) == 1
+
+    def test_boot_alien_machine(self, monkeypatch):
+        """Make sure the boot command fails if you try to boot a BMP."""
+        # Respond as if a BMP
+        core_info = CoreInfo(
+            (0, 0), 0, 0, 1.3, 256, 0, "BC&MP/Spin5-BMP\x00")
+
+        mock_get_software_version = mock.Mock(return_value=core_info)
+        monkeypatch.setattr(MachineController, "get_software_version",
+                            mock_get_software_version)
+
+        mc = MachineController("localhost")
+
+        # Boot should fail due to already being booted as a BMP
+        with pytest.raises(SpiNNakerBootError):
+            mc.boot(2, 4)
 
     def test_get_software_version(self, mock_conn):  # noqa
         """Check that the reporting of the software version is correct.

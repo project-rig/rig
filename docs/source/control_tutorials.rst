@@ -55,6 +55,15 @@ Booting
 You can :py:meth:`~.MachineController.boot` the system like so::
 
     >>> mc.boot(12, 12)  # For a 12x12 machine
+    True
+
+If the machine could not be booted for any reason a
+:py:exc:`rig.machine_control.machine_controller.SpiNNakerBootError` will be
+raised. If no exception is raised, the machine is booted and ready to use. The
+return value of :py:meth:`~.MachineController.boot` indicates whether the
+machine was actually booted (``True``), or if it was already booted and thus
+nothing was done (``False``), most applications may consider the boot to be a
+success either way.
 
 If you're using a SpiNN-2 or SpiNN-3 board booted with no further arguments,
 only LED 0 will be usable. To enable the other LEDs, instead boot the machine
@@ -63,15 +72,7 @@ using one of the pre-defined boot option dictionaries in
 
     >>> from rig.machine_control.boot import spin3_boot_options
     >>> mc.boot(**spin3_boot_options)
-
-To check that the system has been booted successfully, you can query it to
-retrieve its software version with
-:py:meth:`~.MachineController.get_software_version` which returns a
-:py:class:`~rig.machine_control.machine_controller.CoreInfo` named tuple::
-
-    >>> core_info = mc.get_software_version(0, 0)  # Asks chip (0, 0)
-    >>> core_info.version
-    1.33
+    True
 
 Probing for Available Resources
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

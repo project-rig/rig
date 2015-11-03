@@ -10,7 +10,7 @@ import rig
 
 from rig.machine_control import boot, MachineController
 
-from rig.machine_control.scp_connection import TimeoutError
+from rig.machine_control.machine_controller import SpiNNakerBootError
 
 from rig.geometry import standard_system_dimensions
 
@@ -84,43 +84,21 @@ def main(args=None):
         if getattr(args, opt_name) is not None
     })
 
-    # See if the device is already booted
-    mc = MachineController(args.hostname, n_tries=1)
-    try:
-        info = mc.get_software_version(0, 0)
-        if "SpiNNaker" in info.version_string:
-            sys.stderr.write(
-                "{}: error: system already booted with {} v{}\n".format(
-                    parser.prog,
-                    info.version_string.split("/")[0],
-                    info.version))
-            return 1
-        else:
-            sys.stderr.write(
-                "{}: error: host is not a SpiNNaker system "
-                "({} running {} v{})\n".format(
-                    parser.prog,
-                    info.version_string.split("/")[0],
-                    info.version_string.split("/")[1].strip("\x00"),
-                    info.version))
-            return 2
-    except TimeoutError:
-        # The machine isn't booted yet. Continue!
-        pass
-
-    # Try to boot the machine
+    # Attempt to boot the machine
     mc = MachineController(args.hostname)
-    mc.boot(**options)
-
-    # Check the machine is now booted
     try:
-        mc.get_software_version(0, 0)
-    except TimeoutError:
-        sys.stderr.write("{}: error: could not boot machine\n".format(
-            parser.prog))
-        return 3
-
-    return 0
+        if mc.boot(**options):
+            return 0
+        else:
+            # The machine was already booted.
+            sys.stderr.write(
+                "{}: error: machine already booted.\n".format(parser.prog))
+            return 1
+    except SpiNNakerBootError as e:
+        # The machine could not be booted for some reason; show an appropriate
+        # message
+        sys.stderr.write("{}: error: {}\n".format(parser.prog, str(e)))
+        return 2
 
 
 if __name__ == "__main__":  # pragma: no cover
