@@ -7,6 +7,8 @@ import struct
 import tempfile
 import os
 import time
+from collections import defaultdict
+
 from test_scp_connection import SendReceive, mock_conn  # noqa
 
 from rig.machine_control.consts import (
@@ -262,6 +264,16 @@ class TestMachineControllerLive(object):
     def test_count_cores_in_state_run(self, controller, all_targets):
         expected = sum(len(cs) for cs in itervalues(all_targets))
         assert expected == controller.count_cores_in_state("run")
+
+    @pytest.mark.order_after("live_test_load_application")
+    def test_get_idle_cores(self, controller, live_machine):
+        # Test that the correct set of idle cores is reported on a chip where
+        # an application has been loaded or which are the monitor CPU
+        num_working_cores = live_machine[(1, 1)][Cores]
+        assert controller.get_idle_cores(1, 1) == [
+            core for core in range(num_working_cores)
+            if core not in (0, 3, 4)
+        ]
 
     @pytest.mark.order_after("live_test_load_application")
     @pytest.mark.parametrize(
@@ -2039,6 +2051,98 @@ class TestMachineController(object):
             mock.call(x, y) for x in range(8) for y in range(8)
             if (x, y) != (3, 3) and (x, y) != (5, 5)
         ], any_order=True)
+
+    @pytest.mark.parametrize("unavailable_state",
+                             (s for s in consts.AppState
+                              if s != consts.AppState.idle))
+    def test_get_idle_cores(self, unavailable_state):
+        cn = MachineController("localhost")
+
+        unavailable_set = set([
+            (0, 0, 0),
+            (0, 0, 17),
+            (1, 2, 3),
+        ])
+
+        def read_vcpu_struct_field(field, x, y, p):
+            if (x, y, p) in unavailable_set:
+                return unavailable_state
+            else:
+                return consts.AppState.idle
+        cn.read_vcpu_struct_field = \
+            mock.Mock(side_effect=read_vcpu_struct_field)
+
+        assert cn.get_idle_cores(0, 0) == list(range(1, 17))
+        assert cn.get_idle_cores(1, 2) == [n for n in range(18) if n != 3]
+
+    def test_get_resource_constraints(self):
+        cn = MachineController("localhost")
+        machine = Machine(
+            width=4, height=1,
+            chip_resources={"MyCores": 18, "MySDRAM": 128},
+            chip_resource_exceptions={
+                (0, 1): {"MyCores": 17, "MySDRAM": 128}
+            }
+        )
+
+        busy_cores = set([
+            # Chip 0, 0: Has cores 1-16 (top and bottom reserved)
+            (0, 0, 0),
+            (0, 0, 17),
+
+            # Chip 1, 0: Has cores 1-16 (bottom reserved, top dead)
+            (1, 0, 0),
+
+            # Chip 2, 0: Has cores 1-3 and 5-6 reserved
+            (2, 0, 1),
+            (2, 0, 2),
+            (2, 0, 3),
+            (2, 0, 5),
+            (2, 0, 6),
+
+            # Chip 3, 0: Has no constraints!
+        ])
+
+        def get_idle_cores(x, y):
+            return [
+                core for core in range(machine[(x, y)]["MyCores"])
+                if (x, y, core) not in busy_cores
+            ]
+        cn.get_idle_cores = mock.Mock(side_effect=get_idle_cores)
+
+        constraints = cn.get_resource_constraints(machine,
+                                                  core_resource="MyCores",
+                                                  sdram_resource="MySDRAM")
+
+        # All constraints should relate to specific chips in the machine
+        assert all(c.location is not None for c in constraints)
+        assert all(c.location in machine for c in constraints)
+
+        # All constraints should currently be for cores
+        assert all(c.resource == "MyCores" for c in constraints)
+
+        # Split constraints by chip and order by core
+        chip_constraints = defaultdict(list)
+        for constraint in constraints:
+            chip_constraints[constraint.location].append(constraint)
+        for chip, constraints_ in iteritems(chip_constraints):
+            constraints_.sort(key=(lambda c: c.reservation.start))
+
+        # Check correctness and minimality of reservations
+        assert len(chip_constraints) == 3
+
+        assert len(chip_constraints[(0, 0)]) == 2
+        assert chip_constraints[(0, 0)][0].reservation == slice(0, 1)
+        assert chip_constraints[(0, 0)][1].reservation == slice(17, 18)
+
+        assert len(chip_constraints[(1, 0)]) == 1
+        assert chip_constraints[(1, 0)][0].reservation == slice(0, 1)
+
+        assert len(chip_constraints[(2, 0)]) == 2
+        assert chip_constraints[(2, 0)][0].reservation == slice(1, 4)
+        assert chip_constraints[(2, 0)][1].reservation == slice(5, 7)
+
+        assert len(chip_constraints[(3, 0)]) == 0
 
     @pytest.mark.parametrize("app_id", [66, 12])
     def test_application_wrapper(self, app_id):

@@ -18,6 +18,8 @@ from rig.machine_control.scp_connection import SCPConnection, SCPError
 from rig import routing_table
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
 
+from rig.place_and_route.constraints import ReserveResourceConstraint
+
 from rig.utils.contexts import ContextMixin, Required
 from rig.utils.docstrings import add_signature_to_docstring
 
@@ -1545,6 +1547,115 @@ class MachineController(ContextMixin):
                        chip_resources,
                        chip_resource_exceptions,
                        dead_chips, dead_links)
+
+    @ContextMixin.use_contextual_arguments()
+    def get_idle_cores(self, x, y):
+        """Get a list of idle cores on a chip.
+
+        .. warning::
+
+            This method is currently very slow to execute requiring 18
+            round-trip times to the machine and back. Future versions of
+            SpiNNaker's low-level system software may make this process
+            significantly faster.
+
+
+        Returns
+        -------
+        [int, ...]
+            The indices of the idle cores on a chip, in ascending order.
+        """
+        return [
+            p for p in range(18)
+            if self.read_vcpu_struct_field("cpu_state", x, y, p)
+            == consts.AppState.idle
+        ]
+
+    @ContextMixin.use_contextual_arguments()
+    def get_resource_constraints(self, machine,
+                                 core_resource=Cores,
+                                 sdram_resource=SDRAM):
+        """Returns a set of place-and-route
+        :py:class:`~rig.place_and_route.constraints` which reserves any cores
+        and SDRAM that are already in use.
+
+        This method, like :py:meth:`get_machine`, is aimed at users of Rig's
+        place-and-route tools and assumes that one resource type represents
+        Cores while another represents SDRAM.
+
+        The returned set of
+        :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`s
+        reserves all cores not in an Idle state (i.e. not a monitor and not
+        already running an application).
+
+        This set also reserves ranges of SDRAM starting at the top of SDRAM to
+        reduce the SDRAM resource availability on each chip to approximately
+        the amount actually available in the machine, accounting for any
+        already-running applications. Note that due to memory fragmentation
+        this constraint still makes an optimistic estimate of the amount of
+        SDRAM an application may request in practice.
+
+        .. warning::
+
+            Due to limitations in the current version of the SpiNNaker
+            low-level system software SDRAM is not currently reserved and thus
+            the SDRAM-reserving portion of this method's API is provided for
+            forward compatibility. As such, application authors should be aware
+            that already-running applications that consume large amounts of
+            SDRAM are not yet taken into account.
+
+        Parameters
+        ----------
+        machine : :py:class:`~rig.machine.Machine`
+            The :py:class:`~rig.machine.Machine` model of the current SpiNNaker
+            machine (e.g. from :py:meth:`get_machine`).
+        core_resource : resource (Default: :py:data:`~rig.machine.Cores`)
+            The resource identifier used for cores. If using
+            :py:meth:`get_machine`, the default correct.
+        sdram_resource : resource (Default: :py:data:`~rig.machine.SDRAM`)
+            The resource identifier used for SDRAM. If using
+            :py:meth:`get_machine`, the default correct.
+
+        Returns
+        -------
+        [\
+        :py:class:`rig.place_and_route.constraints.ReserveResourceConstraint`,\
+        ...]
+            A set of place-and-route constraints which reserves non-idle cores
+            and SDRAM. The resource types given in the ``core_resource`` and
+            ``sdram_resource`` arguments will be reserved accordingly.
+        """
+        constraints = []
+
+        for x, y in machine:
+            # For each chip, construct a minimal set of
+            # ReserveResourceConstraints which reserve the cores which are not
+            # in the idle state.
+            idle_cores = self.get_idle_cores(x, y) + [None]
+            cur_reservation = None
+            for core in range(machine[(x, y)][core_resource]):
+                if core == idle_cores[0]:
+                    idle_cores.pop(0)
+                    if cur_reservation is not None:
+                        constraints.append(cur_reservation)
+                    cur_reservation = None
+                else:
+                    if cur_reservation is None:
+                        cur_reservation = ReserveResourceConstraint(
+                            core_resource,
+                            slice(core, core + 1),
+                            (x, y))
+                    else:
+                        cur_reservation.reservation = slice(
+                            cur_reservation.reservation.start,
+                            core + 1)
+            if cur_reservation is not None:
+                constraints.append(cur_reservation)
+
+        # TODO: Reserve SDRAM once SC&MP provides a way of querying how much
+        # has been used/is free.
+
+        return constraints
 
 
 class CoreInfo(collections.namedtuple(
