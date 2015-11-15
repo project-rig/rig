@@ -397,7 +397,7 @@ class MachineController(ContextMixin):
                                x, y, p, address, length_bytes)
 
     @ContextMixin.use_contextual_arguments()
-    def link_write(self, address, data, x, y, link):
+    def write_across_link(self, address, data, x, y, link):
         """Write a bytestring to an address in memory on a neigbouring chip.
 
         .. warning::
@@ -405,7 +405,7 @@ class MachineController(ContextMixin):
             This function is intended for low-level debug use only and is not
             optimised for performance nor intended for more general use.
 
-        This method allows you to instruct a monitor processor to send 'POKE'
+        This method instructs a monitor processor to send 'POKE'
         nearest-neighbour packets to a neighbouring chip. These packets are
         handled directly by the SpiNNaker router in the neighbouring chip,
         potentially allowing advanced debug or recovery of a chip rendered
@@ -414,7 +414,7 @@ class MachineController(ContextMixin):
         Parameters
         ----------
         address : int
-            The address at which to start reading the data. Only addresses in
+            The address at which to start writing the data. Only addresses in
             the system-wide address map may be accessed. Addresses must be word
             aligned.
         data : :py:class:`bytes`
@@ -429,10 +429,10 @@ class MachineController(ContextMixin):
         link : :py:class:`rig.machine.Links`
             The link down which the write should be sent.
         """
-        if address & 0b11:
+        if address % 4:
             raise ValueError("Addresses must be word-aligned.")
-        if len(data) & 0b11:
-            raise ValueError("Data must be a multiple of words in length.")
+        if len(data) % 4:
+            raise ValueError("Data must be a whole number of words.")
 
         length_bytes = len(data)
         cur_byte = 0
@@ -451,7 +451,7 @@ class MachineController(ContextMixin):
             length_bytes -= to_write
 
     @ContextMixin.use_contextual_arguments()
-    def link_read(self, address, length_bytes, x, y, link):
+    def read_across_link(self, address, length_bytes, x, y, link):
         """Read a bytestring from an address in memory on a neigbouring chip.
 
         .. warning::
@@ -459,7 +459,7 @@ class MachineController(ContextMixin):
             This function is intended for low-level debug use only and is not
             optimised for performance nor intended for more general use.
 
-        This method allows you to instruct a monitor processor to send 'PEEK'
+        This method instructs a monitor processor to send 'PEEK'
         nearest-neighbour packets to a neighbouring chip. These packets are
         handled directly by the SpiNNaker router in the neighbouring chip,
         potentially allowing advanced debug or recovery of a chip rendered
@@ -488,9 +488,9 @@ class MachineController(ContextMixin):
         :py:class:`bytes`
             The data is read back from memory as a bytestring.
         """
-        if address & 0b11:
+        if address % 4:
             raise ValueError("Addresses must be word-aligned.")
-        if length_bytes & 0b11:
+        if length_bytes % 4:
             raise ValueError("Lengths must be multiples of words.")
 
         # Prepare the buffer to receive the incoming data

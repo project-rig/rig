@@ -126,7 +126,7 @@ class TestMachineControllerLive(object):
         with controller(x=0, y=0, p=1):
             assert controller.read(0x60000000, len(data)) == data
 
-    def test_link_write_and_read(self, controller):
+    def test_write_and_read_across_link(self, controller):
         """Test link-write and read capabilities by writing a string to SDRAM
         on another chip and then reading back.
         """
@@ -134,13 +134,13 @@ class TestMachineControllerLive(object):
 
         # You put the data in
         with controller(x=0, y=0, link=Links.north):
-            controller.link_write(0x60000000, data[0:4])
-            controller.link_write(0x60000004, data[4:])
+            controller.write_across_link(0x60000000, data[0:4])
+            controller.write_across_link(0x60000004, data[4:])
 
         # You take the data out
         with controller(x=0, y=0, link=Links.north):
-            assert controller.link_read(0x60000000, 4) == data[0:4]
-            assert controller.link_read(0x60000000, len(data)) == data
+            assert controller.read_across_link(0x60000000, 4) == data[0:4]
+            assert controller.read_across_link(0x60000000, len(data)) == data
 
         # And check the data really was put on another chip
         with controller(x=0, y=1):
@@ -675,8 +675,8 @@ class TestMachineController(object):
          (256, 6, 7, Links.south, 0x67800000, 0, []),
          ]
     )
-    def test_link_read(self, buffer_size, x, y, link,
-                       start_address, length, data):
+    def test_read_across_link(self, buffer_size, x, y, link,
+                              start_address, length, data):
         # Create the mock controller
         cn = MachineController("localhost")
         cn._scp_data_length = buffer_size
@@ -687,7 +687,7 @@ class TestMachineController(object):
         # Perform the read and ensure that values are passed on as appropriate
         # and the result is correct
         with cn(x=x, y=y, link=link):
-            assert b"".join(data) == cn.link_read(start_address, length)
+            assert b"".join(data) == cn.read_across_link(start_address, length)
 
         # Should have one send_scp call per expected data block
         assert len(cn.connections[0].send_scp.mock_calls) == len(data)
@@ -712,11 +712,12 @@ class TestMachineController(object):
          (0x00000001, 1),
          ]
     )
-    def test_link_read_unaligned(self, start_address, length):
+    def test_read_across_link_unaligned(self, start_address, length):
         # Create the mock controller
         cn = MachineController("localhost")
         with pytest.raises(ValueError):
-            cn.link_read(start_address, length, x=0, y=0, link=Links.north)
+            cn.read_across_link(start_address, length,
+                                x=0, y=0, link=Links.north)
 
     @pytest.mark.parametrize(
         "buffer_size, x, y, link, start_address, data",
@@ -726,8 +727,8 @@ class TestMachineController(object):
          (256, 6, 7, Links.north, 0x67800000, []),
          ]
     )
-    def test_link_write(self, buffer_size, x, y, link,
-                        start_address, data):
+    def test_write_across_link(self, buffer_size, x, y, link,
+                               start_address, data):
         # Create the mock controller
         cn = MachineController("localhost")
         cn._scp_data_length = buffer_size
@@ -735,7 +736,7 @@ class TestMachineController(object):
 
         # Perform the write of the complete data
         with cn(x=x, y=y, link=link):
-            cn.link_write(start_address, b"".join(data))
+            cn.write_across_link(start_address, b"".join(data))
 
         # Should have one send_scp call per expected data block
         assert len(cn.connections[0].send_scp.mock_calls) == len(data)
@@ -761,11 +762,12 @@ class TestMachineController(object):
          (0x00000001, b"\0" * 1),
          ]
     )
-    def test_link_write_unaligned(self, start_address, data):
+    def test_write_across_link_unaligned(self, start_address, data):
         # Create the mock controller
         cn = MachineController("localhost")
         with pytest.raises(ValueError):
-            cn.link_write(start_address, data, x=0, y=0, link=Links.north)
+            cn.write_across_link(start_address, data,
+                                 x=0, y=0, link=Links.north)
 
     @pytest.mark.parametrize(
         "iptag, addr, port",
