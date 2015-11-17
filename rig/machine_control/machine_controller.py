@@ -748,9 +748,24 @@ class MachineController(ContextMixin):
         size : int
             Number of bytes to attempt to allocate in SDRAM.
         tag : int
-            8-bit (chip-wide) tag that can be looked up by a SpiNNaker
-            application to discover the address of the allocated block.  If `0`
-            then no tag is applied.
+            8-bit tag that can be looked up by a SpiNNaker application to
+            discover the address of the allocated block. The tag must be unique
+            for this ``app_id`` on this chip. Attempting to allocate two blocks
+            on the same chip and for the same ``app_id`` will fail. If ``0``
+            (the default) then no tag is applied.
+
+            For example, if some SDRAM is allocated with ``tag=12``, a SpiNNaker
+            application can later discover the address using::
+
+                void *allocated_data = sark_tag_ptr(12, 0);
+
+            A common convention is to allocate one block of SDRAM per
+            application core and give each allocation the associated core
+            number as its tag. This way the underlying SpiNNaker applications
+            can simply call::
+
+                void *allocated_data = sark_tag_ptr(sark_core_id(), 0);
+
         clear : bool
             If True the requested memory will be filled with zeros before the
             pointer is returned.  If False (the default) the memory will be
@@ -790,8 +805,9 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments()
     def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
                                 app_id=Required, buffer_size=0, clear=False):
-        """Like :py:meth:`.sdram_alloc` but returns a file-like object which
-        allows safe reading and writing to the block that is allocated.
+        """Like :py:meth:`.sdram_alloc` but returns a :py:class:`file-like
+        object <.MemoryIO>` which allows safe reading and writing to the block
+        that is allocated.
 
         Other Parameters
         ----------------
@@ -805,7 +821,30 @@ class MachineController(ContextMixin):
         -------
         :py:class:`.MemoryIO`
             File-like object which allows accessing the newly allocated region
-            of memory.
+            of memory. For example::
+
+                >>> # Read, write and seek through the allocated memory just
+                >>> # like a file
+                >>> mem = mc.sdram_alloc_as_filelike(12)  # doctest: +SKIP
+                >>> mem.write(b"Hello, world")            # doctest: +SKIP
+                12
+                >>> mem.seek(0)                           # doctest: +SKIP
+                >>> mem.read(5)                           # doctest: +SKIP
+                b"Hello"
+                >>> mem.read(7)                           # doctest: +SKIP
+                b", world"
+
+                >>> # Reads and writes are truncated to the allocated region,
+                >>> # preventing accidental clobbering/access of memory.
+                >>> mem.seek(0)                           # doctest: +SKIP
+                >>> mem.write(b"How are you today?")      # doctest: +SKIP
+                12
+                >>> mem.seek(0)                           # doctest: +SKIP
+                >>> mem.read(100)                         # doctest: +SKIP
+                b"How are you "
+
+            See the :py:class:`.MemoryIO` class for details of other features of
+            these file-like views of SpiNNaker's memory.
 
         Raises
         ------
@@ -1794,13 +1833,25 @@ class MemoryIO(object):
 
     For example::
 
+        >>> # Read, write and seek through memory as if it was a file
         >>> f = MemoryIO(mc, 0, 1, 0x67800000, 0x6780000c)  # doctest: +SKIP
         >>> f.write(b"Hello, world")                        # doctest: +SKIP
+        12
+        >>> f.seek(0)                                       # doctest: +SKIP
         >>> f.read()                                        # doctest: +SKIP
         b"Hello, world"
+
+        >>> # Slice the MemoryIO to produce a new MemoryIO which can only
+        >>> # access a subset of the memory.
         >>> g = f[0:5]                                      # doctest: +SKIP
         >>> g.read()                                        # doctest: +SKIP
         b"Hello"
+        >>> g.seek(0)                                       # doctest: +SKIP
+        >>> g.write(b"Wasup, bro!")                         # doctest: +SKIP
+        5
+        >>> f.seek(0)                                       # doctest: +SKIP
+        >>> f.read()                                        # doctest: +SKIP
+        b"Wasup, world"
     """
 
     def __init__(self, machine_controller, x, y, start_address, end_address,
