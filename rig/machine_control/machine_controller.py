@@ -28,7 +28,8 @@ class MachineController(ContextMixin):
     This class is essentially a wrapper around key functions provided by the
     SCP protocol which aims to straight-forwardly handle many of the difficult
     details and corner cases to ensure easy, efficient and reliable
-    communication with a machine.
+    communication with and control of a SpiNNaker machine. A :ref:`tutorial
+    <MachineController-tutorial>` is available for new users.
 
     Key features at a glance:
 
@@ -46,6 +47,12 @@ class MachineController(ContextMixin):
 
     * (Additional) 'advanced' non-blocking, parallel I/O interface
     * (Automagically) handling multiple connections simultaneously
+
+    This class does *not* provide any methods for sending and receiving
+    arbitrary SDP packets to and from applications. For this you should use
+    :py:mod:`sockets <socket>` and the :py:mod:`rig.machine_control.packets`
+    library (for which a :ref:`tutorial <scp-and-sdp-tutorial>` is also
+    available).
 
     This class features a context system which allows commonly required
     arguments to be specified for a whole block of code using a 'with'
@@ -639,6 +646,10 @@ class MachineController(ContextMixin):
         Forward SDP packets with the specified IP tag sent by a SpiNNaker
         application to a given external IP address.
 
+        A :ref:`tutorial example <scp-and-sdp-tutorial>` of the use of IP Tags
+        to send and receive SDP packets to and from applications is also
+        available.
+
         Parameters
         ----------
         iptag : int
@@ -754,8 +765,8 @@ class MachineController(ContextMixin):
             on the same chip and for the same ``app_id`` will fail. If ``0``
             (the default) then no tag is applied.
 
-            For example, if some SDRAM is allocated with ``tag=12``, a SpiNNaker
-            application can later discover the address using::
+            For example, if some SDRAM is allocated with ``tag=12``, a
+            SpiNNaker application can later discover the address using::
 
                 void *allocated_data = sark_tag_ptr(12, 0);
 
@@ -843,8 +854,8 @@ class MachineController(ContextMixin):
                 >>> mem.read(100)                         # doctest: +SKIP
                 b"How are you "
 
-            See the :py:class:`.MemoryIO` class for details of other features of
-            these file-like views of SpiNNaker's memory.
+            See the :py:class:`.MemoryIO` class for details of other features
+            of these file-like views of SpiNNaker's memory.
 
         Raises
         ------

@@ -30,13 +30,19 @@ The two high-level interfaces are:
     system temperature, read/write FPGA registers. Only applicable to machines
     based on SpiNN-5 boards.
 
+In addition there is a these high-level interfaces, a lower-level interface for
+sending and receiving application-defined SDP and SCP packets to running
+application via a socket.
+
 A tutorial for each of these interfaces is presented below.
 
 For those wishing to extend these interfaces or directly use SCP or SDP packets,
 the underlying advanced APIs are also very briefly introduced.
 
-:py:class:`.MachineController` Tutorial
----------------------------------------
+.. _MachineController-tutorial:
+
+:py:class:`.MachineController`
+------------------------------
 
 To get started, lets instantiate a :py:class:`.MachineController` which is as
 simple as giving the hostname or IP address of the machine::
@@ -253,8 +259,11 @@ reduce the repetition Python's ``with`` statement can be used::
     ...     block_addr = mc.sdram_alloc(1024, 3)
     ...     mc.write(block_addr, b"Hello, world!")
 
-:py:class:`.BMPController` Tutorial
------------------------------------
+
+.. _BMPController-tutorial:
+
+:py:class:`.BMPController`
+--------------------------
 
 A limited set of utilities are provided for interacting with SpiNNaker BMPs
 which are contained in the :py:class:`.BMPController` class. In systems with
@@ -355,26 +364,169 @@ As with :py:class:`.MachineController`, :py:class:`.BMPController` supports the
     ...     if bc.read_adc().temp_top > 75.0:
     ...         bc.set_led(7, True)  # Turn on LED 7 on the board
 
-Using SDP and SCP Directly (Advanced)
--------------------------------------
 
-SCP and SDP packets can be unpacked from strings of :py:class:`bytes` received
-over the network or assembled into bytes for transmission by the following two
-interfaces:
+.. _scp-and-sdp-tutorial:
 
-* :py:class:`~.packets.SDPPacket`
-* :py:class:`~.packets.SCPPacket`
+Sending/receiving SDP and SCP packets to/from applications
+----------------------------------------------------------
 
-A blocking implementation of SCP is provided by
-:py:class:`~.scp_connection.SCPConnection`.
+A number of low-level facilities are provided for users who wish to send and
+receive SCP and SDP packets directly. The most common use for these APIs is to
+send and receive SDP packets to and from a running SpiNNaker application to
+allow realtime monitoring and communication with the underlying application via
+an IP Tag. A minimal example of each is presented below.
 
-These are used internally by :py:class:`.MachineController` and
-:py:class:`.BMPController`. Users are encouraged to read the official SDP and
-SCP App-Notes and refer to the Rig source code for further guidance in using SCP
-and SDP directly in applications.
+Example: Sending SDP packets to a running application
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In your SpiNNaker application you should register a callback handler for the
+arrival of SDP packets. For example, using the ``spin1_api``:
+
+.. code-block:: c
+
+    spin1_callback_on(SDP_PACKET_RX, on_sdp_from_host, 0);
+
+To send SDP packets to this application, you must open a UDP socket with which
+to send SDP packets to your SpiNNaker system. Note that (slightly confusingly)
+SpiNNaker listens for incoming SDP packets on the :py:data:`SCP port
+<rig.machine_control.consts.SCP_PORT>`.
+
+::
+
+    >>> import socket
+    >>> from rig.machine_control.consts import SCP_PORT
+    >>> out_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    >>> out_sock.connect((hostname, SCP_PORT))
+
+With the port opened, you can use the
+:py:class:`rig.machine_control.packets.SDPPacket` and
+:py:class:`rig.machine_control.packets.SCPPacket` classes to pack your data
+into properly formatted SDP or SCP packets. Since the ``sark`` and
+``spin1_api`` (unfortunately) make packing/unpacking SDP packets rather clumsy,
+it is common to send and receive SCP packets to applications. 
 
 .. note::
-    Since different applications typically have very different requirements for
-    SDP and SCP support, Rig does not currently offer any high-level support for
-    their use. The developers are open to discussions about potential
-    (appropriate) high-level interfaces.
+
+    SCP packets are just SDP packets with some additional fields placed in the
+    SDP data payload and when a port number other than 0 are just passed to
+    your application like any other SDP packets.
+
+As an example, to send an SCP packet core 1 on chip (0, 0) with a ``cmd_rc`` of
+``123``::
+
+    >>> from rig.machine_control.packets import SCPPacket
+    >>> data = b"Hello world!\0"
+    >>> packet = SCPPacket(
+    ...     dest_port=1,
+    ...     dest_x=0, dest_y=0, dest_cpu=1,
+    ...     cmd_rc=123
+    ...     data=data
+    ... )
+    >>> out_sock.send(packet.bytestring)
+
+On the receiving core, the ``on_sdp_from_host`` callback might then look like
+this:
+
+.. code-block:: c
+
+    void on_sdp_from_host(uint mailbox, uint port)
+    {
+      sdp_msg_t *msg = (sdp_msg_t *)mailbox;
+      if (msg->cmd_rc == 123)
+      {
+        io_printf(IO_BUF,
+                  "Got SCP packet from host with data: %s\n",
+                  msg->data);
+      }
+      spin1_msg_free(msg);
+    }
+
+.. note::
+
+    SpiNNaker can only recieve packets up to a certain size. This size can be
+    determined using :py:class:`~rig.machine_control.MachineController`'s
+    :py:meth:`~rig.machine_control.MachineController.scp_data_length` property
+    This property defines the maximum length of the data-field in an SCP packet
+    sent to the machine.
+
+
+Example: Receiving SDP packets from a running application
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To receive SDP packets from an application first a socket must be opened
+through which the SDP packets may be received. A port number of your choosing
+may be used for this purpose. For example::
+
+    >>> import socket
+    >>> PORT = 50007
+    >>> in_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    >>> in_sock.bind(("", PORT))
+
+Next, you must set up an 'IP tag' on every Ethernet-connected SpiNNaker chip
+through which SDP packets may be sent back to the host which informs SpiNNaker
+of the IP address these packets should be sent to.
+
+A list of the Ethernet-connected chips in a typical SpiNNaker machine can be
+produced using :py:class:`rig.machine_control.MachineController.get_machine`
+and :py:class:`rig.geometry.spinn5_eth_coords` and an IP tag configured on each
+using :py:class:`rig.machine_control.MachineController.iptag_set` like so::
+
+    >>> from rig.machine_control import MachineController
+    >>> from rig.geometry import spinn5_eth_coords
+    
+    >>> # Get the IP and port of the socket we opened
+    >>> addr, port = in_sock.getsockname()
+    
+    >>> # Set-up IP Tag 1 on each ethernet-connected chip to forward all SDP
+    >>> # packets to this socket.
+    >>> mc = MachineController("spinnaker-machine-hostname")
+    >>> machine = mc.get_machine()
+    >>> for x, y in spinn5_eth_coords(machine.width, machine.height):
+    ...     mc.iptag_set(1, addr, port, x, y)
+
+You can now listen for incoming packets and unpack them using
+:py:meth:`rig.machine_control.packets.SDPPacket.from_bytestring` and
+:py:meth:`rig.machine_control.packets.SCPPacket.from_bytestring`. For example,
+to unpack SCP packets received from the machine::
+
+    >>> from rig.machine_control.packets import SCPPacket
+    >>> while True:
+    ...     data = self.in_sock.recv(512)
+    ...     if not data:
+    ...         break
+    ...     packet = SCPPacket.from_bytestring(data)
+    ...     print("Got SCP packet from core {} of chip ({}, {}) "
+    ...           "with cmd_rc {} and data {}.".format(
+    ...         packet.src_cpu, packet.src_x, packet.src_y,
+    ...         packet.cmd_rc,
+    ...         packet.data
+    ...     )
+
+SCP packets might be sent from a SpiNNaker application using code such as:
+
+.. code-block:: c
+
+    sdp_msg_t msg;
+    
+    void send_scp_packet(const char *data)
+    {
+      // Send to the nearest Ethernet-connected chip.
+      msg.tag = 1;
+      msg.dest_port = PORT_ETH;
+      msg.dest_addr = sv->eth_addr;
+
+      // Indicate the packet's origin as this chip/core. Note that the core is
+      // indicated in the bottom 5 bits of the srce_port field.
+      msg.flags = 0x07;
+      msg.srce_port = spin1_get_core_id();
+      msg.srce_addr = spin1_get_chip_id();
+      
+      // Append the latest temperature info to the message
+      int len = strlen(data) + 1;  // Include the null-terminating byte
+      spin1_memcpy(msg.data, (void *)data, len);
+      msg.length = sizeof (sdp_hdr_t) + sizeof (cmd_hdr_t) + len;
+
+      // and send it with a 100ms timeout
+      spin1_send_sdp_msg(&msg, 100);
+    }
+
