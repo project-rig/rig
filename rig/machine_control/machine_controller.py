@@ -1634,7 +1634,62 @@ class RouterDiagnostics(collections.namedtuple(
                           "dropped_nearest_neighbour", "dropped_fixed_route",
                           "counter12", "counter13", "counter14", "counter15"])
                         ):
-    """Read out of the diagnostic counters of a SpiNNaker router."""
+    """A namedtuple of values of a SpiNNaker router's 16 programmable
+    diagnostic counters.
+
+    Counter values can be accessed by subscripting::
+
+        >>> diag = mc.get_router_diagnostics(0, 0)  # doctest: +SKIP
+        >>> diag[0]                                 # doctest: +SKIP
+        53491
+
+    On boot, the first twelve counters are preconfigured to count commonly
+    used information. As a convenience, these counter values can be selected by
+    name::
+
+        >>> diag.dropped_multicast  # doctest: +SKIP
+        41
+
+    .. note::
+
+        It is possible to reconfigure *all* of the router counters to count
+        arbitrary events (see the ``rFN`` register in section 10.11 of the
+        SpiNNaker datasheet). If this has been done, using the subscript syntax
+        for accessing counter values from this structure is strongly
+        recommended.
+
+    Parameters
+    ----------
+    local_multicast : int
+    external_multicast : int
+    local_p2p : int
+    external_p2p : int
+    local_nearest_neighbour : int
+    external_nearest_neighbour : int
+    local_fixed_route : int
+    external_fixed_route : int
+        For each of SpiNNaker's four packet types (multicast, point-to-point,
+        nearest neighbour and fixed-route), there is:
+
+        * A ``local_*`` counter which reports the number of packets routed
+          which were sent by local application cores.
+        * An ``external_*`` counter which reports the number of packets routed
+          which were received from external sources (i.e. neighbouring chips).
+
+        Any packets which were dropped by the router are not included in these
+        counts.
+    dropped_multicast : int
+    dropped_p2p : int
+    dropped_nearest_neighbour : int
+    dropped_fixed_route : int
+        These counters report the number of each type of packet which were
+        dropped after arrival at this core.
+    counter12 : int
+    counter13 : int
+    counter14 : int
+    counter15 : int
+        These counters are disabled by default.
+    """
 
 
 class IPTag(collections.namedtuple("IPTag",
