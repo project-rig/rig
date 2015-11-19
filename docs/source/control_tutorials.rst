@@ -10,6 +10,7 @@ packets (a protocol built on top of `SDP`_) sent over the network to a machine.
 Rig includes a set of high-level wrappers around the low-level SCP commands
 which are tailored towards SpiNNaker application developers.
 
+
 .. _SCP: https://spinnaker.cs.man.ac.uk/tiki-download_wiki_attachment.php?attId=17&page=Application%20note%205%20-%20SCP%20Specification&download=y
 
 .. _SDP: https://spinnaker.cs.man.ac.uk/tiki-download_wiki_attachment.php?attId=16&page=Application%20note%204%20-%20SDP%20Specification&download=y
@@ -20,7 +21,11 @@ which are tailored towards SpiNNaker application developers.
     result of this are encouraged to submit a patch or open an issue as the
     developers are open to (reasonable) suggestions!
 
-The two high-level interfaces are:
+In addition to these high-level interfaces, a lower-level interface for sending
+and receiving application-defined SDP and SCP packets to running applications
+via a socket.
+
+The two high-level machine control interfaces are:
 
 :py:class:`.MachineController`
     Interact with and control SpiNNaker chips, e.g. boot, load applications,
@@ -30,14 +35,14 @@ The two high-level interfaces are:
     system temperature, read/write FPGA registers. Only applicable to machines
     based on SpiNN-5 boards.
 
-In addition there is a these high-level interfaces, a lower-level interface for
-sending and receiving application-defined SDP and SCP packets to running
-application via a socket.
+The low-level SDP and SCP interfaces are:
+
+:py:class:`~rig.machine_control.packets.SDPPacket`
+    Pack and unpack SDP packets.
+:py:class:`~rig.machine_control.packets.SCPPacket`
+    Pack and unpack SCP packets.
 
 A tutorial for each of these interfaces is presented below.
-
-For those wishing to extend these interfaces or directly use SCP or SDP packets,
-the underlying advanced APIs are also very briefly introduced.
 
 .. _MachineController-tutorial:
 
@@ -401,15 +406,15 @@ SpiNNaker listens for incoming SDP packets on the :py:data:`SCP port
 With the port opened, you can use the
 :py:class:`rig.machine_control.packets.SDPPacket` and
 :py:class:`rig.machine_control.packets.SCPPacket` classes to pack your data
-into properly formatted SDP or SCP packets. Since the ``sark`` and
-``spin1_api`` (unfortunately) make packing/unpacking SDP packets rather clumsy,
-it is common to send and receive SCP packets to applications. 
+into properly formatted SDP or SCP packets. Since ``sark`` and ``spin1_api``
+(unfortunately) make packing/unpacking SDP packets rather clumsy it is common
+to send and receive SCP packets to applications. 
 
 .. note::
 
     SCP packets are just SDP packets with some additional fields placed in the
-    SDP data payload and when a port number other than 0 are just passed to
-    your application like any other SDP packets.
+    SDP data payload. When a port number other than 0 is used SCP packets are
+    passed to the application like any other SDP packet
 
 As an example, to send an SCP packet core 1 on chip (0, 0) with a ``cmd_rc`` of
 ``123``::
@@ -424,7 +429,7 @@ As an example, to send an SCP packet core 1 on chip (0, 0) with a ``cmd_rc`` of
     ... )
     >>> out_sock.send(packet.bytestring)
 
-On the receiving core, the ``on_sdp_from_host`` callback might then look like
+On the receiving core the ``on_sdp_from_host`` callback might then look like
 this:
 
 .. code-block:: c
@@ -443,7 +448,7 @@ this:
 
 .. note::
 
-    SpiNNaker can only recieve packets up to a certain size. This size can be
+    SpiNNaker can only receive packets up to a certain size. This size can be
     determined using :py:class:`~rig.machine_control.MachineController`'s
     :py:meth:`~rig.machine_control.MachineController.scp_data_length` property
     This property defines the maximum length of the data-field in an SCP packet
@@ -453,9 +458,8 @@ this:
 Example: Receiving SDP packets from a running application
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To receive SDP packets from an application first a socket must be opened
-through which the SDP packets may be received. A port number of your choosing
-may be used for this purpose. For example::
+To receive SDP packets from an application there must first be an open socket
+ready to receive the packets. For example::
 
     >>> import socket
     >>> PORT = 50007
@@ -495,12 +499,18 @@ to unpack SCP packets received from the machine::
     ...     if not data:
     ...         break
     ...     packet = SCPPacket.from_bytestring(data)
-    ...     print("Got SCP packet from core {} of chip ({}, {}) "
-    ...           "with cmd_rc {} and data {}.".format(
-    ...         packet.src_cpu, packet.src_x, packet.src_y,
-    ...         packet.cmd_rc,
-    ...         packet.data
-    ...     )
+    ...     print("Got SCP packet from core {packet.src_cpu} "
+    ...           "of chip ({packet.src_x}, {packet.src_y}) "
+    ...           "with cmd_rc {packet.cmd_rc} and data "
+    ...           "{packet.data}.".format(packet=packet))
+
+.. note::
+
+    We use a 512 byte UDP receive buffer since at present the largest SDP
+    packet supported by the machine at the time of writing is 256 bytes + SDP
+    header. The :py:class:`~rig.machine_control.MachineController`'s
+    :py:meth:`~rig.machine_control.MachineController.scp_data_length` property
+    can be used to get the actual value.
 
 SCP packets might be sent from a SpiNNaker application using code such as:
 

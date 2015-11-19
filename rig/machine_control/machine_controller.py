@@ -213,13 +213,14 @@ class MachineController(ContextMixin):
         hostname was given as the argument to the MachineController. With the
         default arguments this method will only boot systems which have not
         already been booted and will check to ensure that the machine was
-        successfuly booted. See
+        successfuly booted.
 
         This method is a wrapper around
         :py:func:`rig.machine_control.boot.boot` which sets the structs in this
-        MachineController will be set to those used to boot the machine.
+        MachineController to those used to boot the machine.
 
         .. warning::
+
             Booting the system over the open internet is likely to fail due to
             the port number being blocked by most ISPs and UDP not being
             reliable. A proxy such as `spinnaker_proxy
@@ -777,6 +778,14 @@ class MachineController(ContextMixin):
 
                 void *allocated_data = sark_tag_ptr(sark_core_id(), 0);
 
+            .. note::
+
+                The ``sark_tag_ptr`` function will be introduced in SARK 1.40
+                after being erroneously omitted from SARK 1.3x. As an interim
+                measure, users may simply copy an implementation of the
+                function into their own project from :ref:`here
+                <sark-tag-ptr>`.
+
         clear : bool
             If True the requested memory will be filled with zeros before the
             pointer is returned.  If False (the default) the memory will be
@@ -959,6 +968,7 @@ class MachineController(ContextMixin):
         :py:func:`~rig.place_and_route.util.build_application_map`.
 
         .. warning::
+
             The loading process is likely, but not guaranteed, to succeed.
             This is because the flood-fill packets used during loading are not
             guaranteed to arrive. The effect of this is one of the following:
