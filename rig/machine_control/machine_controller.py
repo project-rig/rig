@@ -213,7 +213,8 @@ class MachineController(ContextMixin):
         hostname was given as the argument to the MachineController. With the
         default arguments this method will only boot systems which have not
         already been booted and will check to ensure that the machine was
-        successfuly booted.
+        successfuly booted (and raise a :py:exc:`.SpiNNakerBootError` on
+        failure).
 
         This method is a wrapper around
         :py:func:`rig.machine_control.boot.boot` which sets the structs in this
@@ -752,8 +753,9 @@ class MachineController(ContextMixin):
                     app_id=Required, clear=False):
         """Allocate a region of SDRAM for an application.
 
-        Requests SARK to allocate a block of SDRAM for an application. This
-        allocation will be freed when the application is stopped.
+        Requests SARK to allocate a block of SDRAM for an application and
+        raises a :py:exc:`.SpiNNakerMemoryError` on failure. This allocation
+        will be freed when the application is stopped.
 
         Parameters
         ----------
@@ -798,7 +800,7 @@ class MachineController(ContextMixin):
 
         Raises
         ------
-        SpiNNakerMemoryError
+        rig.machine_control.machine_controller.SpiNNakerMemoryError
             If the memory cannot be allocated, the tag is already taken or it
             is invalid.
         """
@@ -868,7 +870,7 @@ class MachineController(ContextMixin):
 
         Raises
         ------
-        SpiNNakerMemoryError
+        rig.machine_control.machine_controller.SpiNNakerMemoryError
             If the memory cannot be allocated, or the tag is already taken or
             invalid.
         """
@@ -971,25 +973,22 @@ class MachineController(ContextMixin):
 
             The loading process is likely, but not guaranteed, to succeed.
             This is because the flood-fill packets used during loading are not
-            guaranteed to arrive. The effect of this is one of the following:
-
-            * Some regions may be included/excluded incorrectly.
-            * Some chips will not receive the complete application binary and
-              will silently not execute the binary.
+            guaranteed to arrive. The effect of this is that some chips may not
+            receive the complete application binary and will silently ignore
+            the application loading request.
 
             As a result, the user is responsible for checking that each core
             was successfully loaded with the correct binary. At present, the
             two recommended approaches to this are:
 
             * The user should check that the correct number of application
-              binaries reach their initial barrier (SYNC0), when this facility
-              is used. This is not fool-proof but will flag up all but
-              situations where exactly the right number, but the wrong
-              selection of cores were loaded. (At the time of writing, this
-              situation is not possible but will become a concern in future
-              versions of SC&MP.
+              binaries reach the initial barrier (e.g. ``wait``), when the
+              ``wait`` argument is ``True``. If the number does not match the
+              expected number of cores to be loaded, the next approach must be
+              used:
             * The user can check the process list of each chip to ensure the
-              application was loaded into the correct set of cores.
+              application was loaded into the correct set of cores. See
+              :py:meth:`.read_vcpu_struct_field`.
 
         Parameters
         ----------
@@ -1066,7 +1065,7 @@ class MachineController(ContextMixin):
 
         This method guarantees that once it returns, all required cores will
         have been loaded. If this is not possible after a small number of
-        attempts, an exception will be raised.
+        attempts, a :py:exc:`.SpiNNakerLoadingError` will be raised.
 
         This method can be called in either of the following ways::
 
@@ -1094,6 +1093,12 @@ class MachineController(ContextMixin):
             to represent _all_ the cores that will be loaded and a faster
             method to determine whether all applications have been loaded
             correctly will be used. If False a fallback method will be used.
+
+        Raises
+        ------
+        rig.machine_control.machine_controller.SpiNNakerLoadingError
+            This exception is raised after some cores failed to load after
+            ``n_tries`` attempts.
         """
         # Get keyword arguments
         app_id = kwargs.pop("app_id")
@@ -1360,7 +1365,7 @@ class MachineController(ContextMixin):
 
         Raises
         ------
-        SpiNNakerRouterError
+        rig.machine_control.machine_controller.SpiNNakerRouterError
             If it is not possible to allocate sufficient routing table entries.
         """
         for (x, y), table in iteritems(routing_tables):
@@ -1383,7 +1388,7 @@ class MachineController(ContextMixin):
 
         Raises
         ------
-        SpiNNakerRouterError
+        rig.machine_control.machine_controller.SpiNNakerRouterError
             If it is not possible to allocate sufficient routing table entries.
         """
         count = len(entries)
@@ -1789,6 +1794,15 @@ class SpiNNakerBootError(Exception):
 class SpiNNakerMemoryError(Exception):
     """Raised when it is not possible to allocate memory on a SpiNNaker
     chip.
+
+    Attributes
+    ----------
+    size : int
+        The size of the failed allocation.
+    chip : (x, y)
+        The chip coordinates on which the allocation failed.
+    tag : int
+        The tag number of the failed allocation.
     """
     def __init__(self, size, x, y, tag=0):
         self.size = size
@@ -1809,6 +1823,13 @@ class SpiNNakerMemoryError(Exception):
 class SpiNNakerRouterError(Exception):
     """Raised when it is not possible to allocated routing table entries on a
     SpiNNaker chip.
+
+    Attributes
+    ----------
+    count : int
+        The number of routing table entries attempted to allocate.
+    chip : (x, y)
+        The coordinates of the chip the allocation failed on.
     """
     def __init__(self, count, x, y):
         self.count = count
@@ -1820,7 +1841,13 @@ class SpiNNakerRouterError(Exception):
 
 
 class SpiNNakerLoadingError(Exception):
-    """Raised when it has not been possible to load applications to cores."""
+    """Raised when it has not been possible to load applications to cores.
+
+    Attributes
+    ----------
+    app_map : {"/path/to/app.aplx": {(x, y): {core, ...}, ...}, ...}
+        The application map of the cores which could not be loaded.
+    """
     def __init__(self, application_map):
         self.app_map = application_map
 

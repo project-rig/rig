@@ -68,7 +68,7 @@ def sdram_alloc_for_vertices(controller, placements, allocations,
 
     Raises
     ------
-    SpiNNakerMemoryError
+    rig.machine_control.machine_controller.SpiNNakerMemoryError
         If the memory cannot be allocated, or a tag is already taken or
         invalid.
     """
