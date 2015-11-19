@@ -195,7 +195,7 @@ class MachineController(ContextMixin):
             if conn is not None:
                 return conn
             else:
-                # If no connection was available to the local board, chose
+                # If no connection was available to the local board, choose
                 # another arbitrarily.
                 # XXX: This choice will cause lots of contention in systems
                 # with many missing Ethernet connections.
