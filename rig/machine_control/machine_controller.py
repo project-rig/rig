@@ -496,6 +496,127 @@ class MachineController(ContextMixin):
         return connection.read(self.scp_data_length, self.scp_window_size,
                                x, y, p, address, length_bytes)
 
+    @ContextMixin.use_contextual_arguments()
+    def write_across_link(self, address, data, x, y, link):
+        """Write a bytestring to an address in memory on a neigbouring chip.
+
+        .. warning::
+
+            This function is intended for low-level debug use only and is not
+            optimised for performance nor intended for more general use.
+
+        This method instructs a monitor processor to send 'POKE'
+        nearest-neighbour packets to a neighbouring chip. These packets are
+        handled directly by the SpiNNaker router in the neighbouring chip,
+        potentially allowing advanced debug or recovery of a chip rendered
+        otherwise unreachable.
+
+        Parameters
+        ----------
+        address : int
+            The address at which to start writing the data. Only addresses in
+            the system-wide address map may be accessed. Addresses must be word
+            aligned.
+        data : :py:class:`bytes`
+            Data to write into memory. Must be a whole number of words in
+            length. Large writes are automatically broken into a sequence of
+            SCP link-write commands.
+        x : int
+        y : int
+            The coordinates of the chip from which the command will be sent,
+            *not* the coordinates of the chip on which the write will be
+            performed.
+        link : :py:class:`rig.machine.Links`
+            The link down which the write should be sent.
+        """
+        if address % 4:
+            raise ValueError("Addresses must be word-aligned.")
+        if len(data) % 4:
+            raise ValueError("Data must be a whole number of words.")
+
+        length_bytes = len(data)
+        cur_byte = 0
+
+        # Write the requested data, one SCP packet worth at a time
+        while length_bytes > 0:
+            to_write = min(length_bytes, (self.scp_data_length & ~0b11))
+            cur_data = data[cur_byte:cur_byte + to_write]
+            self._send_scp(x, y, 0, SCPCommands.link_write,
+                           arg1=address, arg2=to_write, arg3=int(link),
+                           data=cur_data, expected_args=0)
+
+            # Move to the next block to write
+            address += to_write
+            cur_byte += to_write
+            length_bytes -= to_write
+
+    @ContextMixin.use_contextual_arguments()
+    def read_across_link(self, address, length_bytes, x, y, link):
+        """Read a bytestring from an address in memory on a neigbouring chip.
+
+        .. warning::
+
+            This function is intended for low-level debug use only and is not
+            optimised for performance nor intended for more general use.
+
+        This method instructs a monitor processor to send 'PEEK'
+        nearest-neighbour packets to a neighbouring chip. These packets are
+        handled directly by the SpiNNaker router in the neighbouring chip,
+        potentially allowing advanced debug or recovery of a chip rendered
+        otherwise unreachable.
+
+        Parameters
+        ----------
+        address : int
+            The address at which to start reading the data. Only addresses in
+            the system-wide address map may be accessed. Addresses must be word
+            aligned.
+        length_bytes : int
+            The number of bytes to read from memory. Must be a multiple of four
+            (i.e. a whole number of words). Large reads are transparently
+            broken into multiple SCP link-read commands.
+        x : int
+        y : int
+            The coordinates of the chip from which the command will be sent,
+            *not* the coordinates of the chip on which the read will be
+            performed.
+        link : :py:class:`rig.machine.Links`
+            The link down which the read should be sent.
+
+        Returns
+        -------
+        :py:class:`bytes`
+            The data is read back from memory as a bytestring.
+        """
+        if address % 4:
+            raise ValueError("Addresses must be word-aligned.")
+        if length_bytes % 4:
+            raise ValueError("Lengths must be multiples of words.")
+
+        # Prepare the buffer to receive the incoming data
+        data = bytearray(length_bytes)
+        mem = memoryview(data)
+
+        # Read the requested data, one SCP packet worth at a time
+        while length_bytes > 0:
+            to_read = min(length_bytes, (self.scp_data_length & ~0b11))
+            response = self._send_scp(x, y, 0, SCPCommands.link_read,
+                                      arg1=address,
+                                      arg2=to_read,
+                                      arg3=int(link),
+                                      expected_args=0)
+
+            # Accumulate the incoming data and advance the memoryview through
+            # the buffer.
+            mem[:to_read] = response.data
+            mem = mem[to_read:]
+
+            # Move to the next block to read
+            address += to_read
+            length_bytes -= to_read
+
+        return bytes(data)
+
     def _get_struct_field_and_address(self, struct_name, field_name):
         field = self.structs[six.b(struct_name)][six.b(field_name)]
         address = self.structs[six.b(struct_name)].base + field.offset

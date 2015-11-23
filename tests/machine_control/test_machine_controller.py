@@ -137,6 +137,26 @@ class TestMachineControllerLive(object):
         with controller(x=0, y=0, p=1):
             assert controller.read(0x60000000, len(data)) == data
 
+    def test_write_and_read_across_link(self, controller):
+        """Test link-write and read capabilities by writing a string to SDRAM
+        on another chip and then reading back.
+        """
+        data = b'PEEK and POKE!!!'  # Length is a multiple of words
+
+        # You put the data in
+        with controller(x=0, y=0, link=Links.north):
+            controller.write_across_link(0x60000000, data[0:4])
+            controller.write_across_link(0x60000004, data[4:])
+
+        # You take the data out
+        with controller(x=0, y=0, link=Links.north):
+            assert controller.read_across_link(0x60000000, 4) == data[0:4]
+            assert controller.read_across_link(0x60000000, len(data)) == data
+
+        # And check the data really was put on another chip
+        with controller(x=0, y=1):
+            assert controller.read(0x60000000, len(data)) == data
+
     def test_write_and_read_struct_values(self, controller):
         """Test reading a struct value, writing a new value and then resetting
         the value.
@@ -745,6 +765,109 @@ class TestMachineController(object):
         cn.connections[None].read.assert_called_once_with(
             buffer_size, window_size, x, y, p, start_address, length
         )
+
+    @pytest.mark.parametrize(
+        "buffer_size, x, y, link, start_address, length, data",
+        [(128, 0, 1, Links.north, 0x67800000, 80, [b"\x11" * 80, ]),
+         (128, 2, 3, Links.south, 0x67800000, 152, [b"\x11" * 128,
+                                                    b"\x22" * 24]),
+         (256, 4, 5, Links.north, 0x67800000, 256, [b"\x11" * 256]),
+         (256, 6, 7, Links.south, 0x67800000, 0, []),
+         ]
+    )
+    def test_read_across_link(self, buffer_size, x, y, link,
+                              start_address, length, data):
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn._scp_data_length = buffer_size
+        cn.connections[0] = mock.Mock(spec_set=SCPConnection)
+        cn.connections[0].send_scp.side_effect = [mock.Mock(data=d)
+                                                  for d in data]
+
+        # Perform the read and ensure that values are passed on as appropriate
+        # and the result is correct
+        with cn(x=x, y=y, link=link):
+            assert b"".join(data) == cn.read_across_link(start_address, length)
+
+        # Should have one send_scp call per expected data block
+        assert len(cn.connections[0].send_scp.mock_calls) == len(data)
+
+        # The calls should be for the correct lengths etc.
+        address = start_address
+        for block, call in zip(data, cn.connections[0].send_scp.mock_calls):
+            assert call[1][1] == x
+            assert call[1][2] == y
+            assert call[1][3] == 0
+            assert call[1][4] == SCPCommands.link_read
+            assert call[2]["arg1"] == address
+            assert call[2]["arg2"] == len(block)
+            assert call[2]["arg3"] == int(link)
+            assert call[2]["expected_args"] == 0
+            address += len(block)
+
+    @pytest.mark.parametrize(
+        "start_address, length",
+        [(0x00000001, 4),
+         (0x00000004, 1),
+         (0x00000001, 1),
+         ]
+    )
+    def test_read_across_link_unaligned(self, start_address, length):
+        # Create the mock controller
+        cn = MachineController("localhost")
+        with pytest.raises(ValueError):
+            cn.read_across_link(start_address, length,
+                                x=0, y=0, link=Links.north)
+
+    @pytest.mark.parametrize(
+        "buffer_size, x, y, link, start_address, data",
+        [(128, 0, 1, Links.north, 0x67800000, [b"\x11" * 80, ]),
+         (128, 2, 3, Links.south, 0x67800000, [b"\x11" * 128, b"\x22" * 24]),
+         (256, 4, 5, Links.north, 0x67800000, [b"\x11" * 256]),
+         (256, 6, 7, Links.north, 0x67800000, []),
+         ]
+    )
+    def test_write_across_link(self, buffer_size, x, y, link,
+                               start_address, data):
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn._scp_data_length = buffer_size
+        cn.connections[0] = mock.Mock(spec_set=SCPConnection)
+
+        # Perform the write of the complete data
+        with cn(x=x, y=y, link=link):
+            cn.write_across_link(start_address, b"".join(data))
+
+        # Should have one send_scp call per expected data block
+        assert len(cn.connections[0].send_scp.mock_calls) == len(data)
+
+        # The calls should be for the correct lengths etc.
+        address = start_address
+        for block, call in zip(data, cn.connections[0].send_scp.mock_calls):
+            assert call[1][1] == x
+            assert call[1][2] == y
+            assert call[1][3] == 0
+            assert call[1][4] == SCPCommands.link_write
+            assert call[2]["arg1"] == address
+            assert call[2]["arg2"] == len(block)
+            assert call[2]["arg3"] == int(link)
+            assert call[2]["data"] == block
+            assert call[2]["expected_args"] == 0
+            address += len(block)
+
+    @pytest.mark.parametrize(
+        "start_address, data",
+        [(0x00000001, b"\0" * 4),
+         (0x00000004, b"\0" * 1),
+         (0x00000001, b"\0" * 1),
+         ]
+    )
+    def test_write_across_link_unaligned(self, start_address, data):
+        # Create the mock controller
+        cn = MachineController("localhost")
+        with pytest.raises(ValueError):
+            cn.write_across_link(start_address, data,
+                                 x=0, y=0, link=Links.north)
 
     @pytest.mark.parametrize(
         "iptag, addr, port",
