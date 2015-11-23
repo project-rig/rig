@@ -21,9 +21,9 @@ which are tailored towards SpiNNaker application developers.
     result of this are encouraged to submit a patch or open an issue as the
     developers are open to (reasonable) suggestions!
 
-In addition to these high-level interfaces, a lower-level interface for sending
-and receiving application-defined SDP and SCP packets to running applications
-via a socket.
+In addition to these high-level interfaces, Rig includes a lower-level
+interface for sending and receiving application-defined SDP and SCP packets to
+running applications via a socket.
 
 The two high-level machine control interfaces are:
 
