@@ -1895,11 +1895,11 @@ class MemoryIO(object):
         >>> g.read()                                        # doctest: +SKIP
         b"Hello"
         >>> g.seek(0)                                       # doctest: +SKIP
-        >>> g.write(b"Wasup, bro!")                         # doctest: +SKIP
+        >>> g.write(b"Howdy, partner!")                     # doctest: +SKIP
         5
         >>> f.seek(0)                                       # doctest: +SKIP
         >>> f.read()                                        # doctest: +SKIP
-        b"Wasup, world"
+        b"Howdy, world"
     """
 
     def __init__(self, machine_controller, x, y, start_address, end_address,

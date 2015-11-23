@@ -408,7 +408,7 @@ With the port opened, you can use the
 :py:class:`rig.machine_control.packets.SCPPacket` classes to pack your data
 into properly formatted SDP or SCP packets. Since ``sark`` and ``spin1_api``
 (unfortunately) make packing/unpacking SDP packets rather clumsy it is common
-to send and receive SCP packets to applications. 
+to use SCP packets. 
 
 .. note::
 
@@ -507,8 +507,10 @@ to unpack SCP packets received from the machine::
 .. note::
 
     We use a 512 byte UDP receive buffer since at present the largest SDP
-    packet supported by the machine at the time of writing is 256 bytes + SDP
-    header. The :py:class:`~rig.machine_control.MachineController`'s
+    packet supported by the machine at the time of writing is 256 bytes + 24
+    bytes SCP header. Using power-of-two sized receive buffers is recommended
+    on most operating systems for performance reasons. The
+    :py:class:`~rig.machine_control.MachineController`'s
     :py:meth:`~rig.machine_control.MachineController.scp_data_length` property
     can be used to get the actual value.
 
@@ -531,7 +533,8 @@ SCP packets might be sent from a SpiNNaker application using code such as:
       msg.srce_port = spin1_get_core_id();
       msg.srce_addr = spin1_get_chip_id();
       
-      // Append the latest temperature info to the message
+      // Copy the supplied data into the data field of the packet and update
+      // the length accordingly.
       int len = strlen(data) + 1;  // Include the null-terminating byte
       spin1_memcpy(msg.data, (void *)data, len);
       msg.length = sizeof (sdp_hdr_t) + sizeof (cmd_hdr_t) + len;

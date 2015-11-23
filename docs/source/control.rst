@@ -57,8 +57,8 @@ introductory tutorials:
 :py:mod:`~rig.machine_control.scp_connection`: High-performance SCP protocol implementation
 -------------------------------------------------------------------------------------------
 
-This module presents a high-performance implementation of the SCP protocol when
-used to communicate with SC&MP.
+This module presents a high-performance implementation of the SCP protocol
+which is used to communicate with SC&MP.
 
 .. automodule:: rig.machine_control.scp_connection
     :members:
