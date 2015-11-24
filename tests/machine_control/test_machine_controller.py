@@ -780,9 +780,9 @@ class TestMachineController(object):
         # Create the mock controller
         cn = MachineController("localhost")
         cn._scp_data_length = buffer_size
-        cn.connections[0] = mock.Mock(spec_set=SCPConnection)
-        cn.connections[0].send_scp.side_effect = [mock.Mock(data=d)
-                                                  for d in data]
+        cn.connections[None] = mock.Mock(spec_set=SCPConnection)
+        cn.connections[None].send_scp.side_effect = [mock.Mock(data=d)
+                                                     for d in data]
 
         # Perform the read and ensure that values are passed on as appropriate
         # and the result is correct
@@ -790,11 +790,11 @@ class TestMachineController(object):
             assert b"".join(data) == cn.read_across_link(start_address, length)
 
         # Should have one send_scp call per expected data block
-        assert len(cn.connections[0].send_scp.mock_calls) == len(data)
+        assert len(cn.connections[None].send_scp.mock_calls) == len(data)
 
         # The calls should be for the correct lengths etc.
         address = start_address
-        for block, call in zip(data, cn.connections[0].send_scp.mock_calls):
+        for block, call in zip(data, cn.connections[None].send_scp.mock_calls):
             assert call[1][1] == x
             assert call[1][2] == y
             assert call[1][3] == 0
@@ -832,18 +832,18 @@ class TestMachineController(object):
         # Create the mock controller
         cn = MachineController("localhost")
         cn._scp_data_length = buffer_size
-        cn.connections[0] = mock.Mock(spec_set=SCPConnection)
+        cn.connections[None] = mock.Mock(spec_set=SCPConnection)
 
         # Perform the write of the complete data
         with cn(x=x, y=y, link=link):
             cn.write_across_link(start_address, b"".join(data))
 
         # Should have one send_scp call per expected data block
-        assert len(cn.connections[0].send_scp.mock_calls) == len(data)
+        assert len(cn.connections[None].send_scp.mock_calls) == len(data)
 
         # The calls should be for the correct lengths etc.
         address = start_address
-        for block, call in zip(data, cn.connections[0].send_scp.mock_calls):
+        for block, call in zip(data, cn.connections[None].send_scp.mock_calls):
             assert call[1][1] == x
             assert call[1][2] == y
             assert call[1][3] == 0
