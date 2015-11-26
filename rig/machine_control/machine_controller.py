@@ -213,7 +213,7 @@ class MachineController(ContextMixin):
         hostname was given as the argument to the MachineController. With the
         default arguments this method will only boot systems which have not
         already been booted and will check to ensure that the machine was
-        successfuly booted (and raise a :py:exc:`.SpiNNakerBootError` on
+        successfully booted (and raise a :py:exc:`.SpiNNakerBootError` on
         failure).
 
         This method is a wrapper around
@@ -973,18 +973,18 @@ class MachineController(ContextMixin):
 
             The loading process is likely, but not guaranteed, to succeed.
             This is because the flood-fill packets used during loading are not
-            guaranteed to arrive. The effect of this is that some chips may not
-            receive the complete application binary and will silently ignore
-            the application loading request.
+            guaranteed to arrive. The effect is that some chips may not receive
+            the complete application binary and will silently ignore the
+            application loading request.
 
             As a result, the user is responsible for checking that each core
             was successfully loaded with the correct binary. At present, the
             two recommended approaches to this are:
 
-            * The user should check that the correct number of application
-              binaries reach the initial barrier (e.g. ``wait``), when the
-              ``wait`` argument is ``True``. If the number does not match the
-              expected number of cores to be loaded, the next approach must be
+            * If the ``wait`` argument is given then the user should check that
+              the correct number of application binaries reach the initial
+              barrier (i.e., the ``wait`` state). If the number does not match
+              the expected number of loaded cores the next approach must be
               used:
             * The user can check the process list of each chip to ensure the
               application was loaded into the correct set of cores. See
@@ -1827,7 +1827,7 @@ class SpiNNakerRouterError(Exception):
     Attributes
     ----------
     count : int
-        The number of routing table entries attempted to allocate.
+        The number of routing table entries requested.
     chip : (x, y)
         The coordinates of the chip the allocation failed on.
     """
