@@ -98,14 +98,21 @@ Constraint
       each individual vertex (core) can have independent routes directly to and
       from them.
 
-:py:func:`~rig.place_and_route.wrapper`: common case wrapper
-------------------------------------------------------------
+:py:func:`~rig.place_and_route.place_and_route_wrapper`: common case wrapper
+----------------------------------------------------------------------------
 
 Most applications simply require their application graph be translated into a
 set of data structures describing where binaries need to be loaded and a set of
-routing tables. For most users the :py:func:`rig.place_and_route.wrapper` will
-do exactly this with a minimum of fuss. For more advanced users, this function
-can be used as an example of the complete place-and-route process.
+routing tables. For most users the
+:py:func:`rig.place_and_route.place_and_route_wrapper` will do exactly this
+with a minimum of fuss. For more advanced users, this function can be used as
+an example of the complete place-and-route process.
+
+.. autofunction:: rig.place_and_route.place_and_route_wrapper
+
+The above function replaces the very similar but now deprecated
+:py:func:`rig.place_and_route.wrapper` function which remains for
+backwards-compatibility.
 
 .. autofunction:: rig.place_and_route.wrapper
 

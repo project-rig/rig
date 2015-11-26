@@ -11,4 +11,5 @@ from .allocate.greedy import allocate
 from .route.ner import route
 
 # High-Level Wrapper
-from .wrapper import wrapper
+from .wrapper import place_and_route_wrapper
+from .wrapper import wrapper  # Deprecated

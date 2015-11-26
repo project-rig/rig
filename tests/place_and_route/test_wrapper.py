@@ -5,7 +5,7 @@ from six import iteritems
 from rig.machine import Machine, Cores, SDRAM
 from rig.netlist import Net
 
-from rig.place_and_route import wrapper
+from rig.place_and_route import place_and_route_wrapper, wrapper
 
 
 class Vertex(object):
@@ -28,23 +28,30 @@ class TestWrapper(object):
     """Simple santy-check level tests of the wrapper, no comprehensive checks
     since internal function is largely tested elsewhere."""
 
-    def test_empty(self):
+    @pytest.mark.parametrize("fn", [wrapper, place_and_route_wrapper])
+    def test_empty(self, fn):
         # Simplest possible case of an empty system
         m = Machine(1, 1)
         placements, allocations, application_map, routing_tables = \
-            wrapper({}, {}, [], {}, m)
+            fn({}, {}, [], {}, m)
         assert placements == {}
         assert allocations == {}
         assert application_map == {}
         assert routing_tables == {}
 
-    @pytest.mark.parametrize("reserve_monitor, align_sdram",
-                             [(True, True), (False, False)])
-    def test_ring(self, reserve_monitor, align_sdram):
+    @pytest.mark.parametrize("fn, add_args, reserve_monitor, align_sdram",
+                             [(place_and_route_wrapper, False, False, False),
+                              (wrapper, False, True, True),
+                              (wrapper, True, True, True),
+                              (wrapper, True, False, False)])
+    def test_ring(self, fn, add_args, reserve_monitor, align_sdram):
         # A simple example where a ring network is defined. In the ring, each
         # node is connected by a multicast net to its two immediate neighbours.
 
         m = Machine(2, 2)
+
+        # Makes the placement process signficantly faster...
+        m.chip_resources[Cores] = 4
 
         # Create a ring network which will consume all available cores
         num_vertices = m.width * m.height * (
@@ -58,10 +65,19 @@ class TestWrapper(object):
                 for i in range(num_vertices)]
         net_keys = {n: (i, 0xFFFF) for i, n in enumerate(nets)}
 
+        # Add constraint arguments only for old wrapper function, not for
+        # place_and_route_wrapper which does not support the arguments.
+        if add_args:
+            kwargs = {
+                "reserve_monitor": reserve_monitor,
+                "align_sdram": align_sdram,
+            }
+        else:
+            kwargs = {}
+
         placements, allocations, application_map, routing_tables = \
-            wrapper(vertices_resources, vertices_applications,
-                    nets, net_keys, m, reserve_monitor=reserve_monitor,
-                    align_sdram=align_sdram)
+            fn(vertices_resources, vertices_applications,
+               nets, net_keys, m, **kwargs)
 
         # Check all vertices are placed & allocated
         assert set(vertices) == set(placements) == set(allocations)

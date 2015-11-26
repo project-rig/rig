@@ -84,7 +84,7 @@ are alive and also the SDRAM available::
     >>> machine = mc.get_machine()
 
 This object can be directly passed to Rig's place and route utilities (e.g.
-:py:class:`rig.place_and_route.wrapper`).
+:py:class:`rig.place_and_route.place_and_route_wrapper`).
 
 .. note::
     This method simply lists *working* resources, it does not (for example)
@@ -103,7 +103,8 @@ For example, the following code loads the specified APLX file to cores 1, 2 and
     >>> mc.load_application("/path/to/app.aplx", targets)
 
 Alternatively, this method accepts dictionaries mapping applications to
-targets, such as those produced by :py:class:`rig.place_and_route.wrapper`.
+targets, such as those produced by
+:py:class:`rig.place_and_route.place_and_route_wrapper`.
 
 :py:meth:`~.MachineController.load_application` verifies that all applications
 have been successfully loaded (re-attempting a small number of times if
@@ -161,7 +162,7 @@ Routing table entries can be loaded using
 
 This command allocates and then loads the requested routing table entries onto
 each of the supplied chips. The supplied data structure matches that produced by
-:py:func:`rig.place_and_route.wrapper`.
+:py:func:`rig.place_and_route.place_and_route_wrapper`.
 
 Allocating/Writing/Reading SDRAM
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
