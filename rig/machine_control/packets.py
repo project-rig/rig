@@ -45,7 +45,7 @@ class SDPPacket(object):
         src_x : int
             Source x co-ordinate of the packet.
         src_y : int
-        `   Source y co-ordinate of the packet.
+            Source y co-ordinate of the packet.
 
         .. note::
             The default values for `tag`, `src_port`, `src_cpu`, `src_x` and
@@ -146,7 +146,7 @@ class SCPPacket(SDPPacket):
         src_x : int
             Source x co-ordinate of the packet.
         src_y : int
-        `   Source y co-ordinate of the packet.
+            Source y co-ordinate of the packet.
         seq : int
             Sequence number of the packet, used when communicating the SCAMP or
             SARK.

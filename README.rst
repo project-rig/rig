@@ -4,7 +4,7 @@ Rig
 .. image:: ./docs/source/logo.png?raw=True
    :alt: The Rig Logo
 
-.. image:: https://pypip.in/v/rig/badge.png?style=flat
+.. image:: https://img.shields.io/pypi/v/rig.svg?style=flat
    :alt: PyPi version
    :target: https://pypi.python.org/pypi/rig/
 .. image:: https://readthedocs.org/projects/rig/badge/?version=stable
