@@ -82,6 +82,8 @@ class SCPCommands(enum.IntEnum):
     alloc_free = 28  # Allocate or free SDRAM and routing_table entries
     router = 29  # Router related commands
 
+    info = 31  # Get info about a given chip (e.g. idle cores, dead links)
+
     bmp_info = 48  # Request various info structs from a BMP
 
     power = 57  # BMP main board power control

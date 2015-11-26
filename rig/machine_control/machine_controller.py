@@ -1438,51 +1438,120 @@ class MachineController(ContextMixin):
         return table
 
     @ContextMixin.use_contextual_arguments()
+    def get_chip_info(self, x, y):
+        """Get general information about the resources available on a chip.
+
+        Returns
+        -------
+        :py:class:`.ChipInfo`
+            A named tuple including information about resources available in
+            the chip.
+        """
+        info = self._send_scp(x, y, 0, SCPCommands.info, expected_args=3)
+        return ChipInfo(
+            num_cores=info.arg1 & 0x1F,
+            core_states=[consts.AppState(c)
+                         for c in struct.unpack("<18B", info.data)],
+            working_links=set(link for link in Links
+                              if (info.arg1 >> (8 + link)) & 1),
+            largest_free_sdram_block=info.arg2,
+            largest_free_sram_block=info.arg3,
+        )
+
+    @ContextMixin.use_contextual_arguments()
     def get_working_links(self, x, y):
         """Return the set of links reported as working.
 
-        The returned set lists only links over-which nearest neighbour
-        peek/poke commands could be sent. This means that links connected to
-        peripherals may falsely be omitted.
+        This command tests each of the links leaving a chip by sending a PEEK
+        nearest-neighbour packet down each link to verify that the remote
+        device is a SpiNNaker chip. If no reply is receieved via a given link
+        or if the remote device is not a SpiNNaker chip, the link is reported
+        as dead.
+
+        See also: :py:meth:`.get_chip_info`.
 
         Returns
         -------
         set([:py:class:`rig.machine.Links`, ...])
         """
-        link_up = self.read_struct_field("sv", "link_up", x, y)
-        return set(link for link in Links if link_up & (1 << link))
+        return self.get_chip_info(x, y).working_links
 
     @ContextMixin.use_contextual_arguments()
     def get_num_working_cores(self, x, y):
-        """Return the number of working cores, including the monitor."""
+        """Return the number of working cores, including the monitor.
+
+        See also: :py:meth:`.get_chip_info`.
+        """
         return self.read_struct_field("sv", "num_cpus", x, y)
 
-    def get_machine(self, x=0, y=0, default_num_cores=18):
+    def _get_all_chips_info(self, x=0, y=0):
+        """For internal use only. Get system dimensions and a ChipInfo for all
+        working chips.
+
+        Returns
+        -------
+        (width, height, chips_info)
+            width and height are integers giving the dimensions of the system.
+
+            chips_info is a dictionary {(x, y): :py:class:`.ChipInfo`, ...}
+            giving the chip info for all chips which are reported as working in
+            the P2P table and which responded to :py:meth:`.get_chip_info`.
+        """
+        # A quick way of getting a list of working chips
+        p2p_tables = self.get_p2p_routing_table(x, y)
+
+        # Calculate the extent of the system
+        max_x = max(x_ for (x_, y_), r in iteritems(p2p_tables)
+                    if r != consts.P2PTableEntry.none)
+        max_y = max(y_ for (x_, y_), r in iteritems(p2p_tables)
+                    if r != consts.P2PTableEntry.none)
+
+        chips_info = {}
+
+        for (x, y), p2p_route in iteritems(p2p_tables):
+            if x <= max_x and y <= max_y:
+                if p2p_route != consts.P2PTableEntry.none:
+                    try:
+                        chips_info[(x, y)] = self.get_chip_info(x, y)
+                    except SCPError:
+                        # The chip was listed in the P2P table but is not
+                        # responding. Assume it is dead and don't include it in
+                        # the info returned.
+                        pass
+
+        return (max_x + 1, max_y + 1, chips_info)
+
+    def get_machine(self, x=0, y=0, default_num_cores=18,
+                    _all_chips_info=None):
         """Probe the machine to discover which cores and links are working.
 
         .. note::
             Links are reported as dead when the device at the other end of the
-            link does not respond to SpiNNaker nearest neighbour packets. This
-            may thus mistakenly report links attached to peripherals as dead.
+            link is not a SpiNNaker chip. Thus links attached to peripherals
+            are always marked as dead.
 
         .. note::
-            The probing process does not report how much memory is free, nor
-            how many processors are idle but rather the total available.
+            The returned object not report how much memory is free, nor how
+            many cores are idle but rather the total available. See
+            :py:meth:`.get_machine_and_resource_constraints` or
+            :py:meth:`.get_resource_constraints` for a method which does.
 
         .. note::
             The size of the SDRAM and SysRAM heaps is assumed to be the same
             for all chips and is only checked on chip (x, y).
 
         .. note::
-            The chip (x, y) supplied is the one which will be where the search
-            for working chips begins. Selecting anything other than (0, 0), the
-            default, may be useful when debugging very broken machines.
+            The chip (x, y) supplied is the one where the search for working
+            chips begins. Selecting anything other than (0, 0), the default,
+            may be useful when debugging very broken machines.
 
         Parameters
         ----------
         default_num_cores : int
             The number of cores generally available on a SpiNNaker chip
             (including the monitor).
+        _all_chips_info : None
+            For internal use only. Users should leave this as None.
 
         Returns
         -------
@@ -1498,13 +1567,10 @@ class MachineController(ContextMixin):
             :py:data:`~rig.machine.SRAM`
                 The size of the SysRAM heap.
         """
-        p2p_tables = self.get_p2p_routing_table(x, y)
-
-        # Calculate the extent of the system
-        max_x = max(x_ for (x_, y_), r in iteritems(p2p_tables)
-                    if r != consts.P2PTableEntry.none)
-        max_y = max(y_ for (x_, y_), r in iteritems(p2p_tables)
-                    if r != consts.P2PTableEntry.none)
+        # Get basic info about what resources are available within the system.
+        if _all_chips_info is None:
+            _all_chips_info = self._get_all_chips_info(x, y)
+        width, height, chips_info = _all_chips_info
 
         # Discover the heap sizes available for memory allocation
         sdram_start = self.read_struct_field("sv", "sdram_heap", x, y)
@@ -1520,64 +1586,43 @@ class MachineController(ContextMixin):
         chip_resource_exceptions = {}
 
         # Discover dead links and cores
-        for (x, y), p2p_route in iteritems(p2p_tables):
-            if x <= max_x and y <= max_y:
-                if p2p_route == consts.P2PTableEntry.none:
+        for x in range(width):
+            for y in range(height):
+                chip_info = chips_info.get((x, y))
+                if chip_info is None:
                     dead_chips.add((x, y))
                 else:
-                    try:
-                        num_working_cores = self.get_num_working_cores(x, y)
-                        working_links = self.get_working_links(x, y)
+                    if chip_info.num_cores < default_num_cores:
+                        resource_exception = chip_resources.copy()
+                        resource_exception[Cores] = min(default_num_cores,
+                                                        chip_info.num_cores)
+                        chip_resource_exceptions[(x, y)] = \
+                            resource_exception
 
-                        if num_working_cores < default_num_cores:
-                            resource_exception = chip_resources.copy()
-                            resource_exception[Cores] = min(default_num_cores,
-                                                            num_working_cores)
-                            chip_resource_exceptions[(x, y)] = \
-                                resource_exception
+                    for link in set(Links) - chip_info.working_links:
+                        dead_links.add((x, y, link))
 
-                        for link in set(Links) - working_links:
-                            dead_links.add((x, y, link))
-                    except SCPError:
-                        # The chip was listed in the P2P table but is not
-                        # responding. Assume it is dead anyway.
-                        dead_chips.add((x, y))
-
-        return Machine(max_x + 1, max_y + 1,
+        return Machine(width, height,
                        chip_resources,
                        chip_resource_exceptions,
                        dead_chips, dead_links)
 
     @ContextMixin.use_contextual_arguments()
-    def get_idle_cores(self, x, y):
-        """Get a list of idle cores on a chip.
-
-        .. warning::
-
-            This method is currently very slow to execute requiring 18
-            round-trip times to the machine and back. Future versions of
-            SpiNNaker's low-level system software may make this process
-            significantly faster.
-
-
-        Returns
-        -------
-        [int, ...]
-            The indices of the idle cores on a chip, in ascending order.
-        """
-        return [
-            p for p in range(18)
-            if self.read_vcpu_struct_field("cpu_state", x, y, p)
-            == consts.AppState.idle
-        ]
-
-    @ContextMixin.use_contextual_arguments()
     def get_resource_constraints(self, machine,
                                  core_resource=Cores,
-                                 sdram_resource=SDRAM):
+                                 sdram_resource=SDRAM,
+                                 sram_resource=SRAM,
+                                 _all_chips_info=None):
         """Returns a set of place-and-route
         :py:class:`~rig.place_and_route.constraints` which reserves any cores
         and SDRAM that are already in use.
+
+        .. note::
+            Most users will probably prefer to use
+            :py:meth:`.get_machine_and_resource_constraints` which both gets a
+            :py:class:`rig.machine.Machine` object and a set of place-and-route
+            constraints with reduced overhead over calling both methods
+            individually.
 
         This method, like :py:meth:`get_machine`, is aimed at users of Rig's
         place-and-route tools and assumes that one resource type represents
@@ -1588,21 +1633,12 @@ class MachineController(ContextMixin):
         reserves all cores not in an Idle state (i.e. not a monitor and not
         already running an application).
 
-        This set also reserves ranges of SDRAM starting at the top of SDRAM to
-        reduce the SDRAM resource availability on each chip to approximately
-        the amount actually available in the machine, accounting for any
-        already-running applications. Note that due to memory fragmentation
-        this constraint still makes an optimistic estimate of the amount of
-        SDRAM an application may request in practice.
-
-        .. warning::
-
-            Due to limitations in the current version of the SpiNNaker
-            low-level system software SDRAM is not currently reserved and thus
-            the SDRAM-reserving portion of this method's API is provided for
-            forward compatibility. As such, application authors should be aware
-            that already-running applications that consume large amounts of
-            SDRAM are not yet taken into account.
+        This set also reserves ranges of SDRAM/SRAM starting at the top
+        (highest address) to reduce the resource availability on each chip to
+        approximately the amount actually available in the machine, accounting
+        for any already-running applications. Note that due to memory
+        fragmentation this constraint will make a conservative estimate based
+        on the largest free block of SDRAM/SRAM in the heap.
 
         Parameters
         ----------
@@ -1615,6 +1651,11 @@ class MachineController(ContextMixin):
         sdram_resource : resource (Default: :py:data:`~rig.machine.SDRAM`)
             The resource identifier used for SDRAM. If using
             :py:meth:`get_machine`, the default correct.
+        sram_resource : resource (Default: :py:data:`~rig.machine.SRAM`)
+            The resource identifier used for SRAM. If using
+            :py:meth:`get_machine`, the default correct.
+        _all_chips_info : None
+            For internal use only. Users should leave this as None.
 
         Returns
         -------
@@ -1625,17 +1666,24 @@ class MachineController(ContextMixin):
             and SDRAM. The resource types given in the ``core_resource`` and
             ``sdram_resource`` arguments will be reserved accordingly.
         """
+        if _all_chips_info is not None:
+            chips_info = _all_chips_info[2]
+        else:
+            chips_info = {}
+
         constraints = []
 
         for x, y in machine:
-            # For each chip, construct a minimal set of
-            # ReserveResourceConstraints which reserve the cores which are not
-            # in the idle state.
-            idle_cores = self.get_idle_cores(x, y) + [None]
+            chip_info = chips_info.get((x, y))
+            if chip_info is None:
+                chip_info = self.get_chip_info(x, y)
+
+            # Construct a minimal set of ReserveResourceConstraints which
+            # reserve the cores which are not in the idle state.
             cur_reservation = None
-            for core in range(machine[(x, y)][core_resource]):
-                if core == idle_cores[0]:
-                    idle_cores.pop(0)
+            for state, core in zip(chip_info.core_states,
+                                   range(machine[(x, y)][core_resource])):
+                if state == consts.AppState.idle:
                     if cur_reservation is not None:
                         constraints.append(cur_reservation)
                     cur_reservation = None
@@ -1652,10 +1700,54 @@ class MachineController(ContextMixin):
             if cur_reservation is not None:
                 constraints.append(cur_reservation)
 
-        # TODO: Reserve SDRAM once SC&MP provides a way of querying how much
-        # has been used/is free.
+            # Reserve enough SDRAM such that the amount remaining will be the
+            # size of the largest free block in the heap.
+            total_sdram = machine[(x, y)][sdram_resource]
+            avail_sdram = chip_info.largest_free_sdram_block
+            constraints.append(ReserveResourceConstraint(
+                sdram_resource,
+                slice(avail_sdram, total_sdram),
+                (x, y)))
+
+            # Reserve enough SRAM such that the amount remaining will be the
+            # size of the largest free block in the heap.
+            total_sram = machine[(x, y)][sram_resource]
+            avail_sram = chip_info.largest_free_sram_block
+            constraints.append(ReserveResourceConstraint(
+                sram_resource,
+                slice(avail_sram, total_sram),
+                (x, y)))
 
         return constraints
+
+    def get_machine_and_resource_constraints(self, x=0, y=0,
+                                             default_num_cores=18):
+        """An efficient wrapper around both :py:meth:`.get_machine` and
+        :py:meth:`.get_resource_constraints`.
+
+        This method reduces the number of messages which must be exchanged with
+        the remote machine compared with calling :py:meth:`.get_machine` and
+        :py:meth:`.get_resource_constraints` seperately, halving the execution
+        time of the command.
+
+        Returns
+        -------
+        (machine, resource_constraints)
+            machine is a :py:class:`rig.machine.Machine` describing what
+            resources exist on each chip (see :py:meth:`.get_machine`).
+
+            resource_constraints is a list of place-and-route
+            :py:class:`~rig.place_and_route.constraints` which restrict the
+            resources described in the machine to only those which are not
+            already in use.
+        """
+        all_chips_info = self._get_all_chips_info(x, y)
+
+        machine = self.get_machine(x, y, default_num_cores, all_chips_info)
+        constraints = self.get_resource_constraints(
+            machine, _all_chips_info=all_chips_info)
+
+        return (machine, constraints)
 
 
 class CoreInfo(collections.namedtuple(
@@ -1684,6 +1776,29 @@ class CoreInfo(collections.namedtuple(
         Human readable, textual version information split in to two fields by a
         "/". In the first field is the kernal (e.g. SC&MP or SARK) and the
         second the hardware platform (e.g. SpiNNaker).
+    """
+
+
+class ChipInfo(collections.namedtuple(
+    'ChipInfo', "num_cores core_states working_links "
+                "largest_free_sdram_block,largest_free_sram_block")):
+    """Information returned about a chip.
+
+    Parameters
+    ----------
+    num_cores : int
+        The number of working cores on the chip.
+    core_states : [:py:class:`~rig.machine_control.consts.AppState`, ...]
+        The state of each core in the machine (including cores which are dead,
+        i.e. always 18 in length).
+    working_links : set([`rig.machine.Links`, ...])
+        The set of working links leaving that chip. For a link to be considered
+        working, the link must work in both directions and the device at the
+        far end must also be a SpiNNaker chip.
+    largest_free_sdram_block : int
+        The size (in bytes) of the largest free block of SDRAM.
+    largest_free_sram_block : int
+        The size (in bytes) of the largest free block of SRAM.
     """
 
 

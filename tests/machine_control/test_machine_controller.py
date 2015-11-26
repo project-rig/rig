@@ -7,6 +7,7 @@ import struct
 import tempfile
 import os
 import time
+import itertools
 from collections import defaultdict
 
 from test_scp_connection import SendReceive, mock_conn  # noqa
@@ -15,12 +16,12 @@ from rig.machine_control.consts import (
     SCPCommands, LEDAction, NNCommands, NNConstants)
 from rig.machine_control.machine_controller import (
     MachineController, SpiNNakerBootError, SpiNNakerMemoryError, MemoryIO,
-    SpiNNakerRouterError, SpiNNakerLoadingError, CoreInfo, ProcessorStatus,
-    unpack_routing_table_entry
+    SpiNNakerRouterError, SpiNNakerLoadingError, CoreInfo, ChipInfo,
+    ProcessorStatus, unpack_routing_table_entry,
 )
 from rig.machine_control.packets import SCPPacket
 from rig.machine_control.scp_connection import \
-    SCPConnection, FatalReturnCodeError, SCPError
+    SCPConnection, SCPError
 from rig.machine_control import boot, regions, consts, struct_file
 
 from rig.machine import Cores, SDRAM, SRAM, Links, Machine
@@ -34,8 +35,18 @@ def controller(spinnaker_ip):
 
 
 @pytest.fixture(scope="module")
-def live_machine(controller):
-    return controller.get_machine()
+def live_machine_and_resource_constraints(controller):
+    return controller.get_machine_and_resource_constraints()
+
+
+@pytest.fixture(scope="module")
+def live_machine(live_machine_and_resource_constraints):
+    return live_machine_and_resource_constraints[0]
+
+
+@pytest.fixture(scope="module")
+def live_resource_constraints(live_machine_and_resource_constraints):
+    return live_machine_and_resource_constraints[1]
 
 
 @pytest.fixture
@@ -266,16 +277,6 @@ class TestMachineControllerLive(object):
         assert expected == controller.count_cores_in_state("run")
 
     @pytest.mark.order_after("live_test_load_application")
-    def test_get_idle_cores(self, controller, live_machine):
-        # Test that the correct set of idle cores is reported on a chip where
-        # an application has been loaded or which are the monitor CPU
-        num_working_cores = live_machine[(1, 1)][Cores]
-        assert controller.get_idle_cores(1, 1) == [
-            core for core in range(num_working_cores)
-            if core not in (0, 3, 4)
-        ]
-
-    @pytest.mark.order_after("live_test_load_application")
     @pytest.mark.parametrize(
         "targets",
         [{(1, 1): {3, 4}, (1, 0): {5}},
@@ -321,6 +322,64 @@ class TestMachineControllerLive(object):
             assert 0 <= x < m.width
             assert 0 <= y < m.height
             assert link in Links
+
+    @pytest.mark.order_before("live_test_load_application")
+    def test_get_resource_constraints(self, live_machine,
+                                      live_resource_constraints):
+        # Just sanity check that we have a constraint on cores and SDRAM on
+        # every chip, that only the monitor is reserved and that the amount of
+        # SDRAM reserved is reasonable.
+
+        # Split constraints by chip and type
+        core_constraints = defaultdict(list)
+        sdram_constraints = defaultdict(list)
+        sram_constraints = defaultdict(list)
+        for constraint in live_resource_constraints:
+            if constraint.resource == Cores:
+                core_constraints[constraint.location].append(constraint)
+            elif constraint.resource == SDRAM:
+                sdram_constraints[constraint.location].append(constraint)
+            else:
+                assert constraint.resource == SRAM
+                sram_constraints[constraint.location].append(constraint)
+
+        # Make sure the set of constrained chips exist...
+        assert set(core_constraints) == set(live_machine)
+        assert set(sdram_constraints) == set(live_machine)
+
+        # Make sure we have exactly one constraint of each type for each
+        # resource.
+        assert all(len(cs) == 1 for cs in itervalues(core_constraints))
+        assert all(len(ss) == 1 for ss in itervalues(sdram_constraints))
+
+        # Should only be reserving the monitor
+        assert all(all(c.reservation == slice(0, 1) for c in cs)
+                   for cs in itervalues(core_constraints))
+
+        # Most of SDRAM should still be unreserved
+        assert all(all(s.reservation.start > (100 * 1024 * 1024)
+                       and (s.reservation.stop ==
+                            live_machine.chip_resources[SDRAM])
+                       and s.reservation.stop >= s.reservation.start
+                       for s in ss)
+                   for ss in itervalues(sdram_constraints))
+
+        # Some of SRAM should still be unreserved
+        assert all(all(s.reservation.start > 0
+                       and (s.reservation.stop ==
+                            live_machine.chip_resources[SRAM])
+                       and s.reservation.stop >= s.reservation.start
+                       for s in ss)
+                   for ss in itervalues(sram_constraints))
+
+    def test_get_chip_info_spinn_5(self, controller, is_spinn_5_board):
+        # We should be able to detect chip (0, 0) has only three working links
+        chip_info = controller.get_chip_info(0, 0)
+        assert chip_info.working_links == set([
+            Links.north,
+            Links.north_east,
+            Links.east,
+        ])
 
     def test_get_machine_spinn_5(self, live_machine, spinnaker_width,
                                  spinnaker_height, is_spinn_5_board):
@@ -377,6 +436,42 @@ class TestMachineControllerLive(object):
             # Read back the data
             mem.seek(0)
             assert mem.read(len(data)) == data
+
+    @pytest.mark.order_after("live_test_load_application")
+    def test_get_chip_info(self, controller):
+        # Just sanity check that the monitor processor is flagged as busy and 3
+        # and 4 are too.
+        with controller(x=1, y=1):
+            chip_info = controller.get_chip_info()
+
+            # Assuming a reasonably intact machine
+            assert chip_info.num_cores in (17, 18)
+
+            # No unexpected non-idle cores.
+            assert chip_info.core_states == [  # pragma: no branch
+                consts.AppState.run
+                if c in (0, 3, 4) else
+                consts.AppState.dead
+                if c >= chip_info.num_cores else
+                consts.AppState.idle
+                for c in range(18)
+            ]
+
+            # All links should be alive (assuming an intact machine...)
+            assert chip_info.working_links == set(Links)
+
+            # Should have most SDRAM still available
+            assert chip_info.largest_free_sdram_block > (100 * 1024 * 1024)
+
+            # Should have some SRAM still available
+            assert chip_info.largest_free_sdram_block > 0
+
+            # If we allocate a 50 MB block of SDRAM the largest free block
+            # should shrink accordingly
+            controller.sdram_alloc(50 * 1024 * 1024)
+            before = chip_info.largest_free_sdram_block
+            after = controller.get_chip_info().largest_free_sdram_block
+            assert (before - after) >= (50 * 1024 * 1024)
 
     @pytest.mark.order_id("live_test_load_routes")
     @pytest.mark.order_after("live_test_load_application")
@@ -1946,12 +2041,12 @@ class TestMachineController(object):
                                        set(Links)])
     def test_get_working_links(self, links):
         cn = MachineController("localhost")
-        cn.read_struct_field = mock.Mock()
-        cn.read_struct_field.return_value = sum(1 << l for l in links)
+        cn.get_chip_info = mock.Mock()
+        cn.get_chip_info.return_value = mock.Mock(working_links=links)
 
-        assert cn.get_working_links(x=0, y=0) == links
+        assert cn.get_working_links(x=1, y=2) == links
 
-        assert cn.read_struct_field.called_once_with("sv", "link_up", 0, 0, 0)
+        assert cn.get_chip_info.called_once_with(1, 2)
 
     @pytest.mark.parametrize("num_cpus", [1, 18])
     def test_get_num_working_cores(self, num_cpus):
@@ -1962,7 +2057,97 @@ class TestMachineController(object):
         assert cn.get_num_working_cores(x=0, y=0) == num_cpus
         assert cn.read_struct_field.called_once_with("sv", "num_cpus", 0, 0, 0)
 
-    def test_get_machine(self):
+    @pytest.mark.parametrize("arg1,num_cores,working_links",
+                             [((18 | (0b111110 << 8)),
+                               18,
+                               set(l for l in Links if l != Links.east)),
+                              ((18 | (0b011111 << 8)),
+                               18,
+                               set(l for l in Links if l != Links.south)),
+                              ((17 | (0b111111 << 8)),
+                               17,
+                               set(Links)),
+                              ])
+    @pytest.mark.parametrize("arg2,largest_free_sdram_block",
+                             [(1024, 1024), (0xFFFFFFFF, 0xFFFFFFFF)])
+    @pytest.mark.parametrize("arg3,largest_free_sram_block",
+                             [(1024, 1024), (0xFFFFFFFF, 0xFFFFFFFF)])
+    def test_get_chip_info(self, arg1, num_cores, working_links,
+                           arg2, largest_free_sdram_block,
+                           arg3, largest_free_sram_block):
+
+        core_states = [s for s, _ in zip(itertools.cycle(consts.AppState),
+                                         range(18))]
+
+        data = struct.pack("<18B", *core_states)
+
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+        cn._send_scp.return_value = mock.Mock(arg1=arg1, arg2=arg2, arg3=arg3,
+                                              data=data)
+
+        chip_info = cn.get_chip_info(1, 2)
+
+        cn._send_scp.assert_called_once_with(1, 2, 0,
+                                             SCPCommands.info,
+                                             expected_args=3)
+
+        assert chip_info.num_cores == num_cores
+        assert chip_info.core_states == core_states
+        assert chip_info.working_links == working_links
+        assert chip_info.largest_free_sdram_block == largest_free_sdram_block
+        assert chip_info.largest_free_sram_block == largest_free_sram_block
+
+    def test__get_all_chips_info(self):
+        cn = MachineController("localhost")
+
+        # Return a set of p2p tables where an 10x8 set of chips is alive with
+        # all except (0, 1) being dead.
+        cn.get_p2p_routing_table = mock.Mock()
+        cn.get_p2p_routing_table.return_value = {
+            (x, y): (consts.P2PTableEntry.north
+                     if x < 10 and y < 8 and (x, y) != (0, 1) else
+                     consts.P2PTableEntry.none)
+            for x in range(256)
+            for y in range(256)
+        }
+
+        # Return some value except for (2, 3) which will produce an error.
+        # Make each info unique by setting the largest_free_sdram_block to a
+        # function of its x and y for later checking.
+
+        def get_chip_info(x, y):
+            assert (x, y) != (0, 1)
+            if (x, y) == (2, 3):
+                raise SCPError()
+            else:
+                return ChipInfo(
+                    num_cores=18,
+                    core_states=[consts.AppState.idle for _ in range(18)],
+                    working_links=set(Links),
+                    largest_free_sdram_block=(x << 8) | y,
+                    largest_free_sram_block=(x << 8) | y,
+                )
+        cn.get_chip_info = mock.Mock(side_effect=get_chip_info)
+
+        width, height, chips_info = cn._get_all_chips_info(2, 1)
+
+        # Check dimensions
+        assert width == 10
+        assert height == 8
+
+        # Two dead chips
+        assert set(chips_info) == set((x, y)
+                                      for x in range(width)
+                                      for y in range(height)
+                                      if (x, y) not in [(0, 1), (2, 3)])
+
+        # Check the correct info is associated with each...
+        assert all(info.largest_free_sdram_block == (x << 8) | y
+                   for (x, y), info in iteritems(chips_info))
+
+    @pytest.mark.parametrize("give_all_chips_info", [True, False])
+    def test_get_machine(self, give_all_chips_info):
         cn = MachineController("localhost")
 
         # Return sensible values for heap sizes (taken from manual)
@@ -1981,44 +2166,38 @@ class TestMachineController(object):
         cn.read_struct_field = mock.Mock()
         cn.read_struct_field.side_effect = read_struct_field
 
-        # Return a set of p2p tables where an 8x8 set of chips is alive with
-        # all except (3,3) being dead.
-        cn.get_p2p_routing_table = mock.Mock()
-        cn.get_p2p_routing_table.return_value = {
-            (x, y): (consts.P2PTableEntry.north
-                     if x < 8 and y < 8 and (x, y) != (3, 3) else
-                     consts.P2PTableEntry.none)
-            for x in range(256)
-            for y in range(256)
+        # Describe a 10x8 machine where:
+        # * (0, 1) is dead
+        # * (2, 3) has 17 cores, the rest 18
+        # * (4, 5) has no north link, all others have working links
+        chips_info = {
+            (x, y): ChipInfo(
+                num_cores=(17 if (x, y) == (2, 3) else 18),
+                core_states=[consts.AppState.idle
+                             if (x, y, c) != (2, 3, 17) else
+                             consts.AppState.dead
+                             for c in range(18)],
+                working_links=(set(l for l in Links if l != Links.north)
+                               if (x, y) == (4, 5) else
+                               set(Links)),
+                largest_free_sdram_block=10 * 1024 * 1024,
+                largest_free_sram_block=1 * 1024 * 1024,
+            )
+            for x in range(10)
+            for y in range(8)
+            if (x, y) != (0, 1)
         }
+        _all_chips_info = (10, 8, chips_info)
+        cn._get_all_chips_info = mock.Mock(return_value=_all_chips_info)
 
-        # Return 18 working cores except for (2, 2) which will have only 3
-        # cores and (5, 5) which will fail to respond.
-
-        def get_num_working_cores(x, y):
-            if (x, y) == (5, 5):
-                raise FatalReturnCodeError(0)
-            else:
-                return 18 if (x, y) != (2, 2) else 3
-        cn.get_num_working_cores = mock.Mock()
-        cn.get_num_working_cores.side_effect = get_num_working_cores
-
-        # Return all working links except for (4, 4) which will have no north
-        # link.
-
-        def get_working_links(x, y):
-            if (x, y) != (4, 4):
-                return set(Links)
-            else:
-                return set(Links) - set([Links.north])
-        cn.get_working_links = mock.Mock()
-        cn.get_working_links.side_effect = get_working_links
-
-        m = cn.get_machine(x=3, y=2)
+        m = cn.get_machine(x=3, y=2,
+                           _all_chips_info=(_all_chips_info
+                                            if give_all_chips_info else
+                                            None))
 
         # Check that the machine is correct
         assert isinstance(m, Machine)
-        assert m.width == 8
+        assert m.width == 10
         assert m.height == 8
         assert m.chip_resources == {
             Cores: 18,
@@ -2026,14 +2205,14 @@ class TestMachineController(object):
             SRAM: vcpu_base - sysram_heap,
         }
         assert m.chip_resource_exceptions == {
-            (2, 2): {
-                Cores: 3,
+            (2, 3): {
+                Cores: 17,
                 SDRAM: sdram_sys - sdram_heap,
                 SRAM: vcpu_base - sysram_heap,
             },
         }
-        assert m.dead_chips == set([(3, 3), (5, 5)])
-        assert m.dead_links == set([(4, 4, Links.north)])
+        assert m.dead_chips == set([(0, 1)])
+        assert m.dead_links == set([(4, 5, Links.north)])
 
         # Check that only the expected calls were made to mocks
         cn.read_struct_field.assert_has_calls([
@@ -2042,46 +2221,23 @@ class TestMachineController(object):
             mock.call("sv", "sysram_heap", 3, 2),
             mock.call("sv", "vcpu_base", 3, 2),
         ], any_order=True)
-        cn.get_p2p_routing_table.assert_called_once_with(3, 2)
-        cn.get_num_working_cores.assert_has_calls([
-            mock.call(x, y) for x in range(8) for y in range(8)
-            if (x, y) != (3, 3)
-        ], any_order=True)
-        cn.get_working_links.assert_has_calls([
-            mock.call(x, y) for x in range(8) for y in range(8)
-            if (x, y) != (3, 3) and (x, y) != (5, 5)
-        ], any_order=True)
 
-    @pytest.mark.parametrize("unavailable_state",
-                             (s for s in consts.AppState
-                              if s != consts.AppState.idle))
-    def test_get_idle_cores(self, unavailable_state):
-        cn = MachineController("localhost")
+        # Check that we only queried the machine if necessary
+        if give_all_chips_info:
+            assert len(cn._get_all_chips_info.mock_calls) == 0
+        else:
+            cn._get_all_chips_info.assert_called_once_with(3, 2)
 
-        unavailable_set = set([
-            (0, 0, 0),
-            (0, 0, 17),
-            (1, 2, 3),
-        ])
-
-        def read_vcpu_struct_field(field, x, y, p):
-            if (x, y, p) in unavailable_set:
-                return unavailable_state
-            else:
-                return consts.AppState.idle
-        cn.read_vcpu_struct_field = \
-            mock.Mock(side_effect=read_vcpu_struct_field)
-
-        assert cn.get_idle_cores(0, 0) == list(range(1, 17))
-        assert cn.get_idle_cores(1, 2) == [n for n in range(18) if n != 3]
-
-    def test_get_resource_constraints(self):
+    @pytest.mark.parametrize("give_all_chips_info", [True, False])
+    def test_get_resource_constraints(self, give_all_chips_info):
         cn = MachineController("localhost")
         machine = Machine(
             width=4, height=1,
-            chip_resources={"MyCores": 18, "MySDRAM": 128},
+            chip_resources={"MyCores": 18,
+                            "MySDRAM": 128,
+                            "MySRAM": 64},
             chip_resource_exceptions={
-                (0, 1): {"MyCores": 17, "MySDRAM": 128}
+                (1, 0): {"MyCores": 17, "MySDRAM": 128, "MySRAM": 64}
             }
         )
 
@@ -2103,46 +2259,120 @@ class TestMachineController(object):
             # Chip 3, 0: Has no constraints!
         ])
 
-        def get_idle_cores(x, y):
-            return [
-                core for core in range(machine[(x, y)]["MyCores"])
-                if (x, y, core) not in busy_cores
-            ]
-        cn.get_idle_cores = mock.Mock(side_effect=get_idle_cores)
+        # * (1, 0) has 17 cores, the rest 18
+        # * Busy cores are taken from the table above
+        # * Chip 0, 0 has 10 bytes of SDRAM free, others have 100
+        # * Chip 1, 0 has 5 bytes of SRAM free, others have 50
+        chips_info = {
+            (x, y): ChipInfo(
+                num_cores=(17 if (x, y) == (1, 0) else 18),
+                core_states=[(consts.AppState.idle
+                              if (x, y, c) not in busy_cores else
+                              consts.AppState.run)
+                             for c in range(17 if (x, y) == (0, 1) else 18)],
+                working_links=set(Links),
+                largest_free_sdram_block=10 if (x, y) == (0, 0) else 100,
+                largest_free_sram_block=5 if (x, y) == (1, 0) else 50,
+            )
+            for x in range(4)
+            for y in range(1)
+        }
+
+        def get_chip_info(x, y):
+            return chips_info[(x, y)]
+        cn.get_chip_info = mock.Mock(side_effect=get_chip_info)
 
         constraints = cn.get_resource_constraints(machine,
                                                   core_resource="MyCores",
-                                                  sdram_resource="MySDRAM")
+                                                  sdram_resource="MySDRAM",
+                                                  sram_resource="MySRAM",
+                                                  _all_chips_info=(
+                                                      (4, 1, chips_info)
+                                                      if give_all_chips_info
+                                                      else None))
+
+        if give_all_chips_info:
+            assert len(cn.get_chip_info.mock_calls) == 0
 
         # All constraints should relate to specific chips in the machine
         assert all(c.location is not None for c in constraints)
         assert all(c.location in machine for c in constraints)
 
-        # All constraints should currently be for cores
-        assert all(c.resource == "MyCores" for c in constraints)
+        # All constraints should currently be for cores and SDRAM
+        assert all(c.resource in ("MyCores", "MySDRAM", "MySRAM")
+                   for c in constraints)
 
-        # Split constraints by chip and order by core
-        chip_constraints = defaultdict(list)
+        # Split constraints by chip and type
+        core_constraints = defaultdict(list)
+        sdram_constraints = defaultdict(list)
+        sram_constraints = defaultdict(list)
         for constraint in constraints:
-            chip_constraints[constraint.location].append(constraint)
-        for chip, constraints_ in iteritems(chip_constraints):
+            if constraint.resource == "MyCores":
+                core_constraints[constraint.location].append(constraint)
+            elif constraint.resource == "MySDRAM":
+                sdram_constraints[constraint.location].append(constraint)
+            else:
+                assert constraint.resource == "MySRAM"
+                sram_constraints[constraint.location].append(constraint)
+
+        # Sort core constraints by starting core
+        for chip, constraints_ in iteritems(core_constraints):
             constraints_.sort(key=(lambda c: c.reservation.start))
 
-        # Check correctness and minimality of reservations
-        assert len(chip_constraints) == 3
+        # Check correctness and minimality of core reservations
+        assert len(core_constraints) == 3
 
-        assert len(chip_constraints[(0, 0)]) == 2
-        assert chip_constraints[(0, 0)][0].reservation == slice(0, 1)
-        assert chip_constraints[(0, 0)][1].reservation == slice(17, 18)
+        assert len(core_constraints[(0, 0)]) == 2
+        assert core_constraints[(0, 0)][0].reservation == slice(0, 1)
+        assert core_constraints[(0, 0)][1].reservation == slice(17, 18)
 
-        assert len(chip_constraints[(1, 0)]) == 1
-        assert chip_constraints[(1, 0)][0].reservation == slice(0, 1)
+        assert len(core_constraints[(1, 0)]) == 1
+        assert core_constraints[(1, 0)][0].reservation == slice(0, 1)
 
-        assert len(chip_constraints[(2, 0)]) == 2
-        assert chip_constraints[(2, 0)][0].reservation == slice(1, 4)
-        assert chip_constraints[(2, 0)][1].reservation == slice(5, 7)
+        assert len(core_constraints[(2, 0)]) == 2
+        assert core_constraints[(2, 0)][0].reservation == slice(1, 4)
+        assert core_constraints[(2, 0)][1].reservation == slice(5, 7)
 
-        assert len(chip_constraints[(3, 0)]) == 0
+        assert len(core_constraints[(3, 0)]) == 0
+
+        # Check correctness of SDRAM reservations
+        assert len(sdram_constraints) == 4
+        assert all(len(c) == 1 for c in itervalues(sdram_constraints))
+
+        assert sdram_constraints[(0, 0)][0].reservation == slice(10, 128)
+        assert sdram_constraints[(1, 0)][0].reservation == slice(100, 128)
+        assert sdram_constraints[(2, 0)][0].reservation == slice(100, 128)
+        assert sdram_constraints[(3, 0)][0].reservation == slice(100, 128)
+
+        # Check correctness of SRAM reservations
+        assert len(sram_constraints) == 4
+        assert all(len(c) == 1 for c in itervalues(sram_constraints))
+
+        assert sram_constraints[(0, 0)][0].reservation == slice(50, 64)
+        assert sram_constraints[(1, 0)][0].reservation == slice(5, 64)
+        assert sram_constraints[(2, 0)][0].reservation == slice(50, 64)
+        assert sram_constraints[(3, 0)][0].reservation == slice(50, 64)
+
+    def test_get_machine_and_resource_constraints(self):
+        cn = MachineController("localhost")
+
+        # Just check things are called correctly, don't bother making
+        # realistic outputs since this is just a wrapper...
+        cn._get_all_chips_info = mock.Mock(return_value="1")
+        cn.get_machine = mock.Mock(return_value="2")
+        cn.get_resource_constraints = mock.Mock(return_value="3")
+
+        m, c = cn.get_machine_and_resource_constraints(
+            1, 2, default_num_cores=1)
+
+        assert m == "2"
+        assert c == "3"
+
+        cn._get_all_chips_info.assert_called_once_with(1, 2)
+        cn.get_machine.assert_called_once_with(
+            1, 2, 1, "1")
+        cn.get_resource_constraints.assert_called_once_with(
+            "2", _all_chips_info="1")
 
     @pytest.mark.parametrize("app_id", [66, 12])
     def test_application_wrapper(self, app_id):
