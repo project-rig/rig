@@ -1752,8 +1752,8 @@ class MachineController(ContextMixin):
             are always marked as dead.
 
         .. note::
-            The returned object not report how much memory is free, nor how
-            many cores are idle but rather the total available. See
+            The returned object does not report how much memory is free, nor
+            how many cores are idle but rather the total available. See
             :py:meth:`.get_machine_and_resource_constraints` or
             :py:meth:`.get_resource_constraints` for a method which does.
 
