@@ -1685,9 +1685,9 @@ class MachineController(ContextMixin):
 
         This command tests each of the links leaving a chip by sending a PEEK
         nearest-neighbour packet down each link to verify that the remote
-        device is a SpiNNaker chip. If no reply is receieved via a given link
-        or if the remote device is not a SpiNNaker chip, the link is reported
-        as dead.
+        device is a SpiNNaker chip. If no reply is received via a given link or
+        if the remote device is not a SpiNNaker chip, the link is reported as
+        dead.
 
         See also: :py:meth:`.get_chip_info`.
 
