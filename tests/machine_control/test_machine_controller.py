@@ -298,6 +298,43 @@ class TestMachineControllerLive(object):
                         "Rig test APLX started on {}, {}, {}.\n".format(
                             t_x, t_y, t_p))
 
+    def test_stop_signal(self, controller):
+        # Historically, the stop signal did not reliably free up resources on
+        # some chips resulting in a number of work-arounds being included in
+        # Rig. These issues with SC&MP have since been fixed but this test
+        # exists to ensure these fixes don't regress.
+
+        # A number of routing tables which will only fit once on a chip...
+        routing_entries = [
+            RoutingTableEntry(set(), 0, 0)
+            for _ in range(800)
+        ]
+
+        # Allocate and then deallocate large amounts of SDRAM on (0, 0), large
+        # numbers of routing tables on (1, 0) and load an application onto core
+        # 10 of (0, 1) and use tag 1 on (1, 1). If any one of these actions is
+        # not reversed by the stop signal, the second repetition of this loop
+        # will fail.
+        for repeat in range(3):
+            print("attempt {}...".format(repeat))
+            with controller.application(20):
+                controller.sdram_alloc(80 * 1024 * 1024, x=0, y=0)
+
+                controller.load_routing_table_entries(routing_entries,
+                                                      x=1, y=0)
+
+                assert (  # pragma: no branch
+                    controller.get_chip_info(0, 1).core_states[10] ==
+                    consts.AppState.idle)
+                controller.load_application(
+                    pkg_resources.resource_filename("rig",
+                                                    "binaries/rig_test.aplx"),
+                    {(0, 1): set([10])},
+                    wait=True
+                )
+
+                controller.sdram_alloc(8, tag=1, x=1, y=1)
+
     @pytest.mark.order_after("live_test_load_application")
     @pytest.mark.parametrize(
         "all_targets",
@@ -448,6 +485,8 @@ class TestMachineControllerLive(object):
 
     # NOTE: "Hello, SpiNNaker" is 4 words, it is important that one test is a
     # whole number of words and that another isn't.
+    @pytest.mark.order_after("live_test_load_application")
+    @pytest.mark.order_before("live_test_stop_application")
     @pytest.mark.parametrize("data", [b"Hello, SpiNNaker",
                                       b"Bonjour SpiNNaker"])
     @pytest.mark.parametrize("clear", (False, True))
@@ -469,6 +508,7 @@ class TestMachineControllerLive(object):
             assert mem.read(len(data)) == data
 
     @pytest.mark.order_after("live_test_load_application")
+    @pytest.mark.order_before("live_test_stop_application")
     def test_get_chip_info(self, controller):
         # Just sanity check that the monitor processor is flagged as busy and 3
         # and 4 are too.
@@ -488,8 +528,9 @@ class TestMachineControllerLive(object):
                 for c in range(18)
             ]
 
-            # All links should be alive (assuming an intact machine...)
-            assert chip_info.working_links == set(Links)
+            # Some links should be alive (can't say much more than that, e.g.
+            # if using a SpiNN-2 board)
+            assert chip_info.working_links.issubset(set(Links))
 
             # Should have most SDRAM still available
             assert chip_info.largest_free_sdram_block > (100 * 1024 * 1024)
@@ -506,6 +547,7 @@ class TestMachineControllerLive(object):
 
     @pytest.mark.order_id("live_test_load_routes")
     @pytest.mark.order_after("live_test_load_application")
+    @pytest.mark.order_before("live_test_stop_application")
     @pytest.mark.parametrize(
         "routes",
         [([RoutingTableEntry({Routes.east}, 0x0000ffff, 0xffffffff),
@@ -526,6 +568,7 @@ class TestMachineControllerLive(object):
                 (route, app_id, _) = entry
                 assert app_id == 0 or route in routes
 
+    @pytest.mark.order_id("live_test_stop_application")
     @pytest.mark.order_after("live_test_load_application",
                              "live_test_load_routes")
     def test_app_stop_and_count(self, controller):
