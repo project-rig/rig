@@ -30,7 +30,8 @@ class MachineController(ContextMixin):
     This class is essentially a wrapper around key functions provided by the
     SCP protocol which aims to straight-forwardly handle many of the difficult
     details and corner cases to ensure easy, efficient and reliable
-    communication with a machine.
+    communication with and control of a SpiNNaker machine. A :ref:`tutorial
+    <MachineController-tutorial>` is available for new users.
 
     Key features at a glance:
 
@@ -48,6 +49,12 @@ class MachineController(ContextMixin):
 
     * (Additional) 'advanced' non-blocking, parallel I/O interface
     * (Automagically) handling multiple connections simultaneously
+
+    This class does *not* provide any methods for sending and receiving
+    arbitrary SDP packets to and from applications. For this you should use
+    :py:mod:`sockets <socket>` and the :py:mod:`rig.machine_control.packets`
+    library (for which a :ref:`tutorial <scp-and-sdp-tutorial>` is also
+    available).
 
     This class features a context system which allows commonly required
     arguments to be specified for a whole block of code using a 'with'
@@ -231,13 +238,15 @@ class MachineController(ContextMixin):
         hostname was given as the argument to the MachineController. With the
         default arguments this method will only boot systems which have not
         already been booted and will check to ensure that the machine was
-        successfuly booted. See
+        successfully booted (and raise a :py:exc:`.SpiNNakerBootError` on
+        failure).
 
         This method is a wrapper around
         :py:func:`rig.machine_control.boot.boot` which sets the structs in this
-        MachineController will be set to those used to boot the machine.
+        MachineController to those used to boot the machine.
 
         .. warning::
+
             Booting the system over the open internet is likely to fail due to
             the port number being blocked by most ISPs and UDP not being
             reliable. A proxy such as `spinnaker_proxy
@@ -860,6 +869,10 @@ class MachineController(ContextMixin):
         Forward SDP packets with the specified IP tag sent by a SpiNNaker
         application to a given external IP address.
 
+        A :ref:`tutorial example <scp-and-sdp-tutorial>` of the use of IP Tags
+        to send and receive SDP packets to and from applications is also
+        available.
+
         Parameters
         ----------
         iptag : int
@@ -961,17 +974,41 @@ class MachineController(ContextMixin):
                     app_id=Required, clear=False):
         """Allocate a region of SDRAM for an application.
 
-        Requests SARK to allocate a block of SDRAM for an application. This
-        allocation will be freed when the application is stopped.
+        Requests SARK to allocate a block of SDRAM for an application and
+        raises a :py:exc:`.SpiNNakerMemoryError` on failure. This allocation
+        will be freed when the application is stopped.
 
         Parameters
         ----------
         size : int
             Number of bytes to attempt to allocate in SDRAM.
         tag : int
-            8-bit (chip-wide) tag that can be looked up by a SpiNNaker
-            application to discover the address of the allocated block.  If `0`
-            then no tag is applied.
+            8-bit tag that can be looked up by a SpiNNaker application to
+            discover the address of the allocated block. The tag must be unique
+            for this ``app_id`` on this chip. Attempting to allocate two blocks
+            on the same chip and for the same ``app_id`` will fail. If ``0``
+            (the default) then no tag is applied.
+
+            For example, if some SDRAM is allocated with ``tag=12``, a
+            SpiNNaker application can later discover the address using::
+
+                void *allocated_data = sark_tag_ptr(12, 0);
+
+            A common convention is to allocate one block of SDRAM per
+            application core and give each allocation the associated core
+            number as its tag. This way the underlying SpiNNaker applications
+            can simply call::
+
+                void *allocated_data = sark_tag_ptr(sark_core_id(), 0);
+
+            .. note::
+
+                The ``sark_tag_ptr`` function will be introduced in SARK 1.40
+                after being erroneously omitted from SARK 1.3x. As an interim
+                measure, users may simply copy an implementation of the
+                function into their own project from :ref:`here
+                <sark-tag-ptr>`.
+
         clear : bool
             If True the requested memory will be filled with zeros before the
             pointer is returned.  If False (the default) the memory will be
@@ -984,7 +1021,7 @@ class MachineController(ContextMixin):
 
         Raises
         ------
-        SpiNNakerMemoryError
+        rig.machine_control.machine_controller.SpiNNakerMemoryError
             If the memory cannot be allocated, the tag is already taken or it
             is invalid.
         """
@@ -1011,8 +1048,9 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments()
     def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
                                 app_id=Required, buffer_size=0, clear=False):
-        """Like :py:meth:`.sdram_alloc` but returns a file-like object which
-        allows safe reading and writing to the block that is allocated.
+        """Like :py:meth:`.sdram_alloc` but returns a :py:class:`file-like
+        object <.MemoryIO>` which allows safe reading and writing to the block
+        that is allocated.
 
         Other Parameters
         ----------------
@@ -1026,11 +1064,34 @@ class MachineController(ContextMixin):
         -------
         :py:class:`.MemoryIO`
             File-like object which allows accessing the newly allocated region
-            of memory.
+            of memory. For example::
+
+                >>> # Read, write and seek through the allocated memory just
+                >>> # like a file
+                >>> mem = mc.sdram_alloc_as_filelike(12)  # doctest: +SKIP
+                >>> mem.write(b"Hello, world")            # doctest: +SKIP
+                12
+                >>> mem.seek(0)                           # doctest: +SKIP
+                >>> mem.read(5)                           # doctest: +SKIP
+                b"Hello"
+                >>> mem.read(7)                           # doctest: +SKIP
+                b", world"
+
+                >>> # Reads and writes are truncated to the allocated region,
+                >>> # preventing accidental clobbering/access of memory.
+                >>> mem.seek(0)                           # doctest: +SKIP
+                >>> mem.write(b"How are you today?")      # doctest: +SKIP
+                12
+                >>> mem.seek(0)                           # doctest: +SKIP
+                >>> mem.read(100)                         # doctest: +SKIP
+                b"How are you "
+
+            See the :py:class:`.MemoryIO` class for details of other features
+            of these file-like views of SpiNNaker's memory.
 
         Raises
         ------
-        SpiNNakerMemoryError
+        rig.machine_control.machine_controller.SpiNNakerMemoryError
             If the memory cannot be allocated, or the tag is already taken or
             invalid.
         """
@@ -1130,27 +1191,25 @@ class MachineController(ContextMixin):
         :py:func:`~rig.place_and_route.util.build_application_map`.
 
         .. warning::
+
             The loading process is likely, but not guaranteed, to succeed.
             This is because the flood-fill packets used during loading are not
-            guaranteed to arrive. The effect of this is one of the following:
-
-            * Some regions may be included/excluded incorrectly.
-            * Some chips will not receive the complete application binary and
-              will silently not execute the binary.
+            guaranteed to arrive. The effect is that some chips may not receive
+            the complete application binary and will silently ignore the
+            application loading request.
 
             As a result, the user is responsible for checking that each core
             was successfully loaded with the correct binary. At present, the
             two recommended approaches to this are:
 
-            * The user should check that the correct number of application
-              binaries reach their initial barrier (SYNC0), when this facility
-              is used. This is not fool-proof but will flag up all but
-              situations where exactly the right number, but the wrong
-              selection of cores were loaded. (At the time of writing, this
-              situation is not possible but will become a concern in future
-              versions of SC&MP.
+            * If the ``wait`` argument is given then the user should check that
+              the correct number of application binaries reach the initial
+              barrier (i.e., the ``wait`` state). If the number does not match
+              the expected number of loaded cores the next approach must be
+              used:
             * The user can check the process list of each chip to ensure the
-              application was loaded into the correct set of cores.
+              application was loaded into the correct set of cores. See
+              :py:meth:`.read_vcpu_struct_field`.
 
         Parameters
         ----------
@@ -1227,7 +1286,7 @@ class MachineController(ContextMixin):
 
         This method guarantees that once it returns, all required cores will
         have been loaded. If this is not possible after a small number of
-        attempts, an exception will be raised.
+        attempts, a :py:exc:`.SpiNNakerLoadingError` will be raised.
 
         This method can be called in either of the following ways::
 
@@ -1255,6 +1314,12 @@ class MachineController(ContextMixin):
             to represent _all_ the cores that will be loaded and a faster
             method to determine whether all applications have been loaded
             correctly will be used. If False a fallback method will be used.
+
+        Raises
+        ------
+        rig.machine_control.machine_controller.SpiNNakerLoadingError
+            This exception is raised after some cores failed to load after
+            ``n_tries`` attempts.
         """
         # Get keyword arguments
         app_id = kwargs.pop("app_id")
@@ -1521,7 +1586,7 @@ class MachineController(ContextMixin):
 
         Raises
         ------
-        SpiNNakerRouterError
+        rig.machine_control.machine_controller.SpiNNakerRouterError
             If it is not possible to allocate sufficient routing table entries.
         """
         for (x, y), table in iteritems(routing_tables):
@@ -1544,7 +1609,7 @@ class MachineController(ContextMixin):
 
         Raises
         ------
-        SpiNNakerRouterError
+        rig.machine_control.machine_controller.SpiNNakerRouterError
             If it is not possible to allocate sufficient routing table entries.
         """
         count = len(entries)
@@ -1855,7 +1920,62 @@ class RouterDiagnostics(collections.namedtuple(
                           "dropped_nearest_neighbour", "dropped_fixed_route",
                           "counter12", "counter13", "counter14", "counter15"])
                         ):
-    """Read out of the diagnostic counters of a SpiNNaker router."""
+    """A namedtuple of values of a SpiNNaker router's 16 programmable
+    diagnostic counters.
+
+    Counter values can be accessed by subscripting::
+
+        >>> diag = mc.get_router_diagnostics(0, 0)  # doctest: +SKIP
+        >>> diag[0]                                 # doctest: +SKIP
+        53491
+
+    On boot, the first twelve counters are preconfigured to count commonly
+    used information. As a convenience, these counter values can be selected by
+    name::
+
+        >>> diag.dropped_multicast  # doctest: +SKIP
+        41
+
+    .. note::
+
+        It is possible to reconfigure *all* of the router counters to count
+        arbitrary events (see the ``rFN`` register in section 10.11 of the
+        SpiNNaker datasheet). If this has been done, using the subscript syntax
+        for accessing counter values from this structure is strongly
+        recommended.
+
+    Parameters
+    ----------
+    local_multicast : int
+    external_multicast : int
+    local_p2p : int
+    external_p2p : int
+    local_nearest_neighbour : int
+    external_nearest_neighbour : int
+    local_fixed_route : int
+    external_fixed_route : int
+        For each of SpiNNaker's four packet types (multicast, point-to-point,
+        nearest neighbour and fixed-route), there is:
+
+        * A ``local_*`` counter which reports the number of packets routed
+          which were sent by local application cores.
+        * An ``external_*`` counter which reports the number of packets routed
+          which were received from external sources (i.e. neighbouring chips).
+
+        Any packets which were dropped by the router are not included in these
+        counts.
+    dropped_multicast : int
+    dropped_p2p : int
+    dropped_nearest_neighbour : int
+    dropped_fixed_route : int
+        These counters report the number of each type of packet which were
+        dropped after arrival at this core.
+    counter12 : int
+    counter13 : int
+    counter14 : int
+    counter15 : int
+        These counters are disabled by default.
+    """
 
 
 class IPTag(collections.namedtuple("IPTag",
@@ -1895,6 +2015,15 @@ class SpiNNakerBootError(Exception):
 class SpiNNakerMemoryError(Exception):
     """Raised when it is not possible to allocate memory on a SpiNNaker
     chip.
+
+    Attributes
+    ----------
+    size : int
+        The size of the failed allocation.
+    chip : (x, y)
+        The chip coordinates on which the allocation failed.
+    tag : int
+        The tag number of the failed allocation.
     """
     def __init__(self, size, x, y, tag=0):
         self.size = size
@@ -1915,6 +2044,13 @@ class SpiNNakerMemoryError(Exception):
 class SpiNNakerRouterError(Exception):
     """Raised when it is not possible to allocated routing table entries on a
     SpiNNaker chip.
+
+    Attributes
+    ----------
+    count : int
+        The number of routing table entries requested.
+    chip : (x, y)
+        The coordinates of the chip the allocation failed on.
     """
     def __init__(self, count, x, y):
         self.count = count
@@ -1926,7 +2062,13 @@ class SpiNNakerRouterError(Exception):
 
 
 class SpiNNakerLoadingError(Exception):
-    """Raised when it has not been possible to load applications to cores."""
+    """Raised when it has not been possible to load applications to cores.
+
+    Attributes
+    ----------
+    app_map : {"/path/to/app.aplx": {(x, y): {core, ...}, ...}, ...}
+        The application map of the cores which could not be loaded.
+    """
     def __init__(self, application_map):
         self.app_map = application_map
 
@@ -1960,13 +2102,25 @@ class MemoryIO(object):
 
     For example::
 
+        >>> # Read, write and seek through memory as if it was a file
         >>> f = MemoryIO(mc, 0, 1, 0x67800000, 0x6780000c)  # doctest: +SKIP
         >>> f.write(b"Hello, world")                        # doctest: +SKIP
+        12
+        >>> f.seek(0)                                       # doctest: +SKIP
         >>> f.read()                                        # doctest: +SKIP
         b"Hello, world"
+
+        >>> # Slice the MemoryIO to produce a new MemoryIO which can only
+        >>> # access a subset of the memory.
         >>> g = f[0:5]                                      # doctest: +SKIP
         >>> g.read()                                        # doctest: +SKIP
         b"Hello"
+        >>> g.seek(0)                                       # doctest: +SKIP
+        >>> g.write(b"Howdy, partner!")                     # doctest: +SKIP
+        5
+        >>> f.seek(0)                                       # doctest: +SKIP
+        >>> f.read()                                        # doctest: +SKIP
+        b"Howdy, world"
     """
 
     def __init__(self, machine_controller, x, y, start_address, end_address,

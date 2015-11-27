@@ -19,6 +19,9 @@ class BMPController(ContextMixin):
     """Control the BMPs (Board Management Processors) onboard SpiNN-5 boards in
     a SpiNNaker machine.
 
+    A :ref:`tutorial <BMPController-tutorial>` is available which introduces
+    the basic features of this class.
+
     BMPs (and thus boards) are addressed as follows::
 
                   2             1                0

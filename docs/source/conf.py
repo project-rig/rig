@@ -55,6 +55,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.doctest',
+    'sphinx.ext.linkcode',
     'numpydoc',
 ]
 
@@ -129,6 +130,72 @@ pygments_style = 'sphinx'
 
 # Search Python docs for extra definitions.
 intersphinx_mapping = {'python': ('http://docs.python.org/3', None)}
+
+# -- linkcode GitHub link generator ---------------------------------------
+
+import inspect
+
+import rig
+
+local_module_path = rig.__file__
+github_module_path = "rig/"
+github_repo = "project-rig/rig"
+
+def linkcode_resolve(domain, info):
+    """Determine the URL corresponding to Python object on GitHub
+    
+    This code is derived from the version used by `Numpy
+    <https://github.com/numpy/numpy/blob/v1.9.2/doc/source/conf.py#L286>`_.
+    """
+    # Only link to Python source
+    if domain != 'py':
+        return None
+
+    # Get a reference to the object in question
+    modname = info['module']
+    fullname = info['fullname']
+
+    submod = sys.modules.get(modname)
+    if submod is None:
+        return None
+
+    obj = submod
+    for part in fullname.split('.'):
+        try:
+            obj = getattr(obj, part)
+        except:
+            return None
+
+    # Find the file which contains the object
+    try:
+        file_name = inspect.getsourcefile(obj)
+    except:
+        file_name = None
+    if not file_name:
+        return None
+
+    # Convert the filename into a path relative to the rig module top-level
+    file_name = os.path.relpath(file_name, start=os.path.dirname(local_module_path))
+
+    # Get the line number range that object lives on
+    try:
+        source, lineno = inspect.getsourcelines(obj)
+    except:
+        lineno = None
+    if lineno:
+        linespec = "#L{}-L{}".format(lineno,
+                                     lineno + len(source) - 1)
+    else:
+        linespec = ""
+    
+    # Generate a link to the code in the official GitHub repository with the
+    # current-version's tag.
+    return ("https://github.com/{repo}/blob/v{version}/"
+            "{module_path}{file_name}{linespec}".format(repo=github_repo,
+                                                        version=version,
+                                                        module_path=github_module_path,
+                                                        file_name=file_name,
+                                                        linespec=linespec))
 
 
 # -- Options for HTML output ----------------------------------------------

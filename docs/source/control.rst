@@ -18,7 +18,7 @@ introductory tutorials:
     :special-members:
 
 .. automodule:: rig.machine_control.machine_controller
-    :members: CoreInfo, ProcessorStatus, IPTag, MemoryIO, RouterDiagnostics
+    :members: CoreInfo, ProcessorStatus, IPTag, MemoryIO, RouterDiagnostics, SpiNNakerBootError, SpiNNakerMemoryError, SpiNNakerRouterError, SpiNNakerLoadingError
     :special-members:
 
 .. automodule:: rig.machine_control.utils
@@ -45,19 +45,20 @@ introductory tutorials:
 
 .. autofunction:: rig.machine_control.unbooted_ping.listen
 
-Advanced SCP/SDP APIs
----------------------
 
-:py:mod:`~rig.machine_control.packets`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+:py:mod:`~rig.machine_control.packets`: Raw SDP/SCP Packet Packing/Unpacking
+----------------------------------------------------------------------------
 
 .. automodule:: rig.machine_control.packets
     :members:
     :special-members:
 
 
-:py:mod:`~rig.machine_control.scp_connection`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+:py:mod:`~rig.machine_control.scp_connection`: High-performance SCP protocol implementation
+-------------------------------------------------------------------------------------------
+
+This module presents a high-performance implementation of the SCP protocol
+which is used to communicate with SC&MP.
 
 .. automodule:: rig.machine_control.scp_connection
     :members:
