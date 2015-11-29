@@ -25,9 +25,8 @@ def place_and_route_wrapper(vertices_resources, vertices_applications,
                             core_resource=Cores, sdram_resource=SDRAM):
     """Wrapper for core place-and-route tasks for the common case.
 
-    At a high level this function essentially takes a set of vertices and nets
-    and produces placements, memory allocations, routing tables and application
-    loading information.
+    This function takes a set of vertices and nets and produces placements,
+    allocations, routing tables and application loading information.
 
     .. note::
 

@@ -1747,15 +1747,19 @@ class MachineController(ContextMixin):
         """Probe the machine to discover which cores and links are working.
 
         .. note::
-            Links are reported as dead when the device at the other end of the
-            link is not a SpiNNaker chip. Thus links attached to peripherals
-            are always marked as dead.
+            Links are tested by sending a 'PEEK' command down the link which
+            checks to see if the remote device responds correctly. If the link
+            is dead, no response will be received and the link will be assumed
+            dead. Since peripherals do not generally respond to 'PEEK'
+            commands, working links attached to peripherals will also be marked
+            as dead.
 
         .. note::
             The returned object does not report how much memory is free, nor
-            how many cores are idle but rather the total available. See
+            how many cores are idle but rather the total size of the heap. See
             :py:meth:`.get_machine_and_resource_constraints` or
-            :py:meth:`.get_resource_constraints` for a method which does.
+            :py:meth:`.get_resource_constraints` for a method which does report
+            actual memory availability.
 
         .. note::
             The size of the SDRAM and SysRAM heaps is assumed to be the same
@@ -1771,8 +1775,6 @@ class MachineController(ContextMixin):
         default_num_cores : int
             The number of cores generally available on a SpiNNaker chip
             (including the monitor).
-        _all_chips_info : None
-            For internal use only. Users should leave this as None.
 
         Returns
         -------
@@ -1787,6 +1789,11 @@ class MachineController(ContextMixin):
                 The size of the SDRAM heap.
             :py:data:`~rig.machine.SRAM`
                 The size of the SysRAM heap.
+
+        Other Parameters
+        ----------------
+        _all_chips_info : None or {(x, y): :py:class:`.ChipInfo`, ...}
+            For internal use only. Users should leave this as None.
         """
         # Get basic info about what resources are available within the system.
         if _all_chips_info is None:
@@ -1834,8 +1841,8 @@ class MachineController(ContextMixin):
                                  sdram_resource=SDRAM,
                                  sram_resource=SRAM,
                                  _all_chips_info=None):
-        """Returns a set of place-and-route
-        :py:class:`~rig.place_and_route.constraints` which reserves any cores
+        """Return a set of place-and-route
+        :py:class:`~rig.place_and_route.constraints` which reserve any cores
         and SDRAM that are already in use.
 
         .. note::
@@ -1849,17 +1856,17 @@ class MachineController(ContextMixin):
         place-and-route tools and assumes that one resource type represents
         Cores while another represents SDRAM.
 
-        The returned set of
+        The returned list of
         :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`s
         reserves all cores not in an Idle state (i.e. not a monitor and not
-        already running an application).
-
-        This set also reserves ranges of SDRAM/SRAM starting at the top
-        (highest address) to reduce the resource availability on each chip to
-        approximately the amount actually available in the machine, accounting
-        for any already-running applications. Note that due to memory
-        fragmentation this constraint will make a conservative estimate based
-        on the largest free block of SDRAM/SRAM in the heap.
+        already running an application). These constraints also reserve ranges
+        of SDRAM/SRAM to account for applications already making use of memory.
+        These reservations start at the top (highest address) and reduce the
+        resource availability on each chip to approximately the amount actually
+        available in the machine, accounting for any already-running
+        applications. To account for memory fragmentation, the reservation
+        conservatively estimates the amount of free memory as the largest free
+        block of SDRAM/SRAM on the heap.
 
         Parameters
         ----------
@@ -1868,15 +1875,13 @@ class MachineController(ContextMixin):
             machine (e.g. from :py:meth:`get_machine`).
         core_resource : resource (Default: :py:data:`~rig.machine.Cores`)
             The resource identifier used for cores. If using
-            :py:meth:`get_machine`, the default correct.
+            :py:meth:`get_machine`, the default value is appropriate.
         sdram_resource : resource (Default: :py:data:`~rig.machine.SDRAM`)
             The resource identifier used for SDRAM. If using
-            :py:meth:`get_machine`, the default correct.
+            :py:meth:`get_machine`, the default value is appropriate.
         sram_resource : resource (Default: :py:data:`~rig.machine.SRAM`)
             The resource identifier used for SRAM. If using
-            :py:meth:`get_machine`, the default correct.
-        _all_chips_info : None
-            For internal use only. Users should leave this as None.
+            :py:meth:`get_machine`, the default value is appropriate.
 
         Returns
         -------
@@ -1886,6 +1891,11 @@ class MachineController(ContextMixin):
             A set of place-and-route constraints which reserves non-idle cores
             and SDRAM. The resource types given in the ``core_resource`` and
             ``sdram_resource`` arguments will be reserved accordingly.
+
+        Other Parameters
+        ----------------
+        _all_chips_info : None or {(x, y): :py:class:`.ChipInfo`, ...}
+            For internal use only. Users should leave this as None.
         """
         if _all_chips_info is not None:
             chips_info = _all_chips_info[2]
@@ -1921,46 +1931,42 @@ class MachineController(ContextMixin):
             if cur_reservation is not None:
                 constraints.append(cur_reservation)
 
-            # Reserve enough SDRAM such that the amount remaining will be the
-            # size of the largest free block in the heap.
-            total_sdram = machine[(x, y)][sdram_resource]
-            avail_sdram = chip_info.largest_free_sdram_block
-            constraints.append(ReserveResourceConstraint(
-                sdram_resource,
-                slice(avail_sdram, total_sdram),
-                (x, y)))
+            def make_memory_reservation(resource, available):
+                total = machine[(x, y)][resource]
+                return ReserveResourceConstraint(
+                    resource, slice(available, total), (x, y))
 
-            # Reserve enough SRAM such that the amount remaining will be the
-            # size of the largest free block in the heap.
-            total_sram = machine[(x, y)][sram_resource]
-            avail_sram = chip_info.largest_free_sram_block
-            constraints.append(ReserveResourceConstraint(
-                sram_resource,
-                slice(avail_sram, total_sram),
-                (x, y)))
+            # Reserve enough SDRAM/SRAM such that the amount remaining will be
+            # the size of the largest free block in the heap.
+            constraints.append(make_memory_reservation(
+                sdram_resource, chip_info.largest_free_sdram_block))
+            constraints.append(make_memory_reservation(
+                sram_resource, chip_info.largest_free_sram_block))
 
         return constraints
 
     def get_machine_and_resource_constraints(self, x=0, y=0,
                                              default_num_cores=18):
-        """An efficient wrapper around both :py:meth:`.get_machine` and
-        :py:meth:`.get_resource_constraints`.
+        """Get a representation of the machine and place-and-route constraints
+        restricting resources already in use.
 
         This method reduces the number of messages which must be exchanged with
         the remote machine compared with calling :py:meth:`.get_machine` and
-        :py:meth:`.get_resource_constraints` seperately, halving the execution
+        :py:meth:`.get_resource_constraints` separately, halving the execution
         time of the command.
 
         Returns
-        -------
-        (machine, resource_constraints)
-            machine is a :py:class:`rig.machine.Machine` describing what
-            resources exist on each chip (see :py:meth:`.get_machine`).
+        ------
+        :py:class:`rig.machine.Machine`
+            Description of the resources that exist on each chip.
+        [:py:class:`~rig.place_and_route.constraints`, ...]
+            Restrictions to the resources described in the machine to account
+            for current usage of those resources.
 
-            resource_constraints is a list of place-and-route
-            :py:class:`~rig.place_and_route.constraints` which restrict the
-            resources described in the machine to only those which are not
-            already in use.
+        See Also
+        --------
+        * :py:meth:`.get_machine`
+        * :py:meth:`.get_resource_constraints`
         """
         all_chips_info = self._get_all_chips_info(x, y)
 

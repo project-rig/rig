@@ -110,10 +110,6 @@ an example of the complete place-and-route process.
 
 .. autofunction:: rig.place_and_route.place_and_route_wrapper
 
-The above function replaces the very similar but now deprecated
-:py:func:`rig.place_and_route.wrapper` function which remains for
-backwards-compatibility.
-
 .. autofunction:: rig.place_and_route.wrapper
 
 
