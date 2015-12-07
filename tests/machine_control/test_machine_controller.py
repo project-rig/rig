@@ -1539,45 +1539,6 @@ class TestMachineController(object):
             exp_flags |= consts.AppFlags.wait
         assert arg2 & 0x00fc0000 == exp_flags << 18
 
-    def test_flood_fill_aplx_ordered_regions(self, cn, aplx_file):
-        """Test that flood-fill regions and core masks are sent in ascending
-        order.
-        """
-        BASE_ADDRESS = 0x68900000
-        # Create the mock controller
-        cn._send_scp = mock.Mock()
-        cn.read_struct_field = mock.Mock(return_value=BASE_ADDRESS)
-
-        # Override _send_ffcs such that it ensures increasing values of
-        # ((region << 18) | cores)
-        class SendFFCS(object):
-            def __init__(self):
-                self.last_sent = 0
-
-            def __call__(self, region, cores, fr):
-                # Create the ID for the packet
-                x = (region << 18) | cores
-                assert x > self.last_sent
-                self.last_sent = x
-
-        cn._send_ffcs = mock.Mock(side_effect=SendFFCS())
-
-        # Empty targets because we'll override "compress_flood_fill_regions" to
-        # return values out-of-order.
-        targets = dict()
-        regions_cores = [(100, 2), (100, 1), (10, 3)]
-
-        # Attempt to load
-        with mock.patch("rig.machine_control.machine_controller.regions."
-                        + "compress_flood_fill_regions") as cffr:
-            # Set the targets
-            cffr.return_value = iter(regions_cores)
-
-            # Perform the flood fille
-            cn.flood_fill_aplx({aplx_file: targets})
-
-        assert cn._send_ffcs.call_count == len(regions_cores)
-
     def test_load_and_check_succeed_use_count(self):
         """Test that APLX loading doesn't take place multiple times if the core
         count comes back good.

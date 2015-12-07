@@ -1249,9 +1249,9 @@ class MachineController(ContextMixin):
         for (aplx, targets) in iteritems(application_map):
             # Determine the minimum number of flood-fills that are necessary to
             # load the APLX. The regions and cores should be sorted into
-            # ascending order.
-            fills = list(regions.compress_flood_fill_regions(targets))
-            fills.sort(key=lambda rc: (rc[0] << 18) | rc[1])
+            # ascending order, `compress_flood_fill_regions` ensures this is
+            # done.
+            fills = regions.compress_flood_fill_regions(targets)
 
             # Load the APLX data
             with open(aplx, "rb") as f:
