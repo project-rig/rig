@@ -1,15 +1,174 @@
 import pytest
 
-from rig.place_and_route.utils import build_application_map, \
+from six import iteritems
+
+from collections import defaultdict
+
+from rig.place_and_route.utils import \
+    build_machine, build_core_constraints, build_application_map, \
     build_routing_tables, MultisourceRouteError
 
-from rig.machine import Cores
+from rig.machine import Machine, Links, Cores
 
 from rig.netlist import Net
 
 from rig.routing_table import Routes, RoutingTableEntry
 
 from rig.place_and_route.routing_tree import RoutingTree
+
+from rig.place_and_route.constraints import ReserveResourceConstraint
+
+from rig.machine_control.machine_controller import SystemInfo, ChipInfo
+
+from rig.machine_control.consts import AppState
+
+
+def test_build_null_machine():
+    # Describe a 1x1 machine with all dead chips...
+    system_info = SystemInfo(1, 1, {})
+
+    m = build_machine(system_info)
+
+    assert m.width == 1
+    assert m.height == 1
+    assert m.dead_chips == set([(0, 0)])
+
+
+def test_build_machine():
+    # Describe a 10x8 machine where everything is nominal except:
+    # * (0, 1) is dead
+    # * (2, 3) has 17 cores, the rest 18
+    # * (4, 5) has no north link, all others have working links
+    # * (6, 7) has no SDRAM
+    # * (7, 6) has no SRAM
+    system_info = SystemInfo(10, 8, {
+        (x, y): ChipInfo(
+            num_cores=(17 if (x, y) == (2, 3) else 18),
+            core_states=[AppState.idle
+                         if (x, y, c) != (2, 3, 17) else
+                         AppState.dead
+                         for c in range(17 if (x, y) == (2, 3) else 18)],
+            working_links=(set(l for l in Links if l != Links.north)
+                           if (x, y) == (4, 5) else
+                           set(Links)),
+            largest_free_sdram_block=(0 if (x, y) == (6, 7)
+                                      else 10 * 1024 * 1024),
+            largest_free_sram_block=(0 if (x, y) == (7, 6)
+                                     else 1 * 1024 * 1024),
+        )
+        for x in range(10)
+        for y in range(8)
+        if (x, y) != (0, 1)
+    })
+
+    m = build_machine(system_info,
+                      core_resource="MyCores",
+                      sdram_resource="MySDRAM",
+                      sram_resource="MySRAM")
+
+    # Check that the machine is correct
+    assert isinstance(m, Machine)
+    assert m.width == 10
+    assert m.height == 8
+    assert m.chip_resources == {
+        "MyCores": 18,
+        "MySDRAM": 10 * 1024 * 1024,
+        "MySRAM": 1 * 1024 * 1024,
+    }
+    assert m.chip_resource_exceptions == {
+        (2, 3): {
+            "MyCores": 17,
+            "MySDRAM": 10 * 1024 * 1024,
+            "MySRAM": 1 * 1024 * 1024,
+        },
+        (6, 7): {
+            "MyCores": 18,
+            "MySDRAM": 0,
+            "MySRAM": 1 * 1024 * 1024,
+        },
+        (7, 6): {
+            "MyCores": 18,
+            "MySDRAM": 10 * 1024 * 1024,
+            "MySRAM": 0,
+        },
+    }
+    assert m.dead_chips == set([(0, 1)])
+    assert m.dead_links == set([(4, 5, Links.north)])
+
+
+def test_build_core_constraints():
+    busy_cores = set([
+        # Chip 0, 0: Has cores 1-16 (top and bottom reserved)
+        (0, 0, 0),
+        (0, 0, 17),
+
+        # Chip 1, 0: Has cores 1-16 (bottom reserved, top dead)
+        (1, 0, 0),
+
+        # Chip 2, 0: Has cores 1-3 and 5-6 reserved
+        (2, 0, 1),
+        (2, 0, 2),
+        (2, 0, 3),
+        (2, 0, 5),
+        (2, 0, 6),
+
+        # Chip 3, 0: Has no constraints!
+    ])
+
+    # * (1, 0) has 17 cores, the rest 18
+    # * Busy cores are taken from the table above
+    system_info = SystemInfo(4, 1, {
+        (x, y): ChipInfo(
+            num_cores=(17 if (x, y) == (1, 0) else 18),
+            core_states=[(AppState.idle
+                          if (x, y, c) not in busy_cores else
+                          AppState.run)
+                         for c in range(17 if (x, y) == (0, 1) else 18)],
+            working_links=set(Links),
+            largest_free_sdram_block=100,
+            largest_free_sram_block=10,
+        )
+        for x in range(4)
+        for y in range(1)
+    })
+
+    machine = build_machine(system_info, core_resource="MyCores")
+
+    constraints = build_core_constraints(
+        system_info, machine, core_resource="MyCores")
+
+    # All constraints should relate to specific chips in the machine
+    assert all(c.location is not None for c in constraints)
+    assert all(c.location in system_info for c in constraints)
+
+    # All constraints should currently be for cores and SDRAM
+    assert all(isinstance(c, ReserveResourceConstraint) for c in constraints)
+    assert all(c.resource == "MyCores" for c in constraints)
+
+    # Split constraints by chip and type
+    core_constraints = defaultdict(list)
+    for constraint in constraints:
+        core_constraints[constraint.location].append(constraint)
+
+    # Sort core constraints by starting core
+    for chip, constraints_ in iteritems(core_constraints):
+        constraints_.sort(key=(lambda c: c.reservation.start))
+
+    # Check correctness and minimality of core reservations
+    assert len(core_constraints) == 3
+
+    assert len(core_constraints[(0, 0)]) == 2
+    assert core_constraints[(0, 0)][0].reservation == slice(0, 1)
+    assert core_constraints[(0, 0)][1].reservation == slice(17, 18)
+
+    assert len(core_constraints[(1, 0)]) == 1
+    assert core_constraints[(1, 0)][0].reservation == slice(0, 1)
+
+    assert len(core_constraints[(2, 0)]) == 2
+    assert core_constraints[(2, 0)][0].reservation == slice(1, 4)
+    assert core_constraints[(2, 0)][1].reservation == slice(5, 7)
+
+    assert len(core_constraints[(3, 0)]) == 0
 
 
 def test_build_application_map():

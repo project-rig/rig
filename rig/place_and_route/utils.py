@@ -4,13 +4,180 @@ structures from the products of placement, allocation and routing.
 
 from collections import defaultdict, deque, namedtuple, OrderedDict
 
-from six import iteritems
+from six import iteritems, itervalues
 
-from ..machine import Cores
+from rig.machine import Machine, Cores, SDRAM, SRAM
 
-from ..routing_table import RoutingTableEntry
+from rig.routing_table import RoutingTableEntry
 
-from .routing_tree import RoutingTree
+from rig.place_and_route.routing_tree import RoutingTree
+
+from rig.place_and_route.constraints import ReserveResourceConstraint
+
+from rig.machine_control.consts import AppState
+
+
+def build_machine(system_info,
+                  core_resource=Cores,
+                  sdram_resource=SDRAM,
+                  sram_resource=SRAM):
+    """Build a :py:class:`~rig.machine.Machine` object from a
+    :py:class:`~rig.machine_control.machine_controller.SystemInfo` object.
+
+    .. note::
+        Links are tested by sending a 'PEEK' command down the link which
+        checks to see if the remote device responds correctly. If the link
+        is dead, no response will be received and the link will be assumed
+        dead. Since peripherals do not generally respond to 'PEEK'
+        commands, working links attached to peripherals will also be marked
+        as dead.
+
+    .. note::
+        The returned object does not report how much memory is free, nor
+        how many cores are idle but rather the total number of working cores
+        and the size of the heap. See :py:func:`.build_resource_constraints`
+        for a function which can generate a set of
+        :py:class:`~rig.place_and_route.constraints` which prevent the use of
+        already in-use cores and memory.
+
+    .. note::
+        This method replaces the deprecated
+        :py:meth:`rig.machine_control.MachineController.get_machine` method.
+        Its functionality may be recreated using
+        :py:meth:`rig.machine_control.MachineController.get_system_info` along
+        with this function like so::
+
+            >> sys_info = mc.get_system_info()
+            >> machine = build_machine(sys_info)
+
+    Parameters
+    ----------
+    system_info : :py:class:`rig.machine_control.machine_controller.SystemInfo`
+        The resource availability information for a SpiNNaker machine,
+        typically produced by
+        :py:meth:`rig.machine_control.MachineController.get_system_info`.
+    core_resource : resource (default: :py:class:`rig.machine.Cores`)
+        The resource type to use to represent the number of working cores on a
+        chip, including the monitor, those already in use and all idle cores.
+    sdram_resource : resource (default: :py:class:`rig.machine.SDRAM`)
+        The resource type to use to represent SDRAM on a chip. This resource
+        will be set to the number of bytes in the largest free block in the
+        SDRAM heap. This gives a conservative estimate of the amount of free
+        SDRAM on the chip which will be an underestimate in the presence of
+        memory fragmentation.
+    sram_resource : resource (default: :py:class:`rig.machine.SRAM`)
+        The resource type to use to represent SRAM (a.k.a. system RAM) on a
+        chip. This resource will be set to the number of bytes in the largest
+        free block in the SRAM heap. This gives a conservative estimate of the
+        amount of free SRAM on the chip which will be an underestimate in the
+        presence of memory fragmentation.
+
+    Returns
+    -------
+    :py:class:`rig.machine.Machine`
+        A :py:class:`~rig.machine.Machine` object representing the
+        resources available within a SpiNNaker machine in the form used by the
+        place-and-route infrastructure.
+    """
+    max_cores = max((c.num_cores for c in itervalues(system_info)),
+                    default=0)
+
+    max_sdram = max((c.largest_free_sdram_block
+                     for c in itervalues(system_info)),
+                    default=0)
+    max_sram = max((c.largest_free_sram_block
+                    for c in itervalues(system_info)),
+                   default=0)
+
+    return Machine(width=system_info.width,
+                   height=system_info.height,
+                   chip_resources={
+                       core_resource: max_cores,
+                       sdram_resource: max_sdram,
+                       sram_resource: max_sram,
+                   },
+                   chip_resource_exceptions={
+                       chip: {
+                           core_resource: info.num_cores,
+                           sdram_resource: info.largest_free_sdram_block,
+                           sram_resource: info.largest_free_sram_block,
+                       }
+                       for chip, info in iteritems(system_info)
+                       if (info.num_cores != max_cores
+                           or info.largest_free_sdram_block != max_sdram
+                           or info.largest_free_sram_block != max_sram)
+                   },
+                   dead_chips=set(system_info.dead_chips()),
+                   dead_links=set(system_info.dead_links()))
+
+
+def build_core_constraints(system_info, machine, core_resource=Cores):
+    """Return a set of place-and-route
+    :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
+    which reserve any cores that that are already in use.
+
+    The returned list of
+    :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`s
+    reserves all cores not in an Idle state (i.e. not a monitor and not already
+    running an application).
+
+    .. note::
+
+        Historically it was required that a
+        :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
+        was manually added by every application which reserved the monitor core
+        on each chip. Improves on this by automatically generating appropriate
+        constraints for reserving not just monitor cores but also other cores
+        which are already in use.
+
+    Parameters
+    ----------
+    system_info : :py:class:`rig.machine_control.machine_controller.SystemInfo`
+        The resource availability information for a SpiNNaker machine,
+        typically produced by
+        :py:meth:`rig.machine_control.MachineController.get_system_info`.
+    machine : :py:class:`~rig.machine.Machine`
+        The :py:class:`~rig.machine.Machine` model of the current SpiNNaker
+        machine (e.g. from :py:func:`.build_machine`).
+    core_resource : resource (Default: :py:data:`~rig.machine.Cores`)
+        The resource identifier used for cores.
+
+    Returns
+    -------
+    [:py:class:`rig.place_and_route.constraints.ReserveResourceConstraint`, \
+            ...]
+        A set of place-and-route constraints which reserves all non-idle. The
+        resource type given in the ``core_resource`` argument will be reserved
+        accordingly.
+    """
+    constraints = []
+
+    for x, y in machine:
+        chip_info = system_info[(x, y)]
+
+        # Construct a minimal set of ReserveResourceConstraints which
+        # reserve the cores which are not in the idle state.
+        cur_reservation = None
+        for state, core in zip(chip_info.core_states,
+                               range(machine[(x, y)][core_resource])):
+            if state == AppState.idle:
+                if cur_reservation is not None:
+                    constraints.append(cur_reservation)
+                cur_reservation = None
+            else:
+                if cur_reservation is None:
+                    cur_reservation = ReserveResourceConstraint(
+                        core_resource,
+                        slice(core, core + 1),
+                        (x, y))
+                else:
+                    cur_reservation.reservation = slice(
+                        cur_reservation.reservation.start,
+                        core + 1)
+        if cur_reservation is not None:
+            constraints.append(cur_reservation)
+
+    return constraints
 
 
 def build_application_map(vertices_applications, placements, allocations,
