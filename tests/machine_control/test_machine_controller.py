@@ -1863,12 +1863,22 @@ class TestMachineController(object):
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
 
-        mcn = Machine(5, 4, dead_chips=set([(0, 1), (1, 0), (1, 1)]))
-        cn.get_machine = mock.Mock(return_value=mcn)
+        si = SystemInfo(5, 4, {
+            (x, y): ChipInfo(
+                num_cores=0,
+                core_states=[],
+                working_links=set(),
+                largest_free_sdram_block=0,
+                largest_free_sram_block=0)
+            for x in range(5)
+            for y in range(4)
+            if (x, y) not in [(0, 1), (1, 0), (1, 1)]
+        })
+        cn.get_system_info = mock.Mock(return_value=si)
 
         def clear_routing_table_fn(x, y, app_id):
             assert app_id == _app_id
-            assert (x, y) in mcn
+            assert (x, y) in si
 
         cn.clear_routing_table_entries = mock.Mock()
         cn.clear_routing_table_entries.side_effect = clear_routing_table_fn

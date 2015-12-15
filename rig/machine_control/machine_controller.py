@@ -1372,12 +1372,12 @@ class MachineController(ContextMixin):
         # entries associated with the application ID. This code will be
         # unnecessaru when SpiNNaker tools 1.4 becomes available.
         if signal is consts.AppSignal.stop:
-            # Get a machine object so we can determine where we need to remove
-            # the routing tables.
-            mcn = self.get_machine()
+            # Get a system info object so we can determine where we need to
+            # remove the routing tables.
+            si = self.get_system_info()
 
             # Now remove all routing entries:
-            for (x, y) in mcn:
+            for (x, y) in si:
                 self.clear_routing_table_entries(x, y, app_id)
 
         # Construct the packet for transmission
