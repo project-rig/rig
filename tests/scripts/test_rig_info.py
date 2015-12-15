@@ -9,9 +9,11 @@ import rig.scripts.rig_info as rig_info
 
 from rig.machine_control.scp_connection import TimeoutError
 
-from rig.machine import Cores, SDRAM, SRAM, Links, Machine
+from rig.machine import Links
 
 from rig.machine_control.bmp_controller import ADCInfo
+
+from rig.machine_control.machine_controller import SystemInfo, ChipInfo
 
 
 def test_bad_args():
@@ -61,8 +63,7 @@ def test_spinnaker(monkeypatch, capsys, torus):
 
     width = 4
     height = 8
-    chip_resources = {Cores: 18, SDRAM: 1, SRAM: 1}
-    chip_resource_exceptions = {(0, 0): {Cores: 17, SDRAM: 1, SRAM: 1}}
+    num_cores_exceptions = {(0, 0): 17}
     dead_chips = set([(1, 1)])
     dead_links = set([(0, 0, Links.north)])
     if not torus:
@@ -77,10 +78,19 @@ def test_spinnaker(monkeypatch, capsys, torus):
             dead_links.add((0, y, Links.south_west))
             dead_links.add((width - 1, y, Links.east))
             dead_links.add((width - 1, y, Links.north_east))
-    machine = Machine(width, height,
-                      chip_resources, chip_resource_exceptions,
-                      dead_chips, dead_links)
-    mc.get_machine.return_value = machine
+    mc.get_system_info.return_value = SystemInfo(width, height, {
+        (x, y): ChipInfo(
+            num_cores=num_cores_exceptions.get((x, y), 18),
+            working_links=set(l for l in Links
+                              if (x, y, l) not in dead_links),
+            # Unused
+            core_states=[None] * num_cores_exceptions.get((x, y), 18),
+            largest_free_sdram_block=0,
+            largest_free_sram_block=0)
+        for x in range(width)
+        for y in range(height)
+        if (x, y) not in dead_chips
+    })
 
     app_state = mock.Mock()
     app_state.app_name = "mockapp"

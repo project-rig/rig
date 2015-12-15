@@ -7,6 +7,8 @@ Installed as "rig-ps" by setuptools.
 import sys
 import argparse
 
+from six import iteritems
+
 import rig
 
 import re
@@ -14,8 +16,6 @@ import re
 from rig.machine_control import MachineController
 
 from rig.machine_control.scp_connection import SCPError, TimeoutError
-
-from rig.machine import Cores
 
 
 def match(string, patterns):
@@ -45,14 +45,14 @@ def get_process_list(mc, x_=None, y_=None, p_=None,
     (x, y, core, state, runtime_exception, application, app_id)
     """
 
-    machine = mc.get_machine()
-    for x, y in machine:
+    system_info = mc.get_system_info()
+    for (x, y), chip_info in sorted(iteritems(system_info)):
         if x_ is not None and x_ != x:
             continue
         if y_ is not None and y_ != y:
             continue
 
-        for p in range(machine[(x, y)][Cores]):
+        for p in range(chip_info.num_cores):
             if p_ is not None and p_ != p:
                 continue
 

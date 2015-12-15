@@ -14,7 +14,7 @@ from pytz import utc
 
 import rig
 
-from rig.machine import Cores
+from rig.place_and_route.utils import build_machine
 
 from rig.machine_control import MachineController, BMPController
 
@@ -36,22 +36,21 @@ def get_spinnaker_info(mc):
 
     yield ""
 
-    machine = mc.get_machine()
-    yield "Machine dimensions: {}x{}".format(machine.width, machine.height)
+    system_info = mc.get_system_info()
+    yield "Machine dimensions: {}x{}".format(system_info.width, system_info.height)
 
     # Construct a histogram of the number of cores in the available chips
-    num_chips = (machine.width * machine.height) - len(machine.dead_chips)
+    num_chips = len(system_info)
     num_cores_hist = defaultdict(lambda: 0)
-    for resources in itervalues(machine.chip_resource_exceptions):
-        num_cores_hist[resources[Cores]] += 1
-    num_cores_hist[machine.chip_resources[Cores]] += \
-        num_chips - sum(itervalues(num_cores_hist))
+    for (x, y), chip_info in iteritems(system_info):
+        num_cores_hist[chip_info.num_cores] += 1
 
     hist_msg = []
     for num_cores, count in sorted(iteritems(num_cores_hist), reverse=True):
         hist_msg.append("{} cores: {}".format(num_cores, count))
     yield "Working chips: {} ({})".format(num_chips, ", ".join(hist_msg))
 
+    machine = build_machine(system_info)
     has_wrap_around_links = machine.has_wrap_around_links()
     yield "Network topology: {}".format(
         "torus" if has_wrap_around_links else "mesh"
@@ -65,13 +64,13 @@ def get_spinnaker_info(mc):
     links_to_dead_chips = 0
 
     # Count dead links
-    for x, y, link in machine.dead_links:
+    for x, y, link in system_info.dead_links():
         dx, dy = link.to_vector()
         xx, yy = x + dx, y + dy
         if has_wrap_around_links:
-            xx %= machine.width
-            yy %= machine.height
-        if (x, y) in machine and (xx, yy) in machine:
+            xx %= system_info.width
+            yy %= system_info.height
+        if (x, y) in system_info and (xx, yy) in system_info:
             dead_links += 1
         else:
             links_to_dead_chips += 1
@@ -85,8 +84,8 @@ def get_spinnaker_info(mc):
     # count}}
     yield "Application states:"
     app_states = defaultdict(lambda: defaultdict(lambda: 0))
-    for x, y in machine:
-        for p in range(machine[(x, y)][Cores]):
+    for (x, y), chip_info in iteritems(system_info):
+        for p in range(chip_info.num_cores):
             status = mc.get_processor_status(x=x, y=y, p=p)
             app_states[status.app_name][status.cpu_state] += 1
     for app_name, states in sorted(iteritems(app_states),
