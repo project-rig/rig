@@ -2,10 +2,11 @@ import pytest
 
 from six import iteritems
 
-from rig.machine import Machine, Cores, SDRAM, Links
+from rig.links import Links
 from rig.netlist import Net
 
-from rig.place_and_route import place_and_route_wrapper, wrapper
+from rig.place_and_route import \
+    place_and_route_wrapper, wrapper, Machine, Cores, SDRAM
 from rig.place_and_route.utils import build_machine
 
 from rig.machine_control.machine_controller import SystemInfo, ChipInfo

@@ -3,7 +3,7 @@
 
 import random
 
-from ...machine import Links
+from rig.links import Links
 
 
 def longest_dimension_first(vector, start=(0, 0), width=None, height=None):

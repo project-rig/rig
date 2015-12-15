@@ -2,7 +2,7 @@
 
 import pytest
 
-from rig.machine import Machine, Cores, SDRAM
+from rig.place_and_route.machine import Machine, Cores, SDRAM
 
 from rig.netlist import Net
 

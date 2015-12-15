@@ -7,7 +7,7 @@ from math import sqrt
 
 import numpy as np
 
-from rig.machine import Links
+from rig.links import Links
 
 
 def to_xyz(xy):

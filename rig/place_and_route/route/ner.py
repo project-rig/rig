@@ -20,7 +20,9 @@ from ..exceptions import MachineHasDisconnectedSubregion
 
 from ..constraints import RouteEndpointConstraint
 
-from ...machine import Links, Cores
+from ..machine import Cores
+
+from ...links import Links
 
 from ...routing_table import Routes
 

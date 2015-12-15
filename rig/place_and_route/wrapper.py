@@ -3,7 +3,7 @@
 
 import warnings
 
-from rig.machine import Cores, SDRAM, SRAM
+from rig.place_and_route.machine import Cores, SDRAM, SRAM
 
 from rig.place_and_route.constraints import \
     ReserveResourceConstraint, AlignResourceConstraint

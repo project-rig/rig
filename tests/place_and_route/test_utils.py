@@ -8,7 +8,9 @@ from rig.place_and_route.utils import \
     build_machine, build_core_constraints, build_application_map, \
     build_routing_tables, MultisourceRouteError
 
-from rig.machine import Machine, Links, Cores
+from rig.place_and_route.machine import Machine, Cores
+
+from rig.links import Links
 
 from rig.netlist import Net
 

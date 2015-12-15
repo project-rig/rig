@@ -13,3 +13,6 @@ from .route.ner import route
 # High-Level Wrapper
 from .wrapper import place_and_route_wrapper
 from .wrapper import wrapper  # Deprecated
+
+# Machine datastructure
+from .machine import Machine, Cores, SDRAM, SRAM

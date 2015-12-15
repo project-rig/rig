@@ -24,7 +24,7 @@ from rig.machine_control.scp_connection import \
     SCPConnection, SCPError
 from rig.machine_control import boot, regions, consts, struct_file
 
-from rig.machine import Links, Machine
+from rig.links import Links
 
 from rig.routing_table import RoutingTableEntry, Routes
 

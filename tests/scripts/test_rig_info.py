@@ -9,7 +9,7 @@ import rig.scripts.rig_info as rig_info
 
 from rig.machine_control.scp_connection import TimeoutError
 
-from rig.machine import Links
+from rig.links import Links
 
 from rig.machine_control.bmp_controller import ADCInfo
 

@@ -1,7 +1,9 @@
 from rig.place_and_route.route.utils import \
     longest_dimension_first, links_between
 
-from rig.machine import Machine, Links
+from rig.place_and_route.machine import Machine
+
+from rig.links import Links
 
 
 def test_longest_dimension_first():

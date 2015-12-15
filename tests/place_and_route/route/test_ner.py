@@ -4,7 +4,9 @@ import random
 
 from collections import deque
 
-from rig.machine import Machine, Links
+from rig.place_and_route.machine import Machine
+
+from rig.links import Links
 
 from rig.place_and_route.routing_tree import RoutingTree
 

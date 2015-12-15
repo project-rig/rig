@@ -2,7 +2,7 @@ import pytest
 
 from rig.place_and_route.place.hilbert import hilbert, hilbert_chip_order
 
-from rig.machine import Machine
+from rig.place_and_route.machine import Machine
 
 
 class TestHilbert(object):

@@ -17,7 +17,8 @@ from rig.machine_control import boot, consts, regions, struct_file
 from rig.machine_control.scp_connection import SCPConnection, SCPError
 
 from rig import routing_table
-from rig.machine import Links
+
+from rig.links import Links
 
 from rig.geometry import spinn5_eth_coords, spinn5_local_eth_coord
 
@@ -1118,6 +1119,7 @@ class MachineController(ContextMixin):
         """Unreliably flood-fill APLX to a set of application cores.
 
         .. note::
+
             Most users should use the :py:meth:`.load_application` wrapper
             around this method which guarantees successful loading.
 
@@ -1131,6 +1133,7 @@ class MachineController(ContextMixin):
         :py:func:`~rig.place_and_route.util.build_application_map`.
 
         .. warning::
+
             The loading process is likely, but not guaranteed, to succeed.
             This is because the flood-fill packets used during loading are not
             guaranteed to arrive. The effect of this is one of the following:
@@ -1997,8 +2000,8 @@ class SystemInfo(dict):
     def __contains__(self, chip_core_or_link):
         """Test if a given chip, core or link is present and alive.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         chip_core_or_link : tuple
             * If of the form (x, y, :py:class:`~rig.machine.Links`), checks the
               link is present.

@@ -6,7 +6,7 @@ from collections import defaultdict, deque, namedtuple, OrderedDict
 
 from six import iteritems, itervalues
 
-from rig.machine import Machine, Cores, SDRAM, SRAM
+from rig.place_and_route.machine import Machine, Cores, SDRAM, SRAM
 
 from rig.routing_table import RoutingTableEntry
 
@@ -124,7 +124,7 @@ def build_core_constraints(system_info, machine, core_resource=Cores):
     which reserve any cores that that are already in use.
 
     The returned list of
-    :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`s
+    :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`\ s
     reserves all cores not in an Idle state (i.e. not a monitor and not already
     running an application).
 

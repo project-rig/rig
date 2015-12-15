@@ -8,7 +8,7 @@ from six import iteritems, next
 
 from rig.netlist import Net
 
-from rig.machine import Machine, Cores, SDRAM
+from rig.place_and_route.machine import Machine, Cores, SDRAM
 
 from rig.place_and_route.place import sa
 
