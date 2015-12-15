@@ -2,10 +2,14 @@ import pytest
 
 from six import iteritems
 
-from rig.machine import Machine, Cores, SDRAM
+from rig.machine import Machine, Cores, SDRAM, Links
 from rig.netlist import Net
 
 from rig.place_and_route import place_and_route_wrapper, wrapper
+from rig.place_and_route.utils import build_machine
+
+from rig.machine_control.machine_controller import SystemInfo, ChipInfo
+from rig.machine_control import consts
 
 
 class Vertex(object):
@@ -28,12 +32,13 @@ class TestWrapper(object):
     """Simple santy-check level tests of the wrapper, no comprehensive checks
     since internal function is largely tested elsewhere."""
 
-    @pytest.mark.parametrize("fn", [wrapper, place_and_route_wrapper])
-    def test_empty(self, fn):
+    @pytest.mark.parametrize("fn, m_or_si",
+                             [(wrapper, Machine(1, 1)),
+                              (place_and_route_wrapper, SystemInfo(1, 1))])
+    def test_empty(self, fn, m_or_si):
         # Simplest possible case of an empty system
-        m = Machine(1, 1)
         placements, allocations, application_map, routing_tables = \
-            fn({}, {}, [], {}, m)
+            fn({}, {}, [], {}, m_or_si)
         assert placements == {}
         assert allocations == {}
         assert application_map == {}
@@ -41,6 +46,7 @@ class TestWrapper(object):
 
     @pytest.mark.parametrize("fn, add_args, reserve_monitor, align_sdram",
                              [(place_and_route_wrapper, False, False, False),
+                              (place_and_route_wrapper, False, True, False),
                               (wrapper, False, True, True),
                               (wrapper, True, True, True),
                               (wrapper, True, False, False)])
@@ -48,14 +54,30 @@ class TestWrapper(object):
         # A simple example where a ring network is defined. In the ring, each
         # node is connected by a multicast net to its two immediate neighbours.
 
-        m = Machine(2, 2)
+        kwargs = {}
 
-        # Makes the placement process signficantly faster...
-        m.chip_resources[Cores] = 4
+        # A simple 2x2 machine with 4 cores on each chip
+        si = SystemInfo(2, 2, {
+            (x, y): ChipInfo(
+                num_cores=4,
+                core_states=[consts.AppState.run
+                             if reserve_monitor else
+                             consts.AppState.idle] + [consts.AppState.idle]*3,
+                working_links=set(Links),
+                largest_free_sdram_block=100,
+                largest_free_sram_block=10)
+            for x in range(2)
+            for y in range(2)
+        })
+
+        if fn is place_and_route_wrapper:
+            kwargs["system_info"] = si
+        else:
+            kwargs["machine"] = build_machine(si)
 
         # Create a ring network which will consume all available cores
-        num_vertices = m.width * m.height * (
-            m.chip_resources[Cores] - (1 if reserve_monitor else 0))
+        num_vertices = si.width * si.height * (
+            si[(0, 0)].num_cores - (1 if reserve_monitor else 0))
         vertices = [Vertex() for _ in range(num_vertices)]
         vertices_resources = {v: {Cores: 1, SDRAM: 3} for v in vertices}
         vertices_applications = {v: "app.aplx" for v in vertices}
@@ -68,16 +90,12 @@ class TestWrapper(object):
         # Add constraint arguments only for old wrapper function, not for
         # place_and_route_wrapper which does not support the arguments.
         if add_args:
-            kwargs = {
-                "reserve_monitor": reserve_monitor,
-                "align_sdram": align_sdram,
-            }
-        else:
-            kwargs = {}
+            kwargs["reserve_monitor"] = reserve_monitor
+            kwargs["align_sdram"] = align_sdram
 
         placements, allocations, application_map, routing_tables = \
             fn(vertices_resources, vertices_applications,
-               nets, net_keys, m, **kwargs)
+               nets, net_keys, **kwargs)
 
         # Check all vertices are placed & allocated
         assert set(vertices) == set(placements) == set(allocations)
@@ -90,7 +108,7 @@ class TestWrapper(object):
             allocation = allocations[vertex]
 
             # Placed in the machine
-            assert (x, y) in m
+            assert (x, y) in si
 
             # Got one core
             cores = allocation[Cores]
@@ -98,9 +116,9 @@ class TestWrapper(object):
 
             # Not the monitor and within the cores that exist
             if reserve_monitor:
-                assert 1 < cores.stop <= m.chip_resources[Cores]
+                assert 1 < cores.stop <= si[(x, y)].num_cores
             else:
-                assert 0 < cores.stop <= m.chip_resources[Cores]
+                assert 0 < cores.stop <= si[(x, y)].num_cores
 
             # No cores are over-allocated
             assert (x, y, cores.start) not in used_cores
@@ -121,13 +139,13 @@ class TestWrapper(object):
         # Check the correct application map is given (same app on every core)
         assert application_map == {  # pragma: no branch
             "app.aplx": {xy: set(range(1 if reserve_monitor else 0,
-                                       m.chip_resources[Cores]))
-                         for xy in m}}
+                                       si[xy].num_cores))
+                         for xy in si}}
 
         # Check that all routing keys are observed at least once
         used_keys = set()
         for chip, routing_entries in iteritems(routing_tables):
-            assert chip in m
+            assert chip in si
             for entry in routing_entries:
                 # No routes should terminate on a null
                 assert entry.route != set()
