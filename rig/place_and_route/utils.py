@@ -79,15 +79,22 @@ def build_machine(system_info,
         resources available within a SpiNNaker machine in the form used by the
         place-and-route infrastructure.
     """
-    max_cores = max((c.num_cores for c in itervalues(system_info)),
-                    default=0)
+    try:
+        max_cores = max(c.num_cores for c in itervalues(system_info))
+    except ValueError:
+        max_cores = 0
 
-    max_sdram = max((c.largest_free_sdram_block
-                     for c in itervalues(system_info)),
-                    default=0)
-    max_sram = max((c.largest_free_sram_block
-                    for c in itervalues(system_info)),
-                   default=0)
+    try:
+        max_sdram = max(c.largest_free_sdram_block
+                        for c in itervalues(system_info))
+    except ValueError:
+        max_sdram = 0
+
+    try:
+        max_sram = max(c.largest_free_sram_block
+                       for c in itervalues(system_info))
+    except ValueError:
+        max_sram = 0
 
     return Machine(width=system_info.width,
                    height=system_info.height,
