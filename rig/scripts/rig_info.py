@@ -37,7 +37,8 @@ def get_spinnaker_info(mc):
     yield ""
 
     system_info = mc.get_system_info()
-    yield "Machine dimensions: {}x{}".format(system_info.width, system_info.height)
+    yield "Machine dimensions: {}x{}".format(
+        system_info.width, system_info.height)
 
     # Construct a histogram of the number of cores in the available chips
     num_chips = len(system_info)

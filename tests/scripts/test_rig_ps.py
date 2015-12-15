@@ -13,8 +13,6 @@ from rig.machine_control.consts import AppState, RuntimeException
 
 from rig.machine_control.machine_controller import SystemInfo, ChipInfo
 
-from rig.machine_control import consts
-
 
 def test_match():
     assert rig_ps.match("foo", None)

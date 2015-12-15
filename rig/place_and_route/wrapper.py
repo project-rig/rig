@@ -59,7 +59,8 @@ def place_and_route_wrapper(vertices_resources, vertices_applications,
         A dictionary from nets to (key, mask) tuples to be used in SpiNNaker
         routing tables for routes implementing this net. The key and mask
         should be given as 32-bit integers.
-    system_info : :py:class:`~rig.machine_control.machine_controller.SystemInfo`
+    system_info : \
+            :py:class:`~rig.machine_control.machine_controller.SystemInfo`
         A data structure which defines the resources available in the target
         SpiNNaker machine, typically returned by
         :py:meth:`rig.machine_control.MachineController.get_system_info`. This
