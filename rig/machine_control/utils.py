@@ -1,5 +1,6 @@
 import six
-from ..machine import Cores, SDRAM
+
+from rig.place_and_route import Cores, SDRAM
 
 
 def sdram_alloc_for_vertices(controller, placements, allocations,

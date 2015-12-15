@@ -4,7 +4,9 @@ import pytest
 
 from collections import deque
 
-from rig.machine import Machine, Links, Cores
+from rig.place_and_route.machine import Machine, Cores
+
+from rig.links import Links
 
 from rig.netlist import Net
 

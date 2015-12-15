@@ -1,6 +1,6 @@
 import pytest
 
-from rig.machine import Links
+from rig.links import Links
 
 from rig.routing_table import Routes
 

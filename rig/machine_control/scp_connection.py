@@ -23,7 +23,7 @@ class scpcall(collections.namedtuple("_scpcall", "x, y, p, cmd, arg1, arg2, "
         :py:class:`~.SCPConnection.send_scp` but for the addition of `callback`
         between `expected_args` and `timeout`.
 
-    Attributes
+    Parameters
     ----------
     x : int
     y : int

@@ -16,20 +16,34 @@ import rig.scripts.rig_counters as rig_counters
 
 from rig.machine_control.scp_connection import TimeoutError
 
-from rig.machine import Machine
+from rig.machine_control.machine_controller import SystemInfo, ChipInfo
 
 from rig.machine_control.machine_controller import RouterDiagnostics
 
 
-def test_sample_counters():
+@pytest.fixture
+def system_info():
+    return SystemInfo(2, 2, {
+        (x, y): ChipInfo(
+            # Unused...
+            num_cores=0,
+            core_states=[],
+            working_links=set(),
+            largest_free_sdram_block=0,
+            largest_free_sram_block=0)
+        for x in range(2)
+        for y in range(2)
+    })
+
+
+def test_sample_counters(system_info):
     mc = mock.Mock()
     mc.get_router_diagnostics.return_value = RouterDiagnostics(
         *(0 for _ in RouterDiagnostics._fields))
-    machine = Machine(2, 2)
 
     # All counters should have been sampled
-    counters = rig_counters.sample_counters(mc, machine)
-    assert set(counters) == set(machine)
+    counters = rig_counters.sample_counters(mc, system_info)
+    assert set(counters) == set(system_info)
     assert all(all(v == 0 for v in counters[xy]) for xy in counters)
 
 
@@ -128,11 +142,11 @@ def test_run_command(capsys, monkeypatch, keyboard_interrupt):
 
 @pytest.mark.parametrize("multiple", [False, True])
 @pytest.mark.parametrize("detailed", [False, True])
-def test_monitor_counters(multiple, detailed):
+def test_monitor_counters(multiple, detailed, system_info):
     mock_mc = mock.Mock()
-    mock_mc.get_machine.return_value = Machine(2, 2)
+    mock_mc.get_system_info.return_value = system_info
 
-    cur_count = {xy: 0 for xy in mock_mc.get_machine()}
+    cur_count = {xy: 0 for xy in mock_mc.get_system_info()}
 
     def get_router_diagnostics(x, y):
         counters = RouterDiagnostics(*(cur_count[(x, y)] * (i + 1)
@@ -232,10 +246,10 @@ def test_unknown_arch(monkeypatch):
 @pytest.mark.parametrize("output_to_file", [None, "-", "temp"])
 @pytest.mark.parametrize("use_command", [True, False])
 def test_command(monkeypatch, capsys, counter_args, counters, output_to_file,
-                 use_command):
+                 use_command, system_info):
     # Make sure the less-trivial commandline arguments are handled correctly
     mock_mc = mock.Mock()
-    mock_mc.get_machine.return_value = Machine(2, 2)
+    mock_mc.get_system_info.return_value = system_info
     mock_mc.get_router_diagnostics.return_value = RouterDiagnostics(*[0] * 16)
     mock_info = mock.Mock()
     mock_info.version_string = "SpiNNaker"
