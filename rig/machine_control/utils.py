@@ -35,13 +35,14 @@ def sdram_alloc_for_vertices(controller, placements, allocations,
         Mapping of vertices to the resources they have been allocated.
 
         A block of memory of the size specified by the `sdram_resource`
-        (default: :py:class:`~rig.machine.SDRAM`) resource will be allocated
-        for each vertex. Note that location of the supplied allocation is *not*
-        used.
+        (default: :py:class:`~rig.place_and_route.SDRAM`) resource will be
+        allocated for each vertex. Note that location of the supplied
+        allocation is *not* used.
 
         When `core_as_tag=True`, the tag allocated will be the ID of the first
         core used by the vertex (indicated by the `cores_resource`, default
-        :py:class:`~rig.machine.Cores`), otherwise the tag will be set to 0.
+        :py:class:`~rig.place_and_route.Cores`), otherwise the tag will be set
+        to 0.
     clear : bool
         If True the requested memory will be filled with zeros before the
         pointer is returned.  If False (the default) the memory will be left
@@ -55,9 +56,9 @@ def sdram_alloc_for_vertices(controller, placements, allocations,
     buffer_size : int
         Size of write buffer (in bytes) to allocate to _each_ file-like object
         created by this method.
-    sdram_resource : resource (default :py:class:`~rig.machine.SDRAM`)
+    sdram_resource : resource (default :py:class:`~rig.place_and_route.SDRAM`)
         Key used to indicate SDRAM usage in the resources dictionary.
-    cores_resource : resource (default :py:class:`~rig.machine.Cores`)
+    cores_resource : resource (default :py:class:`~rig.place_and_route.Cores`)
         Key used to indicate cores which have been allocated in the
         allocations dictionary.
 

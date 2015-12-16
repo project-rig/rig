@@ -50,7 +50,7 @@ class Links(IntEnum):
 
         Returns
         -------
-        :py:class:`~rig.machine.Links`
+        :py:class:`~rig.links.Links`
             The link direction to travel in the direction indicated by the
             vector.
         """

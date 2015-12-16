@@ -34,7 +34,7 @@ class Routes(IntEnum):
     Note that the integer values assigned are chosen to match the numbers used
     to identify routes in the low-level software API and hardware registers.
 
-    Note that you can directly cast from a :py:class:`rig.machine.Links` to a
+    Note that you can directly cast from a :py:class:`rig.links.Links` to a
     Routes value.
     """
 

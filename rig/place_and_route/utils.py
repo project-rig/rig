@@ -21,7 +21,7 @@ def build_machine(system_info,
                   core_resource=Cores,
                   sdram_resource=SDRAM,
                   sram_resource=SRAM):
-    """Build a :py:class:`~rig.machine.Machine` object from a
+    """Build a :py:class:`~rig.place_and_route.Machine` object from a
     :py:class:`~rig.machine_control.machine_controller.SystemInfo` object.
 
     .. note::
@@ -56,16 +56,16 @@ def build_machine(system_info,
         The resource availability information for a SpiNNaker machine,
         typically produced by
         :py:meth:`rig.machine_control.MachineController.get_system_info`.
-    core_resource : resource (default: :py:class:`rig.machine.Cores`)
+    core_resource : resource (default: :py:class:`rig.place_and_route.Cores`)
         The resource type to use to represent the number of working cores on a
         chip, including the monitor, those already in use and all idle cores.
-    sdram_resource : resource (default: :py:class:`rig.machine.SDRAM`)
+    sdram_resource : resource (default: :py:class:`rig.place_and_route.SDRAM`)
         The resource type to use to represent SDRAM on a chip. This resource
         will be set to the number of bytes in the largest free block in the
         SDRAM heap. This gives a conservative estimate of the amount of free
         SDRAM on the chip which will be an underestimate in the presence of
         memory fragmentation.
-    sram_resource : resource (default: :py:class:`rig.machine.SRAM`)
+    sram_resource : resource (default: :py:class:`rig.place_and_route.SRAM`)
         The resource type to use to represent SRAM (a.k.a. system RAM) on a
         chip. This resource will be set to the number of bytes in the largest
         free block in the SRAM heap. This gives a conservative estimate of the
@@ -74,8 +74,8 @@ def build_machine(system_info,
 
     Returns
     -------
-    :py:class:`rig.machine.Machine`
-        A :py:class:`~rig.machine.Machine` object representing the
+    :py:class:`rig.place_and_route.Machine`
+        A :py:class:`~rig.place_and_route.Machine` object representing the
         resources available within a SpiNNaker machine in the form used by the
         place-and-route infrastructure.
     """
@@ -130,12 +130,12 @@ def build_core_constraints(system_info, machine, core_resource=Cores):
 
     .. note::
 
-        Historically it was required that a
-        :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
-        was manually added by every application which reserved the monitor core
-        on each chip. Improves on this by automatically generating appropriate
-        constraints for reserving not just monitor cores but also other cores
-        which are already in use.
+        Historically, every application was required to add a
+        :py:class:~rig.place_and_route.constraints.ReserveResourceConstraint to
+        reserve the monitor processor on each chip. This method improves upon
+        this approach by automatically generating constraints which reserve not
+        just the monitor core but also any other cores which are already in
+        use.
 
     Parameters
     ----------
@@ -143,19 +143,19 @@ def build_core_constraints(system_info, machine, core_resource=Cores):
         The resource availability information for a SpiNNaker machine,
         typically produced by
         :py:meth:`rig.machine_control.MachineController.get_system_info`.
-    machine : :py:class:`~rig.machine.Machine`
-        The :py:class:`~rig.machine.Machine` model of the current SpiNNaker
-        machine (e.g. from :py:func:`.build_machine`).
-    core_resource : resource (Default: :py:data:`~rig.machine.Cores`)
+    machine : :py:class:`~rig.place_and_route.Machine`
+        The :py:class:`~rig.place_and_route.Machine` model of the current
+        SpiNNaker machine (e.g. from :py:func:`.build_machine`).
+    core_resource : resource (Default: :py:data:`~rig.place_and_route.Cores`)
         The resource identifier used for cores.
 
     Returns
     -------
     [:py:class:`rig.place_and_route.constraints.ReserveResourceConstraint`, \
             ...]
-        A set of place-and-route constraints which reserves all non-idle. The
-        resource type given in the ``core_resource`` argument will be reserved
-        accordingly.
+        A set of place-and-route constraints which reserves all non-idle cores.
+        The resource type given in the ``core_resource`` argument will be
+        reserved accordingly.
     """
     constraints = []
 

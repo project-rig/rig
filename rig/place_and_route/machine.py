@@ -82,7 +82,7 @@ class Machine(object):
         unavailable. Links leaving a dead chip are implicitly marked as dead.
     dead_links : set
         A set `(x,y,link)` where `x` and `y` are a chip's coordinates and
-        `link` is a value from the Enum :py:class:`~rig.machine.Links`. Note
+        `link` is a value from the Enum :py:class:`~rig.links.Links`. Note
         that links have two directions and both should be defined if a link is
         dead in both directions (the typical case).
     """

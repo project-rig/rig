@@ -146,7 +146,7 @@ def copy_and_disconnect_tree(root, machine):
     root : :py:class:`~rig.place_and_route.routing_tree.RoutingTree`
         The root of the RoutingTree that contains nothing but RoutingTrees
         (i.e. no children which are vertices or links).
-    machine : :py:class:`~rig.machine.Machine`
+    machine : :py:class:`~rig.place_and_route.Machine`
         The machine in which the routes exist.
 
     Returns
@@ -226,13 +226,13 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
         An element from `sources` which is used as a guiding heuristic for the
         A* algorithm.
     sources : set([(x, y), ...])
-    machine : :py:class:`~rig.machine.Machine`
+    machine : :py:class:`~rig.place_and_route.Machine`
     wrap_around : bool
         Consider wrap-around links in heuristic distance calculations.
 
     Returns
     -------
-    [(:py:class:`~rig.machine.Links`, (x, y)), ...]
+    [(:py:class:`~rig.links.Links`, (x, y)), ...]
         A path starting with a coordinate in `sources` and terminating at
         connected neighbour of `sink` (i.e. the path does not include `sink`).
         The direction given is the link down which to proceed from the given
@@ -322,7 +322,7 @@ def avoid_dead_links(root, machine, wrap_around=False):
     root : :py:class:`~rig.place_and_route.routing_tree.RoutingTree`
         The root of the RoutingTree which contains nothing but RoutingTrees
         (i.e. no vertices and links).
-    machine : :py:class:`~rig.machine.Machine`
+    machine : :py:class:`~rig.place_and_route.Machine`
         The machine in which the routes exist.
     wrap_around : bool
         Consider wrap-around links in pathfinding heuristics.

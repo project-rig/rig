@@ -36,7 +36,7 @@ def _initial_placement(movable_vertices, vertices_resources, machine, random):
     movable_vertices : [vertex, ...]
         A list of the vertices to be given a random initial placement.
     vertices_resources : {vertex: {resource: value, ...}, ...}
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
         A machine object describing the machine into which the vertices should
         be placed.
 
@@ -120,7 +120,7 @@ def _net_cost(net, placements, has_wrap_around_links, machine):
     net : :py:class:`rig.netlist.Net`
     placements : {vertex: (x, y), ...}
     has_wrap_around_links : bool
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
 
     Returns
     -------
@@ -208,7 +208,7 @@ def _vertex_net_cost(vertex, v2n, placements, has_wrap_around_links, machine):
     v2n : {vertex: [:py:class:`rig.netlist.Net`, ...], ...}
     placements : {vertex: (x, y), ...}
     has_wrap_around_links : bool
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
 
     Returns
     -------
@@ -237,7 +237,7 @@ def _get_candidate_swap(resources, location,
     l2v : {(x, y): [vertex, ...], ...}
     vertices_resources : {vertex: {resource: value, ...}, ...}
     fixed_vertices : {vertex: (x, y), ...}
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
 
     Returns
     -------
@@ -295,7 +295,7 @@ def _swap(vas, vas_location, vbs, vbs_location, l2v, vertices_resources,
     l2v : {(x, y): [vertex, ...], ...}
     vertices_resources : {vertex: {resource: value, ...}, ...}
     placements : {vertex: (x, y), ...}
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
     """
     # Get the lists of vertices at either location
     vas_location2v = l2v[vas_location]
@@ -361,7 +361,7 @@ def _step(vertices, d_limit, temperature, placements, l2v, v2n,
     vertices_resources : {vertex: {resource: value, ...}, ...}
     fixed_vertices : {vertex: (x, y), ...}
         The set of vertices which must not be moved.
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
         Describes the state of the machine including the resources actually
         available on each chip given the current placements. Updated if a swap
         is made.

@@ -65,7 +65,7 @@ def place_and_route_wrapper(vertices_resources, vertices_applications,
         SpiNNaker machine, typically returned by
         :py:meth:`rig.machine_control.MachineController.get_system_info`. This
         information will be used internally to build a
-        :py:class:`~rig.machine.Machine` and set of
+        :py:class:`~rig.place_and_route.Machine` and set of
         :py:mod:`rig.place_and_route.constraints` which describe the SpiNNaker
         machine used and ensure placement, allocation and routing only use
         working and unused chips, cores, memory and links. If greater control
@@ -89,11 +89,11 @@ def place_and_route_wrapper(vertices_resources, vertices_applications,
         **Optional.** Routing algorithm to use.
     route_kwargs : dict (Default: {})
         **Optional.** Algorithm-specific arguments for the router.
-    core_resource : resource (Default: :py:data:`~rig.machine.Cores`)
+    core_resource : resource (Default: :py:data:`~rig.place_and_route.Cores`)
         **Optional.** The resource identifier used for cores.
-    sdram_resource : resource (Default: :py:data:`~rig.machine.SDRAM`)
+    sdram_resource : resource (Default: :py:data:`~rig.place_and_route.SDRAM`)
         **Optional.** The resource identifier used for SDRAM.
-    sram_resource : resource (Default: :py:data:`~rig.machine.SRAM`)
+    sram_resource : resource (Default: :py:data:`~rig.place_and_route.SRAM`)
         **Optional.** The resource identifier used for SRAM (System RAM).
 
     Returns
@@ -188,7 +188,7 @@ def wrapper(vertices_resources, vertices_applications,
         A dictionary from nets to (key, mask) tuples to be used in SpiNNaker
         routing tables for routes implementing this net. The key and mask
         should be given as 32-bit integers.
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
         A data structure which defines the resources available in the target
         SpiNNaker machine.
     constraints : [constraint, ...]
@@ -215,9 +215,9 @@ def wrapper(vertices_resources, vertices_applications,
         **Optional.** Routing algorithm to use.
     route_kwargs : dict (Default: {})
         **Optional.** Algorithm-specific arguments for the router.
-    core_resource : resource (Default: :py:data:`~rig.machine.Cores`)
+    core_resource : resource (Default: :py:data:`~rig.place_and_route.Cores`)
         **Optional.** The resource identifier used for cores.
-    sdram_resource : resource (Default: :py:data:`~rig.machine.SDRAM`)
+    sdram_resource : resource (Default: :py:data:`~rig.place_and_route.SDRAM`)
         **Optional.** The resource identifier used for SDRAM.
 
     Returns

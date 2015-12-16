@@ -528,7 +528,7 @@ class MachineController(ContextMixin):
             The coordinates of the chip from which the command will be sent,
             *not* the coordinates of the chip on which the write will be
             performed.
-        link : :py:class:`rig.machine.Links`
+        link : :py:class:`rig.links.Links`
             The link down which the write should be sent.
         """
         if address % 4:
@@ -582,7 +582,7 @@ class MachineController(ContextMixin):
             The coordinates of the chip from which the command will be sent,
             *not* the coordinates of the chip on which the read will be
             performed.
-        link : :py:class:`rig.machine.Links`
+        link : :py:class:`rig.links.Links`
             The link down which the read should be sent.
 
         Returns
@@ -1699,7 +1699,7 @@ class MachineController(ContextMixin):
 
         Returns
         -------
-        set([:py:class:`rig.machine.Links`, ...])
+        set([:py:class:`rig.links.Links`, ...])
         """
         return self.get_chip_info(x, y).working_links
 
@@ -1726,7 +1726,7 @@ class MachineController(ContextMixin):
 
         .. note::
             This method replaces the deprecated :py:meth:`.get_machine` method.
-            To build a :py:class:`~rig.machine.Machine` for
+            To build a :py:class:`~rig.place_and_route.Machine` for
             place-and-route purposes, the
             :py:func:`rig.place_and_route.utils.build_machine` utility function
             may be used with :py:meth:`.get_system_info` like so::
@@ -1783,10 +1783,10 @@ class MachineController(ContextMixin):
             general resources available in a SpiNNaker machine. This method may
             be removed in the future.
 
-            To build a :py:class:`~rig.machine.Machine` for place-and-route
-            purposes, the :py:func:`rig.place_and_route.utils.build_machine`
-            utility function may be used with :py:meth:`.get_system_info` like
-            so::
+            To build a :py:class:`~rig.place_and_route.Machine` for
+            place-and-route purposes, the
+            :py:func:`rig.place_and_route.utils.build_machine` utility function
+            may be used with :py:meth:`.get_system_info` like so::
 
                 >> from rig.place_and_route import build_machine
                 >> sys_info = mc.get_system_info()
@@ -1794,10 +1794,10 @@ class MachineController(ContextMixin):
 
             This method also historically used the size of the SDRAM and
             SRAM heaps to set the respective resource values in the
-            :py:class:`~rig.machine.Machine`. :py:meth:`.get_machine` since
-            changed to reporting the size of the largest free block in the
-            SDRAM and SRAM heaps on each chip. Most applications should not be
-            negatively impacted by this change.
+            :py:class:`~rig.place_and_route.Machine`. :py:meth:`.get_machine`
+            since changed to reporting the size of the largest free block in
+            the SDRAM and SRAM heaps on each chip. Most applications should not
+            be negatively impacted by this change.
 
         .. note::
             The chip (x, y) supplied is the one where the search for working
@@ -1811,19 +1811,19 @@ class MachineController(ContextMixin):
 
         Returns
         -------
-        :py:class:`~rig.machine.Machine`
+        :py:class:`~rig.place_and_route.Machine`
             This Machine will include all cores reported as working by the
             system software with the following resources defined:
 
-            :py:data:`~rig.machine.Cores`
+            :py:data:`~rig.place_and_route.Cores`
                 Number of working cores on each chip (including the monitor
                 core, any cores already running applications and idle cores).
-            :py:data:`~rig.machine.SDRAM`
+            :py:data:`~rig.place_and_route.SDRAM`
                 The size of the largest free block of SDRAM on the heap. This
                 gives a conservative measure of how much SDRAM is free on a
                 given chip (which will underestimate availability if the
                 system's memory is highly fragmented.
-            :py:data:`~rig.machine.SRAM`
+            :py:data:`~rig.place_and_route.SRAM`
                 The size of the largest free block of SRAM on the heap. This
                 gives a conservative measure of how much SRAM is free on a
                 given chip (which will underestimate availability if the
@@ -1878,9 +1878,9 @@ class ChipInfo(collections.namedtuple(
     num_cores : int
         The number of working cores on the chip.
     core_states : [:py:class:`~rig.machine_control.consts.AppState`, ...]
-        The state of each working core in the machine in a lust ``num_cores``
+        The state of each working core in the machine in a list ``num_cores``
         in length.
-    working_links : set([`rig.machine.Links`, ...])
+    working_links : set([`rig.links.Links`, ...])
         The set of working links leaving that chip. For a link to be considered
         working, the link must work in both directions and the device at the
         far end must also be a SpiNNaker chip.
@@ -1956,7 +1956,7 @@ class SystemInfo(dict):
 
         Yields
         ------
-        (x, y, :py:class:`rig.machine.Links`)
+        (x, y, :py:class:`rig.links.Links`)
             A working link leaving a chip from the perspective of the chip. For
             example ``(0, 0, Links.north)`` would be the link going north from
             chip (0, 0) to chip (0, 1).
@@ -1974,7 +1974,7 @@ class SystemInfo(dict):
 
         Yields
         ------
-        (x, y, :py:class:`rig.machine.Links`)
+        (x, y, :py:class:`rig.links.Links`)
             A working link leaving a chip from the perspective of the chip. For
             example ``(0, 0, Links.north)`` would be the link going north from
             chip (0, 0) to chip (0, 1).
@@ -2003,7 +2003,7 @@ class SystemInfo(dict):
         Parameters
         ----------
         chip_core_or_link : tuple
-            * If of the form (x, y, :py:class:`~rig.machine.Links`), checks the
+            * If of the form (x, y, :py:class:`~rig.links.Links`), checks the
               link is present.
             * If of the form (x, y, p), checks the core is present.
             * If of the form (x, y, p,
