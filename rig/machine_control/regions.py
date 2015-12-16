@@ -159,7 +159,7 @@ class RegionCoreTree(object):
             # Iterate through the subregions and recurse, we iterate through in
             # the order which ensures that anything we yield is in increasing
             # order.
-            for i in (4*y + x for x in range(4) for y in range(4)):
+            for i in (4*x + y for y in range(4) for x in range(4)):
                 subregion = self.subregions[i]
                 if subregion is not None:
                     for (region, coremask) in \
