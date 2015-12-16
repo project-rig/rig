@@ -1,9 +1,12 @@
 import pytest
 
+from collections import defaultdict
+
 from rig.place_and_route.utils import \
     build_machine, build_core_constraints, build_application_map, \
     build_routing_tables, MultisourceRouteError, \
-    _get_minimal_core_reservations
+    _get_minimal_core_reservations, \
+    build_and_minimise_routing_tables
 
 from rig.place_and_route.machine import Machine, Cores
 
@@ -11,7 +14,8 @@ from rig.links import Links
 
 from rig.netlist import Net
 
-from rig.routing_table import Routes, RoutingTableEntry
+from rig.routing_table import (
+    Routes, RoutingTableEntry, MinimisationFailedError)
 
 from rig.place_and_route.routing_tree import RoutingTree
 
@@ -480,3 +484,140 @@ def test_build_routing_tables_repeated_key_mask_fork_not_allowed():
     assert "(1, 1)" in str(err)  # Co-ordinate of the fork
     assert "0x00000000" in str(err)  # Key that causes the problem
     assert "0x0000000f" in str(err)  # Mask that causes the problem
+
+
+def test_build_minimised_routing_tables():
+    """Test building and minimising routing tables.
+
+    Key 0000:
+
+                    (1, 1)
+                      ^
+                      |
+                      |
+        (0, 0) ---> (0, 1)
+
+    Key 0011:
+
+                    (1, 1)
+                      ^
+                      |
+                      |
+                    (0, 1) <---- (0, 2)
+
+    Key 0001:
+
+        (0, 0) ---> (0, 1) ---> (0, 2)
+    """
+    # Create the nets and net->key mapping
+    nets = [object() for _ in range(3)]
+    net_keys = {nets[0]: (0x0, 0xf),
+                nets[1]: (0x3, 0xf),
+                nets[2]: (0x1, 0xf)}
+
+    # Create the routing trees
+    routes = {
+        nets[0]: RoutingTree((0, 0), {
+            (Routes.east, RoutingTree((0, 1), {
+                (Routes.north, RoutingTree((1, 1), {
+                    (Routes.core(1), object())
+                }))
+            }))
+        }),
+        nets[1]: RoutingTree((0, 2), {
+            (Routes.west, RoutingTree((0, 1), {
+                (Routes.north, RoutingTree((1, 1), {
+                    (Routes.core(1), object())
+                }))
+            }))
+        }),
+        nets[2]: RoutingTree((0, 0), {
+            (Routes.east, RoutingTree((0, 1), {
+                (Routes.east, RoutingTree((0, 2), {
+                    (Routes.core(1), object())
+                }))
+            }))
+        }),
+    }
+
+    # Get the routing tables, with no minimisation
+    routing_tables = build_and_minimise_routing_tables(
+        routes, net_keys)
+
+    # Check at (0, 0)
+    e0 = RoutingTableEntry({Routes.east}, 0x0, 0xf)
+    e1 = RoutingTableEntry({Routes.east}, 0x1, 0xf)
+    assert (routing_tables[(0, 0)] == [e0, e1] or
+            routing_tables[(0, 0)] == [e1, e0])
+
+    # Check at (0, 1)
+    e0 = RoutingTableEntry({Routes.north}, 0x0, 0xf)
+    e1 = RoutingTableEntry({Routes.east}, 0x1, 0xf)
+    e2 = RoutingTableEntry({Routes.north}, 0x3, 0xf)
+    assert (routing_tables[(0, 1)] == [e0, e1, e2] or
+            routing_tables[(0, 1)] == [e0, e2, e1] or
+            routing_tables[(0, 1)] == [e1, e0, e2] or
+            routing_tables[(0, 1)] == [e1, e2, e0] or
+            routing_tables[(0, 1)] == [e2, e0, e1] or
+            routing_tables[(0, 1)] == [e2, e1, e0])
+
+    # Check at (0, 2)
+    e0 = RoutingTableEntry({Routes.core(1)}, 0x1, 0xf)
+    e1 = RoutingTableEntry({Routes.west}, 0x3, 0xf)
+    assert (routing_tables[(0, 2)] == [e0, e1] or
+            routing_tables[(0, 2)] == [e1, e0])
+
+    # Check at (1, 1)
+    e0 = RoutingTableEntry({Routes.core(1)}, 0x0, 0xf)
+    e1 = RoutingTableEntry({Routes.core(1)}, 0x3, 0xf)
+    assert (routing_tables[(1, 1)] == [e0, e1] or
+            routing_tables[(1, 1)] == [e1, e0])
+
+    # Minimise down to 2 entries max
+    routing_tables = build_and_minimise_routing_tables(
+        routes, net_keys, target_length=2)
+
+    # Check at (0, 0)
+    e0 = RoutingTableEntry({Routes.east}, 0x0, 0xf)
+    e1 = RoutingTableEntry({Routes.east}, 0x1, 0xf)
+    assert (routing_tables[(0, 0)] == [e0, e1] or
+            routing_tables[(0, 0)] == [e1, e0])
+
+    # Check at (0, 1) - NOTE: ORDER IS IMPORTANT!
+    assert routing_tables[(0, 1)] == [
+        RoutingTableEntry({Routes.east}, 0x1, 0xf),
+        RoutingTableEntry({Routes.north}, 0x0, 0xc),
+    ]
+
+    # Check at (0, 2)
+    e0 = RoutingTableEntry({Routes.core(1)}, 0x1, 0xf)
+    e1 = RoutingTableEntry({Routes.west}, 0x3, 0xf)
+    assert (routing_tables[(0, 2)] == [e0, e1] or
+            routing_tables[(0, 2)] == [e1, e0])
+
+    # Check at (1, 1)
+    e0 = RoutingTableEntry({Routes.core(1)}, 0x0, 0xf)
+    e1 = RoutingTableEntry({Routes.core(1)}, 0x3, 0xf)
+    assert (routing_tables[(1, 1)] == [e0, e1] or
+            routing_tables[(1, 1)] == [e1, e0])
+
+    # Minimise down to 1 entry max - this is impossible for (0,1) and (0, 2)
+    with pytest.raises(MinimisationFailedError) as e:
+        build_and_minimise_routing_tables(routes, net_keys, target_length=1)
+    assert "(0, 1)" in str(e) or "(0, 2)" in str(e)
+
+    # Minimise down to 1 entry max for chip (0, 1)
+    lengths = defaultdict(lambda: 2)  # pragma: no branch (coverage check bug)
+    lengths[(0, 1)] = 1
+    with pytest.raises(MinimisationFailedError) as e:
+        build_and_minimise_routing_tables(routes, net_keys,
+                                          target_length=lengths)
+    assert "(0, 1)" in str(e)
+
+    # Minimise down to 1 entry max for chip (0, 2)
+    lengths = defaultdict(lambda: 2)
+    lengths[(0, 2)] = 1
+    with pytest.raises(MinimisationFailedError) as e:
+        build_and_minimise_routing_tables(routes, net_keys,
+                                          target_length=lengths)
+    assert "(0, 2)" in str(e)

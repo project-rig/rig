@@ -2,7 +2,26 @@ import pytest
 
 from rig.links import Links
 
-from rig.routing_table import Routes
+from rig.routing_table import Routes, RoutingTableEntry
+
+
+class TestRoutingTableEntry(object):
+    def test_str(self):
+        # Check that the MSB and LSB are put in the right places
+        rte = RoutingTableEntry({}, 0x0, 0x1)
+        assert "X"*31 + "0" in str(rte)
+
+        rte = RoutingTableEntry({}, 0x80000000, 0x80000000)
+        assert "1" + "X"*31 in str(rte)
+
+        # Use "!" for bits that could never match
+        rte = RoutingTableEntry({}, 0xffffffff, 0x00000000)
+        assert "!"*32 in str(rte)
+
+        # Check that the routes are reported correctly
+        rte = RoutingTableEntry({Routes.core(1), Routes.east, Routes.south},
+                                0x0, 0x0)
+        assert "E S 1" in str(rte)
 
 
 def test_routes():
@@ -56,3 +75,13 @@ def test_routes():
     for link in Links:
         with pytest.raises(ValueError):
             Routes(link).core_num
+
+    # Make sure the short strings for routes are correct
+    assert Routes.east.initial == "E"
+    assert Routes.north_east.initial == "NE"
+    assert Routes.north.initial == "N"
+    assert Routes.west.initial == "W"
+    assert Routes.south_west.initial == "SW"
+    assert Routes.south.initial == "S"
+    for i in range(18):
+        assert Routes.core(i).initial == str(i)

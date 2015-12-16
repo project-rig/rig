@@ -8,7 +8,8 @@ from six import iteritems, itervalues
 
 from rig.place_and_route.machine import Machine, Cores, SDRAM, SRAM
 
-from rig.routing_table import RoutingTableEntry
+from rig.routing_table import (
+    RoutingTableEntry, minimise, MinimisationFailedError)
 
 from rig.place_and_route.routing_tree import RoutingTree
 
@@ -133,8 +134,8 @@ def _get_minimal_core_reservations(core_resource, cores, chip=None):
         Which chip the constraints should be applied to or None for a global
         constraint.
 
-    Yields
-    ------
+    Yield
+    -----
     :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
     """
     reservation = None
@@ -277,13 +278,17 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
         If a routing tree has a terminating vertex whose route is set to None,
         that vertex is ignored.
 
+    .. note::
+        :py:func:`~.build_and_minimise_routing_tables` can be used to get
+        minimised versions of routing tables.
+
     Parameters
     ----------
     routes : {net: :py:class:`~rig.place_and_route.routing_tree.RoutingTree`, \
               ...}
         The complete set of RoutingTrees representing all routes in the system.
-        (Note: this is the same datastructure produced by routers in the `par`
-        module.)
+        (Note: this is the same datastructure produced by routers in the
+        `place_and_route` module.)
     net_keys : {net: (key, mask), ...}
         The key and mask associated with each net.
     omit_default_routes : bool
@@ -358,6 +363,59 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
             )
 
     return routing_tables
+
+
+def build_and_minimise_routing_tables(routes, net_keys, target_length=1024):
+    """Convert a set of RoutingTrees into a per-chip set of routing tables and
+    attempt to minimise those tables to meet a target length.
+
+    This is a wrapper around :py:func:`~.build_routing_tables` and
+    :py:func:`rig.routing_table.minimise`.
+
+    Parameters
+    ----------
+    routes : {net: :py:class:`~rig.place_and_route.routing_tree.RoutingTree`, \
+              ...}
+        The complete set of RoutingTrees representing all routes in the system.
+        (Note: this is the same datastructure produced by routers in the
+        `place_and_route` module.)
+    net_keys : {net: (key, mask), ...}
+        The key and mask associated with each net.
+    target_length : {(x, y): int, ...} or int or None
+        Target length of minimised routing tables, either as a dictionary
+        mapping co-ordinates to target lengths or one integer for all target
+        lengths.
+
+    Returns
+    -------
+    {(x, y): [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
+        Minimised routing tables. The correct operation of these tables relies
+        on their entries not being reordered.
+
+    Raises
+    ------
+    MinimisationFailedError
+        If any of the routing tables could not be made to fit the given target
+        lengths.
+    """
+    # Coerce the target_length argument into the dictionary form
+    if not isinstance(target_length, dict):
+        target_lengths = defaultdict(lambda: target_length)
+    else:
+        target_lengths = target_length
+
+    # Build the tables and then minimise them, if any fail to minimise we add
+    # slightly more information and re-raise the error
+    tables = dict()
+    for chip, entries in iteritems(build_routing_tables(
+            routes, net_keys, omit_default_routes=False)):
+        try:
+            tables[chip] = minimise(entries, target_lengths[chip])
+        except MinimisationFailedError as e:
+            e.chip = chip
+            raise
+
+    return tables
 
 
 class MultisourceRouteError(Exception):

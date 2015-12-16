@@ -24,6 +24,30 @@ class RoutingTableEntry(namedtuple("RoutingTableEntry", "route key mask")):
         32-bit unsigned integer mask to apply to keys of packets arriving at
         the router.
     """
+    def __str__(self):
+        """Get an easily readable representation of the routing table entry.
+
+        Representations take the form::
+
+            XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> N NE ...
+
+        For example::
+
+            >>> rte = RoutingTableEntry({Routes.core(5)}, 0b1010, 0xf)
+            >>> print(str(rte))
+            XXXXXXXXXXXXXXXXXXXXXXXXXXXX1010 -> 5
+        """
+        # Build the representation of the key and mask
+        keymask = "".join(
+            ("1" if self.key & bit else "0") if self.mask & bit else
+            ("!" if self.key & bit else "X") for bit in
+            (1 << (31 - i) for i in range(32))
+        )
+
+        # Get the routes strings
+        route = " ".join(r.initial for r in sorted(self.route))
+
+        return "{} -> {}".format(keymask, route)
 
 
 @add_int_enums_to_docstring
@@ -100,3 +124,20 @@ class Routes(IntEnum):
             return self - 6
         else:
             raise ValueError("{} is not a core".format(repr(self)))
+
+    @property
+    def initial(self):
+        """Get a shorter string representation of the Route."""
+        links_strs = {
+            Routes.east: "E",
+            Routes.north_east: "NE",
+            Routes.north: "N",
+            Routes.west: "W",
+            Routes.south_west: "SW",
+            Routes.south: "S",
+        }
+
+        if self.is_link:
+            return links_strs[self]
+        else:
+            return str(self.core_num)

@@ -1,6 +1,8 @@
 :py:mod:`rig.routing_table`: Routing table data structures
 ----------------------------------------------------------
 
-.. automodule:: rig.routing_table
+.. autoclass:: rig.routing_table.RoutingTableEntry
     :members:
 
+.. autoclass:: rig.routing_table.Routes
+    :members:

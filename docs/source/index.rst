@@ -31,6 +31,7 @@ Graph-to-machine mapping
         
         place_and_route
         geometry
+        routing_table_tools
 
 
 Execution control and machine management
