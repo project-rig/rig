@@ -1435,18 +1435,6 @@ class MachineController(ContextMixin):
                 "send_signal: Cannot transmit signal of type {}".format(
                     repr(signal)))
 
-        # XXX If the signal is "stop", then we first remove all routing table
-        # entries associated with the application ID. This code will be
-        # unnecessaru when SpiNNaker tools 1.4 becomes available.
-        if signal is consts.AppSignal.stop:
-            # Get a system info object so we can determine where we need to
-            # remove the routing tables.
-            si = self.get_system_info()
-
-            # Now remove all routing entries:
-            for (x, y) in si:
-                self.clear_routing_table_entries(x, y, app_id)
-
         # Construct the packet for transmission
         arg1 = consts.signal_types[signal]
         arg2 = (signal << 16) | 0xff00 | app_id
