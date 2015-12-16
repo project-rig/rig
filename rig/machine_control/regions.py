@@ -152,20 +152,19 @@ class RegionCoreTree(object):
                 subregions_cores[subregions] |= 1 << core
 
         # Order the locally selected items and then yield them
-        sorted_subregion_coremasks = sorted(list(subregions_cores.items()),
-                                            key=lambda x: (x[0] << 32) | x[1])
-        for (subregions, coremask) in sorted_subregion_coremasks:
+        for (subregions, coremask) in sorted(subregions_cores.items()):
             yield (region_code | subregions), coremask
 
         if self.level < 3:
             # Iterate through the subregions and recurse, we iterate through in
             # the order which ensures that anything we yield is in increasing
             # order.
-            for i in (4*x + y for y in range(4) for x in range(4)):
+            for i in (4*y + x for x in range(4) for y in range(4)):
                 subregion = self.subregions[i]
                 if subregion is not None:
-                    for x in subregion.get_regions_and_coremasks():
-                        yield x
+                    for (region, coremask) in \
+                            subregion.get_regions_and_coremasks():
+                        yield (region, coremask)
 
     def add_core(self, x, y, p):
         """Add a new core to the region tree.
