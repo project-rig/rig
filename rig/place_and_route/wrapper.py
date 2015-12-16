@@ -122,9 +122,7 @@ def place_and_route_wrapper(vertices_resources, vertices_applications,
                             core_resource=core_resource,
                             sdram_resource=sdram_resource,
                             sram_resource=sram_resource)
-    base_constraints = build_core_constraints(system_info,
-                                              machine,
-                                              core_resource)
+    base_constraints = build_core_constraints(system_info, core_resource)
     constraints = base_constraints + constraints
 
     # Place/Allocate/Route

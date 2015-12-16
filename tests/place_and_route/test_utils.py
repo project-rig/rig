@@ -1,12 +1,9 @@
 import pytest
 
-from six import iteritems
-
-from collections import defaultdict
-
 from rig.place_and_route.utils import \
     build_machine, build_core_constraints, build_application_map, \
-    build_routing_tables, MultisourceRouteError
+    build_routing_tables, MultisourceRouteError, \
+    _get_minimal_core_reservations
 
 from rig.place_and_route.machine import Machine, Cores
 
@@ -98,34 +95,41 @@ def test_build_machine():
     assert m.dead_links == set([(4, 5, Links.north)])
 
 
-def test_build_core_constraints():
-    busy_cores = set([
-        # Chip 0, 0: Has cores 1-16 (top and bottom reserved)
-        (0, 0, 0),
-        (0, 0, 17),
-
-        # Chip 1, 0: Has cores 1-16 (bottom reserved, top dead)
-        (1, 0, 0),
-
-        # Chip 2, 0: Has cores 1-3 and 5-6 reserved
-        (2, 0, 1),
-        (2, 0, 2),
-        (2, 0, 3),
-        (2, 0, 5),
-        (2, 0, 6),
-
-        # Chip 3, 0: Has no constraints!
+@pytest.mark.parametrize(
+    "cores,expected_slices",
+    [
+        # Special case: No reservations!
+        ([], []),
+        # Singletons
+        ([0], [slice(0, 1)]),
+        ([1], [slice(1, 2)]),
+        ([17], [slice(17, 18)]),
+        # Contiguous ranges
+        ([0, 1], [slice(0, 2)]),
+        ([3, 4, 5, 6], [slice(3, 7)]),
+        # Multiple, disjoint ranges
+        ([0, 2, 3], [slice(0, 1), slice(2, 4)]),
+        ([0, 1, 16, 17], [slice(0, 2), slice(16, 18)]),
     ])
+def test__get_minimal_core_reservations(cores, expected_slices):
+    reservations = _get_minimal_core_reservations("MyCores", cores, (1, 2))
+    assert [r.reservation for r in reservations] == expected_slices
 
+
+@pytest.mark.parametrize("global_core_0", [False, True])
+def test_build_core_constraints(global_core_0):
+    # * A 4x1 machine
     # * (1, 0) has 17 cores, the rest 18
-    # * Busy cores are taken from the table above
+    # * All 18-core chips have a busy core 17
+    # * All chips have a cores 0-(x+1) busy if global_core_0 else 1-(x+1)
     system_info = SystemInfo(4, 1, {
         (x, y): ChipInfo(
             num_cores=(17 if (x, y) == (1, 0) else 18),
-            core_states=[(AppState.idle
-                          if (x, y, c) not in busy_cores else
-                          AppState.run)
-                         for c in range(17 if (x, y) == (0, 1) else 18)],
+            core_states=[(AppState.run
+                          if ((0 if global_core_0 else 1) <= c <= x
+                              or c == 17)
+                          else AppState.idle)
+                         for c in range(17 if (x, y) == (1, 0) else 18)],
             working_links=set(Links),
             largest_free_sdram_block=100,
             largest_free_sram_block=10,
@@ -134,43 +138,46 @@ def test_build_core_constraints():
         for y in range(1)
     })
 
-    machine = build_machine(system_info, core_resource="MyCores")
+    constraints = build_core_constraints(system_info, "MyCores")
 
-    constraints = build_core_constraints(
-        system_info, machine, core_resource="MyCores")
+    # Should end up with:
+    # * 1 global constraint (if global_core_0)
+    # * 1 constraint on chips x=1 to 3 for the unique reservation
+    # * 1 constraint on chips x=0, 2 and 3 to reserve core 18
+    assert len(constraints) == (7 if global_core_0 else 6)
 
-    # All constraints should relate to specific chips in the machine
-    assert all(c.location is not None for c in constraints)
-    assert all(c.location in system_info for c in constraints)
-
-    # All constraints should currently be for cores and SDRAM
-    assert all(isinstance(c, ReserveResourceConstraint) for c in constraints)
+    # All constraints must reserve cores
+    assert all(isinstance(c, ReserveResourceConstraint)
+               for c in constraints)
     assert all(c.resource == "MyCores" for c in constraints)
 
-    # Split constraints by chip and type
-    core_constraints = defaultdict(list)
+    # The first constraint must be the global reservation
+    if global_core_0:
+        global_reservation = constraints.pop(0)
+        assert global_reservation.reservation == slice(0, 1)
+        assert global_reservation.location is None
+
+    # The remaining constraints should cover those expected above
+    # A set of (x, y, start, stop) tuples.
+    expected_ranges = set([
+        # Core 18 reservations
+        (0, 0, 17, 18),
+        (2, 0, 17, 18),
+        (3, 0, 17, 18),
+
+        # Other reservations
+        (1, 0, 1, 2),
+        (2, 0, 1, 3),
+        (3, 0, 1, 4),
+    ])
     for constraint in constraints:
-        core_constraints[constraint.location].append(constraint)
-
-    # Sort core constraints by starting core
-    for chip, constraints_ in iteritems(core_constraints):
-        constraints_.sort(key=(lambda c: c.reservation.start))
-
-    # Check correctness and minimality of core reservations
-    assert len(core_constraints) == 3
-
-    assert len(core_constraints[(0, 0)]) == 2
-    assert core_constraints[(0, 0)][0].reservation == slice(0, 1)
-    assert core_constraints[(0, 0)][1].reservation == slice(17, 18)
-
-    assert len(core_constraints[(1, 0)]) == 1
-    assert core_constraints[(1, 0)][0].reservation == slice(0, 1)
-
-    assert len(core_constraints[(2, 0)]) == 2
-    assert core_constraints[(2, 0)][0].reservation == slice(1, 4)
-    assert core_constraints[(2, 0)][1].reservation == slice(5, 7)
-
-    assert len(core_constraints[(3, 0)]) == 0
+        assert constraint.location is not None
+        x, y = constraint.location
+        expected_ranges.remove((
+            x, y,
+            constraint.reservation.start,
+            constraint.reservation.stop))
+    assert len(expected_ranges) == 0
 
 
 def test_build_application_map():

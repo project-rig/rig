@@ -118,7 +118,43 @@ def build_machine(system_info,
                    dead_links=set(system_info.dead_links()))
 
 
-def build_core_constraints(system_info, machine, core_resource=Cores):
+def _get_minimal_core_reservations(core_resource, cores, chip=None):
+    """Yield a minimal set of
+    :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
+    objects which reserve the specified set of cores.
+
+    Parameters
+    ----------
+    core_resource : resource type
+        The type of resource representing cores.
+    cores : [int, ...]
+        The core numbers to reserve *in ascending order*.
+    chip : None or (x, y)
+        Which chip the constraints should be applied to or None for a global
+        constraint.
+
+    Yields
+    ------
+    :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
+    """
+    reservation = None
+
+    # Cores is in ascending order
+    for core in cores:
+        if reservation is None:
+            reservation = slice(core, core + 1)
+        elif reservation.stop == core:
+            reservation = slice(reservation.start, core + 1)
+        else:
+            yield ReserveResourceConstraint(
+                core_resource, reservation, chip)
+            reservation = slice(core, core + 1)
+
+    if reservation is not None:
+        yield ReserveResourceConstraint(core_resource, reservation, chip)
+
+
+def build_core_constraints(system_info, core_resource=Cores):
     """Return a set of place-and-route
     :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
     which reserve any cores that that are already in use.
@@ -143,9 +179,6 @@ def build_core_constraints(system_info, machine, core_resource=Cores):
         The resource availability information for a SpiNNaker machine,
         typically produced by
         :py:meth:`rig.machine_control.MachineController.get_system_info`.
-    machine : :py:class:`~rig.place_and_route.Machine`
-        The :py:class:`~rig.place_and_route.Machine` model of the current
-        SpiNNaker machine (e.g. from :py:func:`.build_machine`).
     core_resource : resource (Default: :py:data:`~rig.place_and_route.Cores`)
         The resource identifier used for cores.
 
@@ -159,30 +192,31 @@ def build_core_constraints(system_info, machine, core_resource=Cores):
     """
     constraints = []
 
-    for x, y in machine:
-        chip_info = system_info[(x, y)]
+    # Find the set of cores which are universally reserved
+    globally_reserved = None
+    for chip_info in itervalues(system_info):
+        reserved = sum(1 << c for c, state in enumerate(chip_info.core_states)
+                       if state != AppState.idle)
+        if globally_reserved is None:
+            globally_reserved = reserved
+        else:
+            globally_reserved &= reserved
 
-        # Construct a minimal set of ReserveResourceConstraints which
-        # reserve the cores which are not in the idle state.
-        cur_reservation = None
-        for state, core in zip(chip_info.core_states,
-                               range(machine[(x, y)][core_resource])):
-            if state == AppState.idle:
-                if cur_reservation is not None:
-                    constraints.append(cur_reservation)
-                cur_reservation = None
-            else:
-                if cur_reservation is None:
-                    cur_reservation = ReserveResourceConstraint(
-                        core_resource,
-                        slice(core, core + 1),
-                        (x, y))
-                else:
-                    cur_reservation.reservation = slice(
-                        cur_reservation.reservation.start,
-                        core + 1)
-        if cur_reservation is not None:
-            constraints.append(cur_reservation)
+    if globally_reserved is None:
+        globally_reserved = 0
+
+    constraints.extend(_get_minimal_core_reservations(
+        core_resource,
+        [core for core in range(18) if (1 << core) & globally_reserved]))
+
+    # Create chip-specific resource reservations for any special cases
+    for chip, chip_info in iteritems(system_info):
+        constraints.extend(_get_minimal_core_reservations(
+            core_resource,
+            [core for core, state in enumerate(chip_info.core_states)
+             if state != AppState.idle
+                and not globally_reserved & (1 << core)],
+            chip))
 
     return constraints
 
