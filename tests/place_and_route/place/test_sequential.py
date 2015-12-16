@@ -2,7 +2,7 @@ from collections import OrderedDict
 
 from rig.place_and_route.place.sequential import place
 
-from rig.machine import Machine, Cores
+from rig.place_and_route.machine import Machine, Cores
 
 
 def test_default_ordering():

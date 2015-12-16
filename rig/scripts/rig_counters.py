@@ -21,10 +21,10 @@ from rig.machine_control.machine_controller import RouterDiagnostics
 from rig.machine_control.scp_connection import TimeoutError
 
 
-def sample_counters(mc, machine):
+def sample_counters(mc, system_info):
     """Sample every router counter in the machine."""
     return {
-        (x, y): mc.get_router_diagnostics(x, y) for (x, y) in machine
+        (x, y): mc.get_router_diagnostics(x, y) for (x, y) in system_info
     }
 
 
@@ -44,16 +44,16 @@ def monitor_counters(mc, output, counters, detailed, f):
     output.write("time,{}{}\n".format("x,y," if detailed else "",
                                       ",".join(counters)))
 
-    machine = mc.get_machine()
+    system_info = mc.get_system_info()
 
     # Make an initial sample of the counters
-    last_counter_values = sample_counters(mc, machine)
+    last_counter_values = sample_counters(mc, system_info)
 
     start_time = time.time()
 
     for _ in f():
         # Snapshot the change in counter values
-        counter_values = sample_counters(mc, machine)
+        counter_values = sample_counters(mc, system_info)
         delta = deltas(last_counter_values, counter_values)
         last_counter_values = counter_values
 
@@ -61,14 +61,14 @@ def monitor_counters(mc, output, counters, detailed, f):
 
         # Output the changes
         if detailed:
-            for x, y in machine:
+            for x, y in sorted(system_info):
                 output.write("{:0.1f},{},{},{}\n".format(
                     now, x, y,
                     ",".join(str(getattr(delta[(x, y)], c))
                              for c in counters)))
         else:
             totals = [0 for _ in counters]
-            for xy in machine:
+            for xy in sorted(system_info):
                 for i, counter in enumerate(counters):
                     totals[i] += getattr(delta[xy], counter)
             output.write("{:0.1f},{}\n".format(

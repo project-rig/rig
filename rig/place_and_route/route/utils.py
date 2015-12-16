@@ -3,7 +3,7 @@
 
 import random
 
-from ...machine import Links
+from rig.links import Links
 
 
 def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
@@ -28,7 +28,7 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
 
     Generates
     ---------
-    (:py:class:`~rig.machine.Links`, (x, y))
+    (:py:class:`~rig.links.Links`, (x, y))
         Produces (in order) a (direction, (x, y)) pair for every hop along the
         longest dimension first route. The direction gives the direction to
         travel in from the previous step to reach the current step. Ties are
@@ -76,11 +76,11 @@ def links_between(a, b, machine):
     ----------
     a : (x, y)
     b : (x, y)
-    machine : :py:class:`~rig.machine.Machine`
+    machine : :py:class:`~rig.place_and_route.Machine`
 
     Returns
     -------
-    set([:py:class:`~rig.machine.Links`, ...])
+    set([:py:class:`~rig.links.Links`, ...])
     """
     ax, ay = a
     bx, by = b

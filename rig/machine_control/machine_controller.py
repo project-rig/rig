@@ -9,6 +9,7 @@ import socket
 import struct
 import time
 import pkg_resources
+import warnings
 
 from rig.machine_control.consts import \
     SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
@@ -16,7 +17,8 @@ from rig.machine_control import boot, consts, regions, struct_file
 from rig.machine_control.scp_connection import SCPConnection, SCPError
 
 from rig import routing_table
-from rig.machine import Cores, SDRAM, SRAM, Links, Machine
+
+from rig.links import Links
 
 from rig.geometry import spinn5_eth_coords, spinn5_local_eth_coord
 
@@ -535,7 +537,7 @@ class MachineController(ContextMixin):
             The coordinates of the chip from which the command will be sent,
             *not* the coordinates of the chip on which the write will be
             performed.
-        link : :py:class:`rig.machine.Links`
+        link : :py:class:`rig.links.Links`
             The link down which the write should be sent.
         """
         if address % 4:
@@ -589,7 +591,7 @@ class MachineController(ContextMixin):
             The coordinates of the chip from which the command will be sent,
             *not* the coordinates of the chip on which the read will be
             performed.
-        link : :py:class:`rig.machine.Links`
+        link : :py:class:`rig.links.Links`
             The link down which the read should be sent.
 
         Returns
@@ -1178,6 +1180,7 @@ class MachineController(ContextMixin):
         """Unreliably flood-fill APLX to a set of application cores.
 
         .. note::
+
             Most users should use the :py:meth:`.load_application` wrapper
             around this method which guarantees successful loading.
 
@@ -1436,12 +1439,12 @@ class MachineController(ContextMixin):
         # entries associated with the application ID. This code will be
         # unnecessaru when SpiNNaker tools 1.4 becomes available.
         if signal is consts.AppSignal.stop:
-            # Get a machine object so we can determine where we need to remove
-            # the routing tables.
-            mcn = self.get_machine()
+            # Get a system info object so we can determine where we need to
+            # remove the routing tables.
+            si = self.get_system_info()
 
             # Now remove all routing entries:
-            for (x, y) in mcn:
+            for (x, y) in si:
                 self.clear_routing_table_entries(x, y, app_id)
 
         # Construct the packet for transmission
@@ -1722,66 +1725,96 @@ class MachineController(ContextMixin):
         return table
 
     @ContextMixin.use_contextual_arguments()
+    def get_chip_info(self, x, y):
+        """Get general information about the resources available on a chip.
+
+        Returns
+        -------
+        :py:class:`.ChipInfo`
+            A named tuple indicating the number of working cores, the states of
+            all working cores, the set of working links and the size of the
+            largest free block in SDRAM and SRAM.
+        """
+        info = self._send_scp(x, y, 0, SCPCommands.info, expected_args=3)
+        num_cores = info.arg1 & 0x1F
+        core_states = [consts.AppState(c)
+                       for c in struct.unpack("<18B", info.data)]
+        working_links = set(link for link in Links
+                            if (info.arg1 >> (8 + link)) & 1)
+        return ChipInfo(
+            num_cores=num_cores,
+            core_states=core_states[:num_cores],
+            working_links=working_links,
+            largest_free_sdram_block=info.arg2,
+            largest_free_sram_block=info.arg3,
+        )
+
+    @ContextMixin.use_contextual_arguments()
     def get_working_links(self, x, y):
         """Return the set of links reported as working.
 
-        The returned set lists only links over-which nearest neighbour
-        peek/poke commands could be sent. This means that links connected to
-        peripherals may falsely be omitted.
+        This command tests each of the links leaving a chip by sending a PEEK
+        nearest-neighbour packet down each link to verify that the remote
+        device is a SpiNNaker chip. If no reply is received via a given link or
+        if the remote device is not a SpiNNaker chip, the link is reported as
+        dead.
+
+        See also: :py:meth:`.get_chip_info`.
 
         Returns
         -------
-        set([:py:class:`rig.machine.Links`, ...])
+        set([:py:class:`rig.links.Links`, ...])
         """
-        link_up = self.read_struct_field("sv", "link_up", x, y)
-        return set(link for link in Links if link_up & (1 << link))
+        return self.get_chip_info(x, y).working_links
 
     @ContextMixin.use_contextual_arguments()
     def get_num_working_cores(self, x, y):
-        """Return the number of working cores, including the monitor."""
+        """Return the number of working cores, including the monitor.
+
+        See also: :py:meth:`.get_chip_info`.
+        """
         return self.read_struct_field("sv", "num_cpus", x, y)
 
-    def get_machine(self, x=0, y=0, default_num_cores=18):
-        """Probe the machine to discover which cores and links are working.
+    @ContextMixin.use_contextual_arguments()
+    def get_system_info(self, x=0, y=0):
+        """Discover the integrity and resource availability of a whole
+        SpiNNaker system.
+
+        This command performs :py:meth:`.get_chip_info` on all working chips in
+        the system returning an enhanced :py:class:`dict`
+        (:py:class:`.SystemInfo`) containing a look-up from chip coordinate to
+        :py:class:`.ChipInfo`. In addition to standard dictionary
+        functionality, :py:class:`.SystemInfo` provides a number of convenience
+        methods, which allow convenient iteration over various aspects of the
+        information stored.
 
         .. note::
-            Links are reported as dead when the device at the other end of the
-            link does not respond to SpiNNaker nearest neighbour packets. This
-            may thus mistakenly report links attached to peripherals as dead.
+            This method replaces the deprecated :py:meth:`.get_machine` method.
+            To build a :py:class:`~rig.place_and_route.Machine` for
+            place-and-route purposes, the
+            :py:func:`rig.place_and_route.utils.build_machine` utility function
+            may be used with :py:meth:`.get_system_info` like so::
 
-        .. note::
-            The probing process does not report how much memory is free, nor
-            how many processors are idle but rather the total available.
-
-        .. note::
-            The size of the SDRAM and SysRAM heaps is assumed to be the same
-            for all chips and is only checked on chip (x, y).
-
-        .. note::
-            The chip (x, y) supplied is the one which will be where the search
-            for working chips begins. Selecting anything other than (0, 0), the
-            default, may be useful when debugging very broken machines.
+                >> from rig.place_and_route import build_machine
+                >> sys_info = mc.get_system_info()
+                >> machine = build_machine(sys_info)
 
         Parameters
         ----------
-        default_num_cores : int
-            The number of cores generally available on a SpiNNaker chip
-            (including the monitor).
+        x : int
+        y : int
+            The coordinates of the chip from which system exploration should
+            begin, by default (0, 0). Most users will not need to change these
+            parameters.
 
         Returns
         -------
-        :py:class:`~rig.machine.Machine`
-            This Machine will include all cores reported as working by the
-            system software with the following resources defined:
-
-            :py:data:`~rig.machine.Cores`
-                Number of cores working on each chip (including the monitor
-                core).
-            :py:data:`~rig.machine.SDRAM`
-                The size of the SDRAM heap.
-            :py:data:`~rig.machine.SRAM`
-                The size of the SysRAM heap.
+        :py:class:`.SystemInfo`
+            An enhanced :py:class:`dict` object {(x, y): :py:class:`.ChipInfo`,
+            ...} with a number of utility methods for accessing higher-level
+            system information.
         """
+        # A quick way of getting a list of working chips
         p2p_tables = self.get_p2p_routing_table(x, y)
 
         # Calculate the extent of the system
@@ -1790,47 +1823,84 @@ class MachineController(ContextMixin):
         max_y = max(y_ for (x_, y_), r in iteritems(p2p_tables)
                     if r != consts.P2PTableEntry.none)
 
-        # Discover the heap sizes available for memory allocation
-        sdram_start = self.read_struct_field("sv", "sdram_heap", x, y)
-        sdram_end = self.read_struct_field("sv", "sdram_sys", x, y)
-        sysram_start = self.read_struct_field("sv", "sysram_heap", x, y)
-        sysram_end = self.read_struct_field("sv", "vcpu_base", x, y)
+        sys_info = SystemInfo(max_x + 1, max_y + 1)
 
-        chip_resources = {Cores: default_num_cores,
-                          SDRAM: sdram_end - sdram_start,
-                          SRAM: sysram_end - sysram_start}
-        dead_chips = set()
-        dead_links = set()
-        chip_resource_exceptions = {}
-
-        # Discover dead links and cores
         for (x, y), p2p_route in iteritems(p2p_tables):
-            if x <= max_x and y <= max_y:
-                if p2p_route == consts.P2PTableEntry.none:
-                    dead_chips.add((x, y))
-                else:
-                    try:
-                        num_working_cores = self.get_num_working_cores(x, y)
-                        working_links = self.get_working_links(x, y)
+            if p2p_route != consts.P2PTableEntry.none:
+                try:
+                    sys_info[(x, y)] = self.get_chip_info(x, y)
+                except SCPError:
+                    # The chip was listed in the P2P table but is not
+                    # responding. Assume it is dead and don't include it in
+                    # the info returned.
+                    pass
 
-                        if num_working_cores < default_num_cores:
-                            resource_exception = chip_resources.copy()
-                            resource_exception[Cores] = min(default_num_cores,
-                                                            num_working_cores)
-                            chip_resource_exceptions[(x, y)] = \
-                                resource_exception
+        return sys_info
 
-                        for link in set(Links) - working_links:
-                            dead_links.add((x, y, link))
-                    except SCPError:
-                        # The chip was listed in the P2P table but is not
-                        # responding. Assume it is dead anyway.
-                        dead_chips.add((x, y))
+    def get_machine(self, x=0, y=0, default_num_cores=18):
+        """**Deprecated.** Probe the machine to discover which cores and links
+        are working.
 
-        return Machine(max_x + 1, max_y + 1,
-                       chip_resources,
-                       chip_resource_exceptions,
-                       dead_chips, dead_links)
+        .. warning::
+            This method has been deprecated in favour of
+            :py:meth:`.get_system_info` for getting information about the
+            general resources available in a SpiNNaker machine. This method may
+            be removed in the future.
+
+            To build a :py:class:`~rig.place_and_route.Machine` for
+            place-and-route purposes, the
+            :py:func:`rig.place_and_route.utils.build_machine` utility function
+            may be used with :py:meth:`.get_system_info` like so::
+
+                >> from rig.place_and_route import build_machine
+                >> sys_info = mc.get_system_info()
+                >> machine = build_machine(sys_info)
+
+            This method also historically used the size of the SDRAM and
+            SRAM heaps to set the respective resource values in the
+            :py:class:`~rig.place_and_route.Machine`. :py:meth:`.get_machine`
+            since changed to reporting the size of the largest free block in
+            the SDRAM and SRAM heaps on each chip. Most applications should not
+            be negatively impacted by this change.
+
+        .. note::
+            The chip (x, y) supplied is the one where the search for working
+            chips begins. Selecting anything other than (0, 0), the default,
+            may be useful when debugging very broken machines.
+
+        Parameters
+        ----------
+        default_num_cores : int
+            This argument is ignored.
+
+        Returns
+        -------
+        :py:class:`~rig.place_and_route.Machine`
+            This Machine will include all cores reported as working by the
+            system software with the following resources defined:
+
+            :py:data:`~rig.place_and_route.Cores`
+                Number of working cores on each chip (including the monitor
+                core, any cores already running applications and idle cores).
+            :py:data:`~rig.place_and_route.SDRAM`
+                The size of the largest free block of SDRAM on the heap. This
+                gives a conservative measure of how much SDRAM is free on a
+                given chip (which will underestimate availability if the
+                system's memory is highly fragmented.
+            :py:data:`~rig.place_and_route.SRAM`
+                The size of the largest free block of SRAM on the heap. This
+                gives a conservative measure of how much SRAM is free on a
+                given chip (which will underestimate availability if the
+                system's memory is highly fragmented.
+        """
+        warnings.warn(
+            "MachineController.get_machine() is deprecated, "
+            "see get_system_info().", DeprecationWarning)
+
+        from rig.place_and_route.utils import build_machine
+
+        system_info = self.get_system_info(x, y)
+        return build_machine(system_info)
 
 
 class CoreInfo(collections.namedtuple(
@@ -1860,6 +1930,173 @@ class CoreInfo(collections.namedtuple(
         "/". In the first field is the kernal (e.g. SC&MP or SARK) and the
         second the hardware platform (e.g. SpiNNaker).
     """
+
+
+class ChipInfo(collections.namedtuple(
+    'ChipInfo', "num_cores core_states working_links "
+                "largest_free_sdram_block,largest_free_sram_block")):
+    """Information returned about a chip.
+
+    Parameters
+    ----------
+    num_cores : int
+        The number of working cores on the chip.
+    core_states : [:py:class:`~rig.machine_control.consts.AppState`, ...]
+        The state of each working core in the machine in a list ``num_cores``
+        in length.
+    working_links : set([`rig.links.Links`, ...])
+        The set of working links leaving that chip. For a link to be considered
+        working, the link must work in both directions and the device at the
+        far end must also be a SpiNNaker chip.
+    largest_free_sdram_block : int
+        The size (in bytes) of the largest free block of SDRAM.
+    largest_free_sram_block : int
+        The size (in bytes) of the largest free block of SRAM.
+    """
+
+
+class SystemInfo(dict):
+    """An enhanced :py:class:`dict` containing a lookup from chip coordinates,
+    (x, y), to chip information, :py:class:`.ChipInfo`.
+
+    This dictionary contains an entry for every working chip in a system and no
+    entry for chips which are dead. In addition to normal dictionary
+    functionality, a number of utility methods are provided for iterating over
+    useful information, for example individual cores and links.
+
+    Attributes
+    ----------
+    width : int
+        The width of the system in chips.
+    height : int
+        The height of the system in chips.
+    """
+
+    def __init__(self, width, height, *args, **kwargs):
+        """Construct a :py:class:`.SystemInfo` object.
+
+        Parameters
+        ----------
+        width : int
+            The width of the system, in chips.
+        height : int
+            The height of the system, in chips.
+        ...
+            Remaining arguments are passed directly to the :py:class:`dict`
+            constructor.
+        """
+        super(SystemInfo, self).__init__(*args, **kwargs)
+
+        self.width = width
+        self.height = height
+
+    def chips(self):
+        """Iterate over the coordinates of working chips.
+
+        An alias for :py:meth:`.__iter__`, included for consistency.
+
+        Yields
+        ------
+        (x, y)
+            The coordinate of a working chip.
+        """
+        return iter(self)
+
+    def dead_chips(self):
+        """Generate the coordinates of all dead chips.
+
+        Yields
+        ------
+        (x, y)
+            The coordinate of a dead chip.
+        """
+        for x in range(self.width):
+            for y in range(self.height):
+                if (x, y) not in self:
+                    yield (x, y)
+
+    def links(self):
+        """Generate the coordinates of all working links.
+
+        Yields
+        ------
+        (x, y, :py:class:`rig.links.Links`)
+            A working link leaving a chip from the perspective of the chip. For
+            example ``(0, 0, Links.north)`` would be the link going north from
+            chip (0, 0) to chip (0, 1).
+        """
+        for (x, y), chip_info in iteritems(self):
+            for link in chip_info.working_links:
+                yield (x, y, link)
+
+    def dead_links(self):
+        """Generate the coordinates of all dead links leaving working chips.
+
+        Any link leading to a dead chip will also be included in the list of
+        dead links. In non-torroidal SpiNNaker sysmtes (e.g. single SpiNN-5
+        boards), links on the periphery of the system will be marked as dead.
+
+        Yields
+        ------
+        (x, y, :py:class:`rig.links.Links`)
+            A working link leaving a chip from the perspective of the chip. For
+            example ``(0, 0, Links.north)`` would be the link going north from
+            chip (0, 0) to chip (0, 1).
+        """
+        for (x, y), chip_info in iteritems(self):
+            for link in Links:
+                if link not in chip_info.working_links:
+                    yield (x, y, link)
+
+    def cores(self):
+        """Generate the set of all cores in the system.
+
+        Yields
+        ------
+        (x, y, p, :py:class:`~rig.machine_control.consts.AppState`)
+            A core in the machine, and its state. Cores related to a specific
+            chip are yielded consecutively in ascending order of core number.
+        """
+        for (x, y), chip_info in iteritems(self):
+            for p, state in enumerate(chip_info.core_states):
+                yield (x, y, p, state)
+
+    def __contains__(self, chip_core_or_link):
+        """Test if a given chip, core or link is present and alive.
+
+        Parameters
+        ----------
+        chip_core_or_link : tuple
+            * If of the form (x, y, :py:class:`~rig.links.Links`), checks the
+              link is present.
+            * If of the form (x, y, p), checks the core is present.
+            * If of the form (x, y, p,
+              :py:class:`~rig.machine_control.consts.AppState`), checks the
+              core is present and in the specified state.
+            * If of the form (x, y), checks the chip is present.
+        """
+        if len(chip_core_or_link) == 2:
+            return super(SystemInfo, self).__contains__(chip_core_or_link)
+        elif (len(chip_core_or_link) == 3
+                and isinstance(chip_core_or_link[2], Links)):
+            x, y, link = chip_core_or_link
+            chip = self.get((x, y))
+            return chip is not None and link in chip.working_links
+        elif (len(chip_core_or_link) == 3
+                and isinstance(chip_core_or_link[2], six.integer_types)):
+            x, y, p = chip_core_or_link
+            chip = self.get((x, y))
+            return chip is not None and 0 <= p < chip.num_cores
+        elif len(chip_core_or_link) == 4:
+            x, y, p, state = chip_core_or_link
+            chip = self.get((x, y))
+            return (chip is not None
+                    and 0 <= p < chip.num_cores
+                    and chip.core_states[p] == state)
+        else:
+            raise ValueError(
+                "Expect either (x, y) (x, y, p), (x, y, p, state) "
+                "or (x, y, link).")
 
 
 class ProcessorStatus(collections.namedtuple(

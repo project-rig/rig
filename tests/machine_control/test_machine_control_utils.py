@@ -4,7 +4,7 @@ import pytest
 from rig.machine_control import MachineController
 from rig.machine_control.machine_controller import MemoryIO
 from rig.machine_control.utils import sdram_alloc_for_vertices
-from rig.machine import Cores, SDRAM
+from rig.place_and_route import Cores, SDRAM
 
 
 @pytest.mark.parametrize("core_as_tag", [True, False])

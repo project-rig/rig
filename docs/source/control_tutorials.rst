@@ -88,18 +88,17 @@ using one of the pre-defined boot option dictionaries in
 Probing for Available Resources
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :py:meth:`~.MachineController.get_machine` method returns a
-:py:class:`~rig.machine.Machine` object describing which chips, links and cores
-are alive and also the SDRAM available::
+The :py:meth:`~.MachineController.get_system_info` method returns a
+:py:class:`~rig.machine_control.machine_controller.SystemInfo` object
+describing which chips, links and cores are alive and also the SDRAM
+available::
 
-    >>> machine = mc.get_machine()
+    >>> system_info = mc.get_system_info()
 
-This object can be directly passed to Rig's place and route utilities (e.g.
-:py:class:`rig.place_and_route.wrapper`).
-
-.. note::
-    This method simply lists *working* resources, it does not (for example)
-    exclude cores and memory which are already in use (e.g. monitor cores).
+This object can also be used to guide Rig's place and route utilities (see
+:py:class:`rig.place_and_route.place_and_route_wrapper`,
+:py:class:`rig.place_and_route.utils.build_machine` and
+:py:class:`rig.place_and_route.utils.build_core_constraints`).
 
 Loading Applications
 ^^^^^^^^^^^^^^^^^^^^
@@ -114,7 +113,8 @@ For example, the following code loads the specified APLX file to cores 1, 2 and
     >>> mc.load_application("/path/to/app.aplx", targets)
 
 Alternatively, this method accepts dictionaries mapping applications to
-targets, such as those produced by :py:class:`rig.place_and_route.wrapper`.
+targets, such as those produced by
+:py:class:`rig.place_and_route.place_and_route_wrapper`.
 
 :py:meth:`~.MachineController.load_application` verifies that all applications
 have been successfully loaded (re-attempting a small number of times if
@@ -172,7 +172,7 @@ Routing table entries can be loaded using
 
 This command allocates and then loads the requested routing table entries onto
 each of the supplied chips. The supplied data structure matches that produced by
-:py:func:`rig.place_and_route.wrapper`.
+:py:func:`rig.place_and_route.place_and_route_wrapper`.
 
 Allocating/Writing/Reading SDRAM
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -9,9 +9,9 @@ import rig.scripts.rig_ps as rig_ps
 from rig.machine_control.scp_connection import \
     TimeoutError, FatalReturnCodeError
 
-from rig.machine import Machine, Cores
-
 from rig.machine_control.consts import AppState, RuntimeException
+
+from rig.machine_control.machine_controller import SystemInfo, ChipInfo
 
 
 def test_match():
@@ -28,8 +28,18 @@ def test_match():
 def test_get_process_list():
     mc = mock.Mock()
 
-    machine = Machine(2, 2, chip_resources={Cores: 2})
-    mc.get_machine.return_value = machine
+    system_info = SystemInfo(2, 2, {
+        (x, y): ChipInfo(
+            num_cores=2,
+            # Rest ignored...
+            core_states=[None]*2,
+            working_links=set(),
+            largest_free_sdram_block=0,
+            largest_free_sram_block=0)
+        for x in range(2)
+        for y in range(2)
+    })
+    mc.get_system_info.return_value = system_info
 
     def get_processor_status(x, y, p):
         status = mock.Mock()
@@ -86,8 +96,16 @@ def test_get_process_list():
 def test_get_process_list_dead_chip():
     mc = mock.Mock()
 
-    machine = Machine(1, 1, chip_resources={Cores: 2})
-    mc.get_machine.return_value = machine
+    system_info = SystemInfo(1, 1, {
+        (0, 0): ChipInfo(
+            num_cores=2,
+            # Rest ignored...
+            core_states=[None]*2,
+            working_links=set(),
+            largest_free_sdram_block=0,
+            largest_free_sram_block=0)
+    })
+    mc.get_system_info.return_value = system_info
 
     mc.get_processor_status.side_effect = FatalReturnCodeError(0x88)
 

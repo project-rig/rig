@@ -1,6 +1,6 @@
 import pytest
 
-from rig.machine import Links
+from rig.links import Links
 
 from rig.geometry import concentric_hexagons, to_xyz, minimise_xyz, \
     shortest_mesh_path_length, shortest_mesh_path, \

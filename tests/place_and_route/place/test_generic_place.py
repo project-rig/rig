@@ -14,7 +14,9 @@ from six import iteritems
 
 from rig.netlist import Net
 
-from rig.machine import Machine, Cores, Links
+from rig.links import Links
+
+from rig.place_and_route.machine import Machine, Cores
 
 from rig.place_and_route.exceptions import InsufficientResourceError
 from rig.place_and_route.exceptions import InvalidConstraintError

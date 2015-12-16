@@ -51,16 +51,16 @@ Resource
     
     The type of a *resource* is represented by some unique Python
     :py:class:`object`. Some common resources are defined in
-    :py:mod:`rig.machine` (though users are free to use their own):
+    :py:mod:`rig.place_and_route` (though users are free to use their own):
     
-    * :py:data:`rig.machine.Cores`: Resource identifier for (monitor and
-      application) processor cores.
+    * :py:data:`rig.place_and_route.Cores`: Resource identifier for (monitor
+      and application) processor cores.
     
-    * :py:data:`rig.machine.SDRAM`: Resource identifier for shared off-die
-      SDRAM (in bytes).
+    * :py:data:`rig.place_and_route.SDRAM`: Resource identifier for shared
+      off-die SDRAM (in bytes).
     
-    * :py:data:`rig.machine.SRAM`: Resource identifier for shared on-die SRAM
-      (in bytes).
+    * :py:data:`rig.place_and_route.SRAM`: Resource identifier for shared
+      on-die SRAM (in bytes).
     
     Quantities of a *resource* are represented by positive integer values.
 Constraint
@@ -98,14 +98,17 @@ Constraint
       each individual vertex (core) can have independent routes directly to and
       from them.
 
-:py:func:`~rig.place_and_route.wrapper`: common case wrapper
-------------------------------------------------------------
+:py:func:`~rig.place_and_route.place_and_route_wrapper`: common case wrapper
+----------------------------------------------------------------------------
 
 Most applications simply require their application graph be translated into a
 set of data structures describing where binaries need to be loaded and a set of
-routing tables. For most users the :py:func:`rig.place_and_route.wrapper` will
-do exactly this with a minimum of fuss. For more advanced users, this function
-can be used as an example of the complete place-and-route process.
+routing tables. For most users the
+:py:func:`rig.place_and_route.place_and_route_wrapper` will do exactly this
+with a minimum of fuss. For more advanced users, this function can be used as
+an example of the complete place-and-route process.
+
+.. autofunction:: rig.place_and_route.place_and_route_wrapper
 
 .. autofunction:: rig.place_and_route.wrapper
 
@@ -154,7 +157,7 @@ Sensible default implementations for each function are aliased as:
         resource required.
     nets : [:py:class:`~rig.netlist.Net`, ...]
         A list (in no particular order) defining the nets connecting vertices.
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
         A data structure which defines the resources available in the target
         SpiNNaker machine.
     constraints : [constraint, ...]
@@ -197,7 +200,7 @@ Sensible default implementations for each function are aliased as:
         resource required.
     nets : [:py:class:`~rig.netlist.Net`, ...]
         A list (in no particular order) defining the nets connecting vertices.
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
         A data structure which defines the resources available in the target
         SpiNNaker machine.
     constraints : [constraint, ...]
@@ -250,16 +253,16 @@ Sensible default implementations for each function are aliased as:
     
     Most applications will probably wish to supply the ``allocations`` optional
     argument which enables the router to produce
-    :py:class:`~.rig.place_and_route.routing_tree.RoutingTree`s which end on the
-    specific cores allocated to each sink vertex. The resource allocated to the
-    resource specified by the ``core_resource`` argument (which defaults to
-    :py:class:`~rig.machine.Cores`) is assumed to indicate the core number for
-    each vertex.
+    :py:class:`~.rig.place_and_route.routing_tree.RoutingTree`s which end on
+    the specific cores allocated to each sink vertex. The resource allocated to
+    the resource specified by the ``core_resource`` argument (which defaults to
+    :py:class:`~rig.place_and_route.Cores`) is assumed to indicate the core
+    number for each vertex.
     
     For example, if a vertex, ``v``, is allocated the resources ``{Cores:
     slice(1, 3)``, if ``v`` is the sink in a net, that tree will terminate at
     cores 1 and 2 of the chip ``v`` is placed on (assuming ``core_resource`` is
-    :py:class:`~rig.machine.Cores`).
+    :py:class:`~rig.place_and_route.Cores`).
     
     Note that if a vertex is allocated an empty set of cores, e.g. ``{Cores:
     slice(0, 0)}``, the tree will terminate at the chip allocated to the vertex
@@ -288,7 +291,7 @@ Sensible default implementations for each function are aliased as:
         resource required.
     nets : [:py:class:`~rig.netlist.Net`, ...]
         A list (in no particular order) defining the nets connecting vertices.
-    machine : :py:class:`rig.machine.Machine`
+    machine : :py:class:`rig.place_and_route.Machine`
         A data structure which defines the resources available in the target
         SpiNNaker machine.
     constraints : [constraint, ...]
@@ -307,7 +310,7 @@ Sensible default implementations for each function are aliased as:
         An optional dictionary of the format returned by :py:func:`allocate`
         describing the allocation of resources to vertices. If not supplied,
         this dictionary defaults to being empty.
-    core_resource : resource (Default: :py:data:`~rig.machine.Cores`)
+    core_resource : resource (Default: :py:data:`~rig.place_and_route.Cores`)
         **Optional.** Identifier of the resource in `allocations` which
         indicates the cores to route to when routing to a vertex.
         
@@ -375,5 +378,6 @@ Data structures
         :maxdepth: 2
         
         machine
+        links
         routing_table
         netlist
