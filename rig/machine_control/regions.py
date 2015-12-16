@@ -12,6 +12,7 @@ selected.
 A complete introduction and specification of the region system is given in
 "Managing Big SpiNNaker Machines" By Steve Temple.
 """
+import array
 import collections
 from six import iteritems
 
@@ -51,26 +52,6 @@ def get_region_for_chip(x, y, level=3):
     return region
 
 
-def minimise_regions(chips):
-    """Create a reduced set of regions by minimising a hierarchy tree.
-
-    Parameters
-    ----------
-    chips : iterable
-        An iterable returning x and y co-ordinate pairs.
-
-    Returns
-    -------
-    generator
-        A generator which yields 32-bit region codes which minimally cover the
-        set of given chips.
-    """
-    t = RegionTree()
-    for (x, y) in chips:
-        t.add_coordinate(x, y)
-    return t.get_regions()
-
-
 def compress_flood_fill_regions(targets):
     """Generate a reduced set of flood fill parameters.
 
@@ -82,34 +63,27 @@ def compress_flood_fill_regions(targets):
         :py:func:`~rig.place_and_route.util.build_application_map` when indexed
         by an application.
 
-    Returns
-    -------
-    generator
-        A generator which yields region and core mask pairs indicating
-        parameters to use to flood-fill an application.  `region` and
-        `core_mask` are both integer representations of bit fields that are
-        understood by SCAMP.
+    Yields
+    ------
+    (region, core mask)
+        Pair of integers which represent a region of a SpiNNaker machine and a
+        core mask of selected cores within that region for use in flood-filling
+        an application.  `region` and `core_mask` are both integer
+        representations of bit fields that are understood by SCAMP.
+
+        The pairs are yielded in an order suitable for direct use with SCAMP's
+        flood-fill core select (FFCS) method of loading.
     """
-    # Build a dictionary mapping core mask -> chips where this should be
-    # applied.
-    cores_to_targets = collections.defaultdict(set)
+    t = RegionCoreTree()
+
     for (x, y), cores in iteritems(targets):
-        # Build the core mask
-        core_mask = 0x0000
-        for c in cores:
-            core_mask |= 1 << c
+        for p in cores:
+            t.add_core(x, y, p)
 
-        # Add to the targets dict
-        cores_to_targets[core_mask].add((x, y))
-
-    # For each of these cores build the minimal set of regions
-    for core_mask, coordinates in iteritems(cores_to_targets):
-        regions = minimise_regions(coordinates)
-        for r in regions:
-            yield (r, core_mask)
+    return t.get_regions_and_coremasks()
 
 
-class RegionTree(object):
+class RegionCoreTree(object):
     """A tree structure for use in minimising sets of regions.
 
     A tree is defined which reflects the definition of SpiNNaker regions like
@@ -119,24 +93,23 @@ class RegionTree(object):
     broken up into 16x16 grids which are represented by their (level 2)
     children. These level 2 nodes have their 16x16 grids broken up into 4x4
     grids represented by their (level 3) children. Level 3 children explicitly
-    list which of their sixteen cores are part of the region.
+    list which cores of their sixteen chips are part of the region.
 
-    If any of a level 2 node's level 3 children have all of their cores
-    selected, these level 3 nodes can be removed and replaced by a level 2
-    region with the corresponding 4x4 grid selected. If multiple children can
-    be replaced with level 2 regions, these can be combined into a single level
-    2 region with the corresponding 4x4 grids selected, resulting in a
-    reduction in the number of regions required. The same process can be
+    If any of a level 2 node's level 3 children have all of their chips
+    selected for a given core, these level 3 nodes can be removed and replaced
+    by a level 2 region with the corresponding 4x4 grid selected. If multiple
+    children can be replaced with level 2 regions, these can be combined into a
+    single level 2 region with the corresponding 4x4 grids selected, resulting
+    in a reduction in the number of regions required. The same process can be
     repeated at each level of the hierarchy eventually producing a minimal set
     of regions.
 
-    This data structure is specified by supplying a sequence of (x, y)
-    coordinates of chips to be represented by a series of regions using
-    :py:meth:`.add_coordinate`. This method minimises the tree during insertion
-    meaning a minimal set of regions can be extracted by
-    :py:meth:`.get_regions` which simply traverses the tree.
+    This data structure is specified by supplying a sequence of (x, y, p)
+    coordinates of cores to be represented by a series of regions using
+    :py:meth:`.add_core`. This method minimises the tree during insertion and
+    an ordered set of regions and core masks can be extracted by
+    :py:meth:`.get_regions_and_coremasks` which simply traverses the tree.
     """
-
     def __init__(self, base_x=0, base_y=0, level=0):
         self.base_x = base_x
         self.base_y = base_y
@@ -144,75 +117,101 @@ class RegionTree(object):
         self.shift = 6 - 2*level
         self.level = level
 
-        # Each region has locally selected components
-        self.locally_selected = set()
+        # For each core number (0-17) we maintain a bitfield indicating for
+        # which subregions this core should be filled.
+        self.locally_selected = array.array('H', (0x0 for _ in range(18)))
 
-        # And possibly contains subregions
+        # If this is a coarser region tree then we also maintain a subtree of
+        # fixed size.
         if level < 3:
             self.subregions = [None] * 16
 
-    def get_regions(self):
-        """Generate a set of integer region representations.
+    def get_regions_and_coremasks(self):
+        """Generate a set of ordered paired region and core mask representations.
 
-        Returns
-        -------
-        generator
-            Generator which yields 32-bit region codes as might be generated by
-            :py:func:`.get_region_for_chip`.
+        .. note::
+            The region and core masks are ordered such that ``(region << 32) |
+            core_mask`` is monotonically increasing. Consequently region and
+            core masks generated by this method can be used with SCAMP's
+            Flood-Fill Core Select (FFSC) method.
+
+        Yields
+        ------
+        (region, core mask)
+            Pair of integers which represent a region of a SpiNNaker machine
+            and a core mask of selected cores within that region.
         """
         region_code = ((self.base_x << 24) | (self.base_y << 16) |
                        (self.level << 16))
 
-        # Build up the returned set of regions
-        if self.locally_selected != set():
-            elements = 0x0000
-            for e in self.locally_selected:
-                elements |= 1 << e
-            yield (region_code | elements)
+        # Generate core masks for any regions which are selected at this level
+        # Create a mapping from subregion mask to core numbers
+        subregions_cores = collections.defaultdict(lambda: 0x0)
+        for core, subregions in enumerate(self.locally_selected):
+            if subregions:  # If any subregions are selected on this level
+                subregions_cores[subregions] |= 1 << core
 
-        # Include subregions if they exist
+        # Order the locally selected items and then yield them
+        for (subregions, coremask) in sorted(subregions_cores.items()):
+            yield (region_code | subregions), coremask
+
         if self.level < 3:
-            for i, sr in enumerate(self.subregions):
-                if i not in self.locally_selected and sr is not None:
-                    for r in sr.get_regions():
-                        yield r
+            # Iterate through the subregions and recurse, we iterate through in
+            # the order which ensures that anything we yield is in increasing
+            # order.
+            for i in (4*x + y for y in range(4) for x in range(4)):
+                subregion = self.subregions[i]
+                if subregion is not None:
+                    for (region, coremask) in \
+                            subregion.get_regions_and_coremasks():
+                        yield (region, coremask)
 
-    def add_coordinate(self, x, y):
-        """Add a new coordinate to the region tree.
+    def add_core(self, x, y, p):
+        """Add a new core to the region tree.
 
         Raises
         ------
         ValueError
-            If the co-ordinate is not contained within the region.
+            If the co-ordinate is not contained within this part of the tree or
+            the core number is out of range.
 
         Returns
         -------
         bool
-            If all contained subregions are full.
+            True if the specified core is to be loaded to all subregions.
         """
         # Check that the co-ordinate is contained in this region
-        if ((x < self.base_x or x >= self.base_x + self.scale) or
+        if ((p < 0 or p > 17) or
+                (x < self.base_x or x >= self.base_x + self.scale) or
                 (y < self.base_y or y >= self.base_y + self.scale)):
-            raise ValueError((x, y))
+            raise ValueError((x, y, p))
 
         # Determine which subregion this refers to
         subregion = ((x >> self.shift) & 0x3) + 4*((y >> self.shift) & 0x3)
 
         if self.level == 3:
             # If level-3 then we just add to the locally selected regions
-            self.locally_selected.add(subregion)
-        else:
-            # Otherwise we delegate, if that level is full then we store it as
-            # a region that is full.
+            self.locally_selected[p] |= 1 << subregion
+        elif not self.locally_selected[p] & (1 << subregion):
+            # If the subregion isn't in `locally_selected` for this core number
+            # then add the core to the subregion.
             if self.subregions[subregion] is None:
                 # "Lazy": if the subtree doesn't exist yet then add it
                 base_x = int(self.base_x + (self.scale / 4) * (subregion % 4))
                 base_y = int(self.base_y + (self.scale / 4) * (subregion // 4))
-                self.subregions[subregion] = RegionTree(base_x, base_y,
-                                                        self.level + 1)
+                self.subregions[subregion] = RegionCoreTree(base_x, base_y,
+                                                            self.level + 1)
 
-            if self.subregions[subregion].add_coordinate(x, y):
-                self.locally_selected.add(subregion)
+            # If the subregion reports that all of its subregions for this core
+            # are selected then we need to add it to `locally_selected`.
+            if self.subregions[subregion].add_core(x, y, p):
+                self.locally_selected[p] |= 1 << subregion
 
-        # If "full" then return True (i.e., would be 0x____ffff if converted)
-        return self.locally_selected == {i for i in range(16)}
+        # If all subregions are selected for this core and this is not the top
+        # level in the hierarchy then return True after emptying the local
+        # selection for the core.
+        if self.locally_selected[p] == 0xffff and self.level != 0:
+            self.locally_selected[p] = 0x0
+            return True
+        else:
+            return False
