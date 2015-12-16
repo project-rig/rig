@@ -1783,7 +1783,7 @@ class MachineController(ContextMixin):
             :py:func:`rig.place_and_route.utils.build_machine` utility function
             may be used with :py:meth:`.get_system_info` like so::
 
-                >> from rig.place_and_route import build_machine
+                >> from rig.place_and_route.utils import build_machine
                 >> sys_info = mc.get_system_info()
                 >> machine = build_machine(sys_info)
 

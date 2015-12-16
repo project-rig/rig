@@ -18,7 +18,7 @@ introductory tutorials:
     :special-members:
 
 .. automodule:: rig.machine_control.machine_controller
-    :members: CoreInfo, ProcessorStatus, IPTag, MemoryIO, RouterDiagnostics, SpiNNakerBootError, SpiNNakerMemoryError, SpiNNakerRouterError, SpiNNakerLoadingError
+    :members: SystemInfo, ChipInfo, CoreInfo, ProcessorStatus, IPTag, MemoryIO, RouterDiagnostics, SpiNNakerBootError, SpiNNakerMemoryError, SpiNNakerRouterError, SpiNNakerLoadingError
     :special-members:
 
 .. automodule:: rig.machine_control.utils
