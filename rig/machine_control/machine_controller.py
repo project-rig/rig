@@ -1729,12 +1729,14 @@ class MachineController(ContextMixin):
                        for c in struct.unpack("<18B", info.data)]
         working_links = set(link for link in Links
                             if (info.arg1 >> (8 + link)) & 1)
+        largest_free_rtr_mc_block = (info.arg1 >> 14) & 0x7FF
         return ChipInfo(
             num_cores=num_cores,
             core_states=core_states[:num_cores],
             working_links=working_links,
             largest_free_sdram_block=info.arg2,
             largest_free_sram_block=info.arg3,
+            largest_free_rtr_mc_block=largest_free_rtr_mc_block
         )
 
     @ContextMixin.use_contextual_arguments()
@@ -1922,8 +1924,14 @@ class CoreInfo(collections.namedtuple(
 
 class ChipInfo(collections.namedtuple(
     'ChipInfo', "num_cores core_states working_links "
-                "largest_free_sdram_block,largest_free_sram_block")):
+                "largest_free_sdram_block largest_free_sram_block "
+                "largest_free_rtr_mc_block")):
     """Information returned about a chip.
+
+    If some parameter is omitted from the constructor, realistic defaults are
+    provided. These should only be used for writing tests and general
+    applications should set all values based on reports from the SpiNNaker
+    machine itself, e.g. using :py:meth:`~.MachineController.get_chip_info`.
 
     Parameters
     ----------
@@ -1940,7 +1948,28 @@ class ChipInfo(collections.namedtuple(
         The size (in bytes) of the largest free block of SDRAM.
     largest_free_sram_block : int
         The size (in bytes) of the largest free block of SRAM.
+    largest_free_rtr_mc_block : int
+        Number of entries in the largest free block of multicast router
+        entries.
     """
+
+    def __new__(cls,
+                num_cores=18,
+                core_states=None,
+                working_links=set(Links),
+                largest_free_sdram_block=119275492,
+                largest_free_sram_block=22240,
+                largest_free_rtr_mc_block=1023):
+        # If core_states is omitted, generate a list of core-states the right
+        # length for the number of cores suggested)
+        if core_states is None:
+            core_states = ([consts.AppState.run]
+                           + [consts.AppState.idle] * num_cores)[:-1]
+
+        return super(ChipInfo, cls).__new__(
+            cls, num_cores, core_states, working_links,
+            largest_free_sdram_block, largest_free_sram_block,
+            largest_free_rtr_mc_block)
 
 
 class SystemInfo(dict):

@@ -451,6 +451,7 @@ class TestMachineControllerLive(object):
             assert mem.read(len(data)) == data
 
     @pytest.mark.order_after("live_test_load_application")
+    @pytest.mark.order_before("live_test_load_routes")
     @pytest.mark.order_before("live_test_stop_application")
     def test_get_chip_info(self, controller):
         # Just sanity check that the monitor processor is flagged as busy and 3
@@ -480,6 +481,17 @@ class TestMachineControllerLive(object):
 
             # Should have some SRAM still available
             assert chip_info.largest_free_sdram_block > 0
+
+            # The MC routing tables should just have one entry reserved by
+            # SC&MP
+            assert chip_info.largest_free_rtr_mc_block == 1023
+
+            # If we allocate a large block of routing table entries, the number
+            # available should shrink.
+            routes = [RoutingTableEntry(set(), 0xFFFFFFFF, 0x00000000)]*100
+            controller.load_routing_table_entries(routes)
+            chip_info = controller.get_chip_info()
+            assert chip_info.largest_free_rtr_mc_block == 923
 
             # If we allocate a 50 MB block of SDRAM the largest free block
             # should shrink accordingly
@@ -2206,22 +2218,27 @@ class TestMachineController(object):
         assert cn.get_num_working_cores(x=0, y=0) == num_cpus
         cn.read_struct_field.assert_called_once_with("sv", "num_cpus", 0, 0)
 
-    @pytest.mark.parametrize("arg1,num_cores,working_links",
-                             [((18 | (0b111110 << 8)),
+    @pytest.mark.parametrize("arg1,num_cores,working_links,"
+                             "largest_free_rtr_mc_block",
+                             [((18 | (0b111110 << 8) | (1024 << 14)),
                                18,
-                               set(l for l in Links if l != Links.east)),
-                              ((18 | (0b011111 << 8)),
+                               set(l for l in Links if l != Links.east),
+                               1024),
+                              ((18 | (0b011111 << 8) | (0 << 14)),
                                18,
-                               set(l for l in Links if l != Links.south)),
-                              ((17 | (0b111111 << 8)),
+                               set(l for l in Links if l != Links.south),
+                               0),
+                              ((17 | (0b111111 << 8) | (123 << 14)),
                                17,
-                               set(Links)),
+                               set(Links),
+                               123),
                               ])
     @pytest.mark.parametrize("arg2,largest_free_sdram_block",
                              [(1024, 1024), (0xFFFFFFFF, 0xFFFFFFFF)])
     @pytest.mark.parametrize("arg3,largest_free_sram_block",
                              [(1024, 1024), (0xFFFFFFFF, 0xFFFFFFFF)])
     def test_get_chip_info(self, arg1, num_cores, working_links,
+                           largest_free_rtr_mc_block,
                            arg2, largest_free_sdram_block,
                            arg3, largest_free_sram_block):
 
@@ -2246,6 +2263,7 @@ class TestMachineController(object):
         assert chip_info.working_links == working_links
         assert chip_info.largest_free_sdram_block == largest_free_sdram_block
         assert chip_info.largest_free_sram_block == largest_free_sram_block
+        assert chip_info.largest_free_rtr_mc_block == largest_free_rtr_mc_block
 
     def test_get_system_info(self):
         cn = MachineController("localhost")
@@ -2329,6 +2347,71 @@ class TestMachineController(object):
 
         # Exiting the context should result in calling app_stop
         cn.send_signal.assert_called_once_with("stop")
+
+
+class TestChipInfo(object):
+    """Make sure the ChipInfo constructor works."""
+
+    def test_defaults(self):
+        # Make sure defaults are sane
+        ci = ChipInfo()
+        assert ci.num_cores == 18
+        assert len(ci.core_states) == 18
+        assert ci.core_states[0] == consts.AppState.run
+        assert ci.core_states[1:] == [consts.AppState.idle] * 17
+        assert ci.working_links == set(Links)
+        assert ci.largest_free_sdram_block > 100 * 1024 * 1024
+        assert ci.largest_free_sram_block > 1024
+        assert ci.largest_free_rtr_mc_block > 1000
+
+    @pytest.mark.parametrize("num_cores,core_states",
+                             [(0, []),
+                              (1, [consts.AppState.run]),
+                              (2, [consts.AppState.run, consts.AppState.idle]),
+                              (3,
+                               [consts.AppState.run] +
+                               [consts.AppState.idle] * 2),
+                              (18,
+                               [consts.AppState.run] +
+                               [consts.AppState.idle] * 17)])
+    def test_default_core_states(self, num_cores, core_states):
+        # Make sure the default core_states value is consistent with the number
+        # of cores.
+        ci = ChipInfo(num_cores)
+        assert ci.num_cores == num_cores
+        assert len(ci.core_states) == num_cores
+        assert ci.core_states == core_states
+
+    def test_explicit_positional(self):
+        # Make sure explicit values are retained
+        ci_positional = ChipInfo(10, [consts.AppState.idle] * 10,
+                                 set([Links.north]),
+                                 1024,
+                                 128,
+                                 16)
+
+        assert ci_positional.num_cores == 10
+        assert ci_positional.core_states == [consts.AppState.idle] * 10
+        assert ci_positional.working_links == set([Links.north])
+        assert ci_positional.largest_free_sdram_block == 1024
+        assert ci_positional.largest_free_sram_block == 128
+        assert ci_positional.largest_free_rtr_mc_block == 16
+
+    def test_explicit_named(self):
+        # Make sure explicit values are retained
+        ci_named = ChipInfo(num_cores=10,
+                            core_states=[consts.AppState.idle] * 10,
+                            working_links=set([Links.north]),
+                            largest_free_sdram_block=1024,
+                            largest_free_sram_block=128,
+                            largest_free_rtr_mc_block=16)
+
+        assert ci_named.num_cores == 10
+        assert ci_named.core_states == [consts.AppState.idle] * 10
+        assert ci_named.working_links == set([Links.north])
+        assert ci_named.largest_free_sdram_block == 1024
+        assert ci_named.largest_free_sram_block == 128
+        assert ci_named.largest_free_rtr_mc_block == 16
 
 
 class TestSystemInfo(object):

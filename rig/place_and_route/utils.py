@@ -365,7 +365,29 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     return routing_tables
 
 
-def build_and_minimise_routing_tables(routes, net_keys, target_length=1024):
+def build_routing_table_target_lengths(system_info):
+    """Build a dictionary of target routing table lengths from a
+    :py:class:`~rig.machine_control.machine_controller.SystemInfo` object.
+
+    Useful in conjunction with :py:func:`.build_and_minimise_routing_tables`.
+
+    Returns
+    -------
+    {(x, y): num, ...}
+        A dictionary giving the number of free routing table entries on each
+        chip on a SpiNNaker system.
+
+        .. note::
+            The actual number of entries reported is the size of the largest
+            contiguous free block of routing entries in the routing table.
+    """
+    return {
+        (x, y): ci.largest_free_rtr_mc_block
+        for (x, y), ci in iteritems(system_info)
+    }
+
+
+def build_and_minimise_routing_tables(routes, net_keys, target_length):
     """Convert a set of RoutingTrees into a per-chip set of routing tables and
     attempt to minimise those tables to meet a target length.
 
@@ -381,10 +403,17 @@ def build_and_minimise_routing_tables(routes, net_keys, target_length=1024):
         `place_and_route` module.)
     net_keys : {net: (key, mask), ...}
         The key and mask associated with each net.
-    target_length : {(x, y): int, ...} or int or None
+    target_length : {(x, y): int or None, ...} or int or None
         Target length of minimised routing tables, either as a dictionary
-        mapping co-ordinates to target lengths or one integer for all target
-        lengths.
+        mapping co-ordinates to target lengths or one value for all chips. See
+        :py:func:`.build_routing_table_target_lengths`.
+
+        If an int, gives the target number of entries to use. An exception is
+        raised if the target is not met. The minimisation process halts when
+        the number of routing entries reaches or drops below the target length.
+
+        If None, the minimisation process makes a best-effort to minimise the
+        routing table as much as possible.
 
     Returns
     -------

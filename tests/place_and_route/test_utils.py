@@ -6,7 +6,8 @@ from rig.place_and_route.utils import \
     build_machine, build_core_constraints, build_application_map, \
     build_routing_tables, MultisourceRouteError, \
     _get_minimal_core_reservations, \
-    build_and_minimise_routing_tables
+    build_and_minimise_routing_tables, \
+    build_routing_table_target_lengths
 
 from rig.place_and_route.machine import Machine, Cores
 
@@ -542,7 +543,7 @@ def test_build_minimised_routing_tables():
 
     # Get the routing tables, with no minimisation
     routing_tables = build_and_minimise_routing_tables(
-        routes, net_keys)
+        routes, net_keys, 1024)
 
     # Check at (0, 0)
     e0 = RoutingTableEntry({Routes.east}, 0x0, 0xf)
@@ -621,3 +622,16 @@ def test_build_minimised_routing_tables():
         build_and_minimise_routing_tables(routes, net_keys,
                                           target_length=lengths)
     assert "(0, 2)" in str(e)
+
+
+def test_build_routing_table_target_lengths():
+    si = SystemInfo(2, 3, {
+        (x, y): ChipInfo(largest_free_rtr_mc_block=(x << 8) | y)
+        for x in range(2)
+        for y in range(3)
+    })
+    assert build_routing_table_target_lengths(si) == {  # pragma: no branch
+        (x, y): (x << 8) | y
+        for x in range(2)
+        for y in range(3)
+    }
