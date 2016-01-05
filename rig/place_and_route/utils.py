@@ -8,8 +8,8 @@ from six import iteritems, itervalues
 
 from rig.place_and_route.machine import Machine, Cores, SDRAM, SRAM
 
-from rig.routing_table import (
-    RoutingTableEntry, minimise, MinimisationFailedError)
+from rig.routing_table import RoutingTableEntry, MinimisationFailedError
+from rig.routing_table import minimise as default_routing_table_minimiser
 
 from rig.place_and_route.routing_tree import RoutingTree
 
@@ -387,7 +387,9 @@ def build_routing_table_target_lengths(system_info):
     }
 
 
-def build_and_minimise_routing_tables(routes, net_keys, target_length):
+def build_and_minimise_routing_tables(routes, net_keys, target_length,
+                                      minimise=default_routing_table_minimiser,
+                                      minimise_kwargs={}):
     """Convert a set of RoutingTrees into a per-chip set of routing tables and
     attempt to minimise those tables to meet a target length.
 
@@ -414,6 +416,12 @@ def build_and_minimise_routing_tables(routes, net_keys, target_length):
 
         If None, the minimisation process makes a best-effort to minimise the
         routing table as much as possible.
+    minimise : A routing-table minimisation function.
+        The table minimistion function to use. Defaults to
+        :py:func:`rig.routing_table.minimise`.
+    minimise_kwargs : dict
+        Additional keyword arguments to pass to the table minimisation
+        function.  Default to an empty dict.
 
     Returns
     -------
@@ -439,7 +447,8 @@ def build_and_minimise_routing_tables(routes, net_keys, target_length):
     for chip, entries in iteritems(build_routing_tables(
             routes, net_keys, omit_default_routes=False)):
         try:
-            tables[chip] = minimise(entries, target_lengths[chip])
+            tables[chip] = minimise(entries, target_lengths[chip],
+                                    **minimise_kwargs)
         except MinimisationFailedError as e:
             e.chip = chip
             raise

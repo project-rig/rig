@@ -1,7 +1,7 @@
-:py:mod:`rig.links`: Chip-to-chip link data structure
------------------------------------------------------
+:py:class:`rig.links.Links`: Chip-to-chip link data structure
+-------------------------------------------------------------
 
-.. automodule:: rig.links
+.. autoclass:: rig.links.Links
     :members:
     :special-members:
 

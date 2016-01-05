@@ -61,6 +61,8 @@ The utilities provided by Rig can be broken down approximately as follows:
   * ``place_and_route``: a suite of algorithms for mapping graph-like problems
     onto the SpiNNaker hardware, allocating on-chip resources and generating
     routing tables.
+  * ``routing_table``: a suite of algorithms for minimising and analysing
+    SpiNNaker's multicast routing tables.
   * ``geometry``: utility functions for working with SpiNNaker's hexagonal
     torus topology.
 

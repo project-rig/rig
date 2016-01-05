@@ -17,6 +17,7 @@ from rig.netlist import Net
 
 from rig.routing_table import (
     Routes, RoutingTableEntry, MinimisationFailedError)
+from rig.routing_table import minimise as default_routing_table_minimiser
 
 from rig.place_and_route.routing_tree import RoutingTree
 
@@ -487,7 +488,8 @@ def test_build_routing_tables_repeated_key_mask_fork_not_allowed():
     assert "0x0000000f" in str(err)  # Mask that causes the problem
 
 
-def test_build_minimised_routing_tables():
+@pytest.mark.parametrize("wrap", [True, False])
+def test_build_minimised_routing_tables(wrap):
     """Test building and minimising routing tables.
 
     Key 0000:
@@ -510,6 +512,22 @@ def test_build_minimised_routing_tables():
 
         (0, 0) ---> (0, 1) ---> (0, 2)
     """
+    # A wrapper around the minimisation function to ensure we can pass in
+    # alternative minimisers.
+    if wrap:
+        minimise_kwargs = {"test_arg": "testing"}
+
+        def minimise_wrapper(*args, **kwargs):
+            assert kwargs.pop("test_arg") == "testing"
+            return default_routing_table_minimiser(*args, **kwargs)
+
+        kwargs = {
+            "minimise": minimise_wrapper,
+            "minimise_kwargs": minimise_kwargs,
+        }
+    else:
+        kwargs = {}
+
     # Create the nets and net->key mapping
     nets = [object() for _ in range(3)]
     net_keys = {nets[0]: (0x0, 0xf),
@@ -543,7 +561,7 @@ def test_build_minimised_routing_tables():
 
     # Get the routing tables, with no minimisation
     routing_tables = build_and_minimise_routing_tables(
-        routes, net_keys, 1024)
+        routes, net_keys, 1024, **kwargs)
 
     # Check at (0, 0)
     e0 = RoutingTableEntry({Routes.east}, 0x0, 0xf)
@@ -576,7 +594,7 @@ def test_build_minimised_routing_tables():
 
     # Minimise down to 2 entries max
     routing_tables = build_and_minimise_routing_tables(
-        routes, net_keys, target_length=2)
+        routes, net_keys, target_length=2, **kwargs)
 
     # Check at (0, 0)
     e0 = RoutingTableEntry({Routes.east}, 0x0, 0xf)
@@ -604,7 +622,8 @@ def test_build_minimised_routing_tables():
 
     # Minimise down to 1 entry max - this is impossible for (0,1) and (0, 2)
     with pytest.raises(MinimisationFailedError) as e:
-        build_and_minimise_routing_tables(routes, net_keys, target_length=1)
+        build_and_minimise_routing_tables(
+            routes, net_keys, target_length=1, **kwargs)
     assert "(0, 1)" in str(e) or "(0, 2)" in str(e)
 
     # Minimise down to 1 entry max for chip (0, 1)
@@ -612,7 +631,8 @@ def test_build_minimised_routing_tables():
     lengths[(0, 1)] = 1
     with pytest.raises(MinimisationFailedError) as e:
         build_and_minimise_routing_tables(routes, net_keys,
-                                          target_length=lengths)
+                                          target_length=lengths,
+                                          **kwargs)
     assert "(0, 1)" in str(e)
 
     # Minimise down to 1 entry max for chip (0, 2)
@@ -620,7 +640,8 @@ def test_build_minimised_routing_tables():
     lengths[(0, 2)] = 1
     with pytest.raises(MinimisationFailedError) as e:
         build_and_minimise_routing_tables(routes, net_keys,
-                                          target_length=lengths)
+                                          target_length=lengths,
+                                          **kwargs)
     assert "(0, 2)" in str(e)
 
 

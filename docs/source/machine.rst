@@ -1,5 +1,5 @@
-:py:mod:`rig.place_and_route.Machine` etc.: Machine resource availability P&R data structure
---------------------------------------------------------------------------------------------
+:py:mod:`~rig.place_and_route.Machine` etc.: Machine resource availability P&R data structure
+---------------------------------------------------------------------------------------------
 
 .. autoclass:: rig.place_and_route.Machine
     :members:

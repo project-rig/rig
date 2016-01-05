@@ -1,7 +1,12 @@
-"""Minimisation of SpiNNaker Routing Tables
+"""
+Ordered Covering
+================
+
+An novel algorithm for the minimisation of SpiNNaker's multicast routing tables
+devised by Andrew Mundy.
 
 Background
-==========
+----------
 
 SpiNNaker routing tables consist of entries made up of a 32-bit key, a 32-bit
 mask and a 24-bit route value. The key and mask of every entry act as a sieve
@@ -23,12 +28,12 @@ the cores and links indicated by the route field.
 
 For example, if the table were:
 
- =======   ========  =================
+ ========  ========  =================
  Key       Mask      Route
- =======   ========  =================
+ ========  ========  =================
  ``0000``  ``1111``  North, North East
  ``0111``  ``0111``  South
- =======   ========  =================
+ ========  ========  =================
 
 Which, from now on, will be written as::
 
@@ -52,7 +57,7 @@ However, packets with the key ``1111`` would be sent to cores 1 and 2 as only
 the higher priority entry has effect.
 
 Merging routing table entries
-=============================
+-----------------------------
 
 Routing tables can be minimised by merging together entries with equivalent
 routes. This is done by creating a new key-mask pair with an ``X`` wherever the
@@ -85,7 +90,7 @@ We need a set of rules for:
  2. Which merges are allowed
 
 "Ordered Covering"
-==================
+------------------
 
 The algorithm implemented here, "Ordered Covering", provides the following
 rules:
@@ -327,7 +332,7 @@ class Merge(namedtuple("Merge", ["routing_table", "entries", "key", "mask",
                                  "insertion_index"])):
     """Represents a potential merge of routing table entries.
 
-    Attributes
+    Parameters
     ----------
     routing_table : [:py:class:`~.RoutingTableEntry`, ...]
         Reference to the routing table against which the merge is defined.

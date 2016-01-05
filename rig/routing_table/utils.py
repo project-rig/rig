@@ -123,7 +123,8 @@ def expand_entry(entry, ignore_xs=0x0):
 
 
 def expand_entries(entries, ignore_xs=None):
-    """Turn all Xs which are not ignored in all entries into ``0``s and ``1``s.
+    """Turn all Xs which are not ignored in all entries into ``0`` s and
+    ``1`` s.
 
     For example::
 

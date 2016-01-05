@@ -379,5 +379,4 @@ Data structures
         
         machine
         links
-        routing_table
         netlist
