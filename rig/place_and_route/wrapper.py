@@ -9,12 +9,19 @@ from rig.place_and_route.constraints import \
     ReserveResourceConstraint, AlignResourceConstraint
 
 from rig.place_and_route.utils import \
-    build_machine, build_core_constraints, build_application_map, \
-    build_routing_tables
+    build_machine, build_core_constraints, build_application_map
 
 from rig.place_and_route import place as default_place
 from rig.place_and_route import allocate as default_allocate
 from rig.place_and_route import route as default_route
+
+from rig.routing_table import \
+    routing_tree_to_tables, build_routing_table_target_lengths, \
+    minimise_tables
+
+from rig.routing_table.remove_default_routes import minimise as \
+    remove_default_entries
+from rig.routing_table.ordered_covering import minimise as ordered_covering
 
 
 def place_and_route_wrapper(vertices_resources, vertices_applications,
@@ -23,12 +30,14 @@ def place_and_route_wrapper(vertices_resources, vertices_applications,
                             place=default_place, place_kwargs={},
                             allocate=default_allocate, allocate_kwargs={},
                             route=default_route, route_kwargs={},
+                            minimise_tables_methods=(remove_default_entries,
+                                                     ordered_covering),
                             core_resource=Cores, sdram_resource=SDRAM,
                             sram_resource=SRAM):
     """Wrapper for core place-and-route tasks for the common case.
 
     This function takes a set of vertices and nets and produces placements,
-    allocations, routing tables and application loading information.
+    allocations, minimised routing tables and application loading information.
 
     .. note::
 
@@ -89,6 +98,16 @@ def place_and_route_wrapper(vertices_resources, vertices_applications,
         **Optional.** Routing algorithm to use.
     route_kwargs : dict (Default: {})
         **Optional.** Algorithm-specific arguments for the router.
+    minimise_tables_methods : [:py:func:`rig.routing_table.minimise`, ...]
+        **Optional.** An iterable of routing table minimisation algorithms to
+        use when routing tables outgrow the space available.  Each method is
+        tried in the order presented and the first to meet the required target
+        length for a given chip is used. Consequently less computationally
+        costly algorithms should be nearer the start of the list. The default
+        methods will try to remove default routes
+        (:py:meth:`rig.routing_table.remove_default_routes.minimise`) and then
+        fall back on the ordered covering algorithm
+        (:py:meth:`rig.routing_table.ordered_covering.minimise`).
     core_resource : resource (Default: :py:data:`~rig.place_and_route.Cores`)
         **Optional.** The resource identifier used for cores.
     sdram_resource : resource (Default: :py:data:`~rig.place_and_route.SDRAM`)
@@ -137,8 +156,14 @@ def place_and_route_wrapper(vertices_resources, vertices_applications,
     application_map = build_application_map(vertices_applications, placements,
                                             allocations, core_resource)
 
-    # Build data-structures ready to feed to the machine loading functions
-    routing_tables = build_routing_tables(routes, net_keys)
+    # Build routing tables from the generated routes
+    routing_tables = routing_tree_to_tables(routes, net_keys)
+
+    # Minimise the routing tables, if required
+    target_lengths = build_routing_table_target_lengths(system_info)
+    routing_tables = minimise_tables(routing_tables,
+                                     target_lengths,
+                                     minimise_tables_methods)
 
     return placements, allocations, application_map, routing_tables
 
@@ -265,6 +290,7 @@ def wrapper(vertices_resources, vertices_applications,
                                             allocations, core_resource)
 
     # Build data-structures ready to feed to the machine loading functions
+    from rig.place_and_route.utils import build_routing_tables
     routing_tables = build_routing_tables(routes, net_keys)
 
     return placements, allocations, application_map, routing_tables

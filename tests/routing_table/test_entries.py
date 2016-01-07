@@ -23,6 +23,34 @@ class TestRoutingTableEntry(object):
                                 0x0, 0x0)
         assert "E S 1" in str(rte)
 
+    def test_str_with_source(self):
+        RTE = RoutingTableEntry
+
+        assert (str(RTE({Routes.core(3)}, 0x0, 0x0, {Routes.east})) ==
+                "E -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 3")
+        assert (str(RTE({Routes.core(3)}, 0x0, 0x0, {Routes.north_east})) ==
+                "NE -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 3")
+        assert (str(RTE({Routes.core(3)}, 0x0, 0x0, {Routes.north})) ==
+                "N -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 3")
+        assert (str(RTE({Routes.core(3)}, 0x0, 0x0, {Routes.west})) ==
+                "W -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 3")
+        assert (str(RTE({Routes.core(3)}, 0x0, 0x0, {Routes.south_west})) ==
+                "SW -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 3")
+        assert (str(RTE({Routes.core(3)}, 0x0, 0x0, {Routes.south})) ==
+                "S -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 3")
+        assert (str(RTE({Routes.core(2)}, 0x0, 0x0, {Routes.core(1)})) ==
+                "1 -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 2")
+
+        # Check multiple
+        assert (str(RTE({Routes.core(3)}, 0x0, 0x0,
+                        {Routes.west, Routes.south})) ==
+                "W S -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 3")
+
+        # Check that it works even if a None bleeds in
+        assert (str(RTE({Routes.core(3)}, 0x0, 0x0,
+                        {Routes.west, Routes.south, None})) ==
+                "W S -> XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -> 3")
+
 
 def test_routes():
     # Make sure Links are cast correctly
@@ -85,3 +113,15 @@ def test_routes():
     assert Routes.south.initial == "S"
     for i in range(18):
         assert Routes.core(i).initial == str(i)
+
+    # Test that the opposites are correct
+    assert Routes.east.opposite is Routes.west
+    assert Routes.north_east.opposite is Routes.south_west
+    assert Routes.north.opposite is Routes.south
+    assert Routes.east is Routes.west.opposite
+    assert Routes.north_east is Routes.south_west.opposite
+    assert Routes.north is Routes.south.opposite
+
+    for i in range(18):
+        with pytest.raises(ValueError):
+            Routes.core(i).opposite

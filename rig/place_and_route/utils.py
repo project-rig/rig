@@ -2,16 +2,13 @@
 structures from the products of placement, allocation and routing.
 """
 
-from collections import defaultdict, deque, namedtuple, OrderedDict
+from collections import defaultdict
 
 from six import iteritems, itervalues
 
+import warnings
+
 from rig.place_and_route.machine import Machine, Cores, SDRAM, SRAM
-
-from rig.routing_table import RoutingTableEntry, MinimisationFailedError
-from rig.routing_table import minimise as default_routing_table_minimiser
-
-from rig.place_and_route.routing_tree import RoutingTree
 
 from rig.place_and_route.constraints import ReserveResourceConstraint
 
@@ -257,14 +254,30 @@ def build_application_map(vertices_applications, placements, allocations,
 
 
 def build_routing_tables(routes, net_keys, omit_default_routes=True):
-    """Convert a set of RoutingTrees into a per-chip set of routing tables.
+    """**DEPRECATED** Convert a set of RoutingTrees into a per-chip set of
+    routing tables.
+
+    .. warning::
+        This method has been deprecated in favour of
+        :py:meth:`rig.routing_table.routing_tree_to_tables` and
+        :py:meth:`rig.routing_table.minimise`.
+
+        E.g. most applications should use something like::
+
+            from rig.routing_table import routing_tree_to_tables, minimise
+            tables = minimise(routing_tree_to_tables(routes, net_keys),
+                              target_lengths)
+
+        Where target_length gives the number of available routing entries on
+        the chips in your SpiNNaker system (see
+        :py:func:~rig.routing_table.utils.build_routing_table_target_lengths)
 
     This command produces routing tables with entries optionally omitted when
     the route does not change direction (i.e. when default routing can be
     used).
 
     .. warning::
-        A :py:exc:`rig.place_and_route.utils.MultisourceRouteError` will
+        A :py:exc:`rig.routing_table.MultisourceRouteError` will
         be raised if entries with identical keys and masks but with differing
         routes are generated. This is not a perfect test, entries which would
         otherwise collide are not spotted.
@@ -277,10 +290,6 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     .. note::
         If a routing tree has a terminating vertex whose route is set to None,
         that vertex is ignored.
-
-    .. note::
-        :py:func:`~.build_and_minimise_routing_tables` can be used to get
-        minimised versions of routing tables.
 
     Parameters
     ----------
@@ -299,173 +308,23 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     -------
     {(x, y): [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
     """
-    # Pairs of inbound and outbound routes.
-    _InOutPair = namedtuple("_InOutPair", "ins, outs")
+    from rig.routing_table import routing_tree_to_tables, remove_default_routes
 
-    # {(x, y): {(key, mask): _InOutPair}}
-    route_sets = defaultdict(OrderedDict)
+    warnings.warn(
+        "build_routing_tables() is deprecated, see "
+        "rig.routing_table.routing_tree_to_tables()"
+        "and rig.routing_table.minimise()", DeprecationWarning
+    )
 
-    for net, routing_tree in iteritems(routes):
-        key, mask = net_keys[net]
-
-        # A queue of (direction, node) to visit. The direction is the Links
-        # entry which describes the direction in which we last moved to reach
-        # the node (or None for the root).
-        to_visit = deque([(None, routing_tree)])
-        while to_visit:
-            direction, node = to_visit.popleft()
-
-            x, y = node.chip
-
-            # Determine the set of directions we must travel to reach the
-            # children
-            out_directions = set()
-            for child_direction, child in node.children:
-                # Note that if the direction is unspecified, we simply
-                # (silently) don't add a route for that child.
-                if child_direction is not None:
-                    out_directions.add(child_direction)
-
-                # Search the next steps of the route too
-                if isinstance(child, RoutingTree):
-                    assert child_direction is not None
-                    to_visit.append((child_direction, child))
-
-            # Add a routing entry when the direction changes
-            if (key, mask) in route_sets[(x, y)]:
-                # If there is an existing route set raise an error if the out
-                # directions are not equivalent.
-                if route_sets[(x, y)][(key, mask)].outs != out_directions:
-                    raise MultisourceRouteError(key, mask, (x, y))
-
-                # Otherwise, add the input directions as this represents a
-                # merge of the routes.
-                route_sets[(x, y)][(key, mask)].ins.add(direction)
-            else:
-                # Otherwise create a new route set
-                route_sets[(x, y)][(key, mask)] = _InOutPair(
-                    set([direction]), set(out_directions)
-                )
-
-    # Construct the routing tables from the route sets
-    routing_tables = defaultdict(list)
-    for (x, y), routes in iteritems(route_sets):
-        for (key, mask), route in iteritems(routes):
-            # Remove default routes where possible
-            if omit_default_routes and (len(route.ins) == 1 and
-                                        route.outs == route.ins):
-                # This route can be removed, so skip it.
-                continue
-
-            # Add the route
-            routing_tables[(x, y)].append(
-                RoutingTableEntry(route.outs, key, mask)
-            )
-
-    return routing_tables
-
-
-def build_routing_table_target_lengths(system_info):
-    """Build a dictionary of target routing table lengths from a
-    :py:class:`~rig.machine_control.machine_controller.SystemInfo` object.
-
-    Useful in conjunction with :py:func:`.build_and_minimise_routing_tables`.
-
-    Returns
-    -------
-    {(x, y): num, ...}
-        A dictionary giving the number of free routing table entries on each
-        chip on a SpiNNaker system.
-
-        .. note::
-            The actual number of entries reported is the size of the largest
-            contiguous free block of routing entries in the routing table.
-    """
-    return {
-        (x, y): ci.largest_free_rtr_mc_block
-        for (x, y), ci in iteritems(system_info)
-    }
-
-
-def build_and_minimise_routing_tables(routes, net_keys, target_length,
-                                      minimise=default_routing_table_minimiser,
-                                      minimise_kwargs={}):
-    """Convert a set of RoutingTrees into a per-chip set of routing tables and
-    attempt to minimise those tables to meet a target length.
-
-    This is a wrapper around :py:func:`~.build_routing_tables` and
-    :py:func:`rig.routing_table.minimise`.
-
-    Parameters
-    ----------
-    routes : {net: :py:class:`~rig.place_and_route.routing_tree.RoutingTree`, \
-              ...}
-        The complete set of RoutingTrees representing all routes in the system.
-        (Note: this is the same datastructure produced by routers in the
-        `place_and_route` module.)
-    net_keys : {net: (key, mask), ...}
-        The key and mask associated with each net.
-    target_length : {(x, y): int or None, ...} or int or None
-        Target length of minimised routing tables, either as a dictionary
-        mapping co-ordinates to target lengths or one value for all chips. See
-        :py:func:`.build_routing_table_target_lengths`.
-
-        If an int, gives the target number of entries to use. An exception is
-        raised if the target is not met. The minimisation process halts when
-        the number of routing entries reaches or drops below the target length.
-
-        If None, the minimisation process makes a best-effort to minimise the
-        routing table as much as possible.
-    minimise : A routing-table minimisation function.
-        The table minimistion function to use. Defaults to
-        :py:func:`rig.routing_table.minimise`.
-    minimise_kwargs : dict
-        Additional keyword arguments to pass to the table minimisation
-        function.  Default to an empty dict.
-
-    Returns
-    -------
-    {(x, y): [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
-        Minimised routing tables. The correct operation of these tables relies
-        on their entries not being reordered.
-
-    Raises
-    ------
-    MinimisationFailedError
-        If any of the routing tables could not be made to fit the given target
-        lengths.
-    """
-    # Coerce the target_length argument into the dictionary form
-    if not isinstance(target_length, dict):
-        target_lengths = defaultdict(lambda: target_length)
-    else:
-        target_lengths = target_length
-
-    # Build the tables and then minimise them, if any fail to minimise we add
-    # slightly more information and re-raise the error
+    # Build full routing tables and then remove default entries from them
     tables = dict()
-    for chip, entries in iteritems(build_routing_tables(
-            routes, net_keys, omit_default_routes=False)):
-        try:
-            tables[chip] = minimise(entries, target_lengths[chip],
-                                    **minimise_kwargs)
-        except MinimisationFailedError as e:
-            e.chip = chip
-            raise
+
+    for chip, table in iteritems(routing_tree_to_tables(routes, net_keys)):
+        if omit_default_routes:
+            table = remove_default_routes.minimise(table, target_length=None)
+
+        # If the table is empty don't add it to the dictionary of tables.
+        if table:
+            tables[chip] = table
 
     return tables
-
-
-class MultisourceRouteError(Exception):
-    """Indicates that two nets with the same key and mask would cause packets
-    to become duplicated.
-    """
-    def __init__(self, key, mask, coordinate):
-        self.key = key
-        self.mask = mask
-        self.x, self.y = coordinate
-
-    def __str__(self):
-        return ("Two different nets with the same key ({0.key:#010x}) and "
-                "mask ({0.mask:#010x}) fork differently at ({0.x}, {0.y})".
-                format(self))

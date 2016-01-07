@@ -1,6 +1,108 @@
+from collections import defaultdict, namedtuple, OrderedDict
+
+from rig.routing_table import RoutingTableEntry, MultisourceRouteError
+from six import iteritems
 import warnings
 
-from rig.routing_table import RoutingTableEntry
+
+def routing_tree_to_tables(routes, net_keys):
+    """Convert a set of
+    :py:class:`~rig.place_and_route.routing_tree.RoutingTree` s into a per-chip
+    set of routing tables.
+
+    .. warning::
+        A :py:exc:`rig.routing_table.MultisourceRouteError` will
+        be raised if entries with identical keys and masks but with differing
+        routes are generated. This is not a perfect test, entries which would
+        otherwise collide are not spotted.
+
+    .. warning::
+        The routing trees provided are assumed to be correct and continuous
+        (not missing any hops). If this is not the case, the output is
+        undefined.
+
+    .. note::
+        If a routing tree has a terminating vertex whose route is set to None,
+        that vertex is ignored.
+
+    Parameters
+    ----------
+    routes : {net: :py:class:`~rig.place_and_route.routing_tree.RoutingTree`, \
+              ...}
+        The complete set of RoutingTrees representing all routes in the system.
+        (Note: this is the same data structure produced by routers in the
+        :py:mod:`~rig.place_and_route` module.)
+    net_keys : {net: (key, mask), ...}
+        The key and mask associated with each net.
+
+    Returns
+    -------
+    {(x, y): [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
+    """
+    # Pairs of inbound and outbound routes.
+    InOutPair = namedtuple("InOutPair", "ins, outs")
+
+    # {(x, y): {(key, mask): _InOutPair}}
+    route_sets = defaultdict(OrderedDict)
+
+    for net, routing_tree in iteritems(routes):
+        key, mask = net_keys[net]
+
+        # The direction is the Links entry which describes the direction in
+        # which we last moved to reach the node (or None for the root).
+        for direction, (x, y), out_directions in routing_tree.traverse():
+            # Determine the in_direction
+            in_direction = direction
+            if in_direction is not None:
+                in_direction = direction.opposite
+
+            # Add a routing entry
+            if (key, mask) in route_sets[(x, y)]:
+                # If there is an existing route set raise an error if the out
+                # directions are not equivalent.
+                if route_sets[(x, y)][(key, mask)].outs != out_directions:
+                    raise MultisourceRouteError(key, mask, (x, y))
+
+                # Otherwise, add the input directions as this represents a
+                # merge of the routes.
+                route_sets[(x, y)][(key, mask)].ins.add(in_direction)
+            else:
+                # Otherwise create a new route set
+                route_sets[(x, y)][(key, mask)] = \
+                    InOutPair({in_direction}, set(out_directions))
+
+    # Construct the routing tables from the route sets
+    routing_tables = defaultdict(list)
+    for (x, y), routes in iteritems(route_sets):
+        for (key, mask), route in iteritems(routes):
+            # Add the route
+            routing_tables[(x, y)].append(
+                RoutingTableEntry(route.outs, key, mask, route.ins)
+            )
+
+    return routing_tables
+
+
+def build_routing_table_target_lengths(system_info):
+    """Build a dictionary of target routing table lengths from a
+    :py:class:`~rig.machine_control.machine_controller.SystemInfo` object.
+
+    Useful in conjunction with :py:func:`~rig.routing_table.minimise_tables`.
+
+    Returns
+    -------
+    {(x, y): num, ...}
+        A dictionary giving the number of free routing table entries on each
+        chip on a SpiNNaker system.
+
+        .. note::
+            The actual number of entries reported is the size of the largest
+            contiguous free block of routing entries in the routing table.
+    """
+    return {
+        (x, y): ci.largest_free_rtr_mc_block
+        for (x, y), ci in iteritems(system_info)
+    }
 
 
 def table_is_subset_of(entries_a, entries_b):
@@ -23,7 +125,7 @@ def table_is_subset_of(entries_a, entries_b):
 
     is a functional subset of a minimised version of itself::
 
-        >>> from rig.routing_table import minimise
+        >>> from rig.routing_table.ordered_covering import minimise
         >>> other_table = minimise(table, target_length=None)
         >>> other_table == table
         False
@@ -34,6 +136,17 @@ def table_is_subset_of(entries_a, entries_b):
 
         >>> table_is_subset_of(other_table, table)
         False
+
+    Default routes are taken into account, such that the table::
+
+        >>> table = [
+        ...     RoutingTableEntry({Routes.north}, 0x0, 0xf, {Routes.south}),
+        ... ]
+
+    is a subset of the empty table::
+
+        >>> table_is_subset_of(table, list())
+        True
 
     Parameters
     ----------
@@ -65,10 +178,57 @@ def table_is_subset_of(entries_a, entries_b):
                     return False
         else:
             # If we didn't break out of the loop then the entry from the first
-            # table never matched an entry in the second table
-            return False
+            # table never matched an entry in the second table. If the entry
+            # from the first table could not be default routed we return False
+            # as the tables cannot be equivalent.
+            default_routed = False
+
+            if len(entry.route) == 1 and len(entry.sources) == 1:
+                source = next(iter(entry.sources))
+                sink = next(iter(entry.route))
+
+                if (source is not None and
+                        sink.is_link and
+                        source is sink.opposite):
+                    default_routed = True
+
+            if not default_routed:
+                return False
 
     return True
+
+
+def intersect(key_a, mask_a, key_b, mask_b):
+    """Return if key-mask pairs intersect (i.e., would both match some of the
+    same keys).
+
+    For example, the key-mask pairs ``00XX`` and ``001X`` both match the keys
+    ``0010`` and ``0011`` (i.e., they do intersect)::
+
+        >>> intersect(0b0000, 0b1100, 0b0010, 0b1110)
+        True
+
+    But the key-mask pairs ``00XX`` and ``11XX`` do not match any of the same
+    keys (i.e., they do not intersect)::
+
+        >>> intersect(0b0000, 0b1100, 0b1100, 0b1100)
+        False
+
+    Parameters
+    ----------
+    key_a : int
+    mask_a : int
+        The first key-mask pair
+    key_b : int
+    mask_b : int
+        The second key-mask pair
+
+    Returns
+    -------
+    bool
+        True if the two key-mask pairs intersect otherwise False.
+    """
+    return (key_a & mask_b) == (key_b & mask_a)
 
 
 def expand_entry(entry, ignore_xs=0x0):
@@ -149,13 +309,14 @@ def expand_entries(entries, ignore_xs=None):
     entries will both match ``0000``, so when the second entry is expanded only
     one entry is retained)::
 
+        >>> from rig.routing_table import Routes
         >>> entries = [
-        ...     RoutingTableEntry(0, 0b0000, 0b1111),  # 0000 -> 0
-        ...     RoutingTableEntry(1, 0b0000, 0b1011),  # 0X00 -> 1
+        ...     RoutingTableEntry({Routes.north}, 0b0000, 0b1111),  # 0000 -> N
+        ...     RoutingTableEntry({Routes.south}, 0b0000, 0b1011),  # 0X00 -> S
         ... ]
         >>> list(expand_entries(entries)) == [
-        ...     RoutingTableEntry(0, 0b0000, 0b1111),  # 0000 -> 0
-        ...     RoutingTableEntry(1, 0b0100, 0b1111),  # 0100 -> 1
+        ...     RoutingTableEntry({Routes.north}, 0b0000, 0b1111),  # 0000 -> N
+        ...     RoutingTableEntry({Routes.south}, 0b0100, 0b1111),  # 0100 -> S
         ... ]
         True
 
@@ -213,8 +374,8 @@ def get_common_xs(entries):
 
         >>> from rig.routing_table import RoutingTableEntry
         >>> entries = [
-        ...     RoutingTableEntry(None, 0b0100, 0xfffffff0 | 0b1100),  # 01XX
-        ...     RoutingTableEntry(None, 0b0010, 0xfffffff0 | 0b0010),  # XX1X
+        ...     RoutingTableEntry(set(), 0b0100, 0xfffffff0 | 0b1100),  # 01XX
+        ...     RoutingTableEntry(set(), 0b0010, 0xfffffff0 | 0b0010),  # XX1X
         ... ]
         >>> print("{:#06b}".format(get_common_xs(entries)))
         0b0001

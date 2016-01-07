@@ -5,6 +5,7 @@ complete path taken by a route. This is used during place and route in
 preference to a set of RoutingTableEntry tuples since it is more easily
 verified and more accurately represents the problem at hand.
 """
+from collections import deque
 
 
 class RoutingTree(object):
@@ -36,6 +37,12 @@ class RoutingTree(object):
           the supplied vertex. Note that the direction may be None and so
           additional logic may be required to determine what core to target to
           reach the vertex.
+
+    See Also
+    --------
+    rig.routing_table.routing_tree_to_tables:
+        May be used to convert :py:class:`.RoutingTree` objects into routing
+        tables suitable for loading onto a SpiNNaker machine.
     """
 
     def __init__(self, chip, children=None):
@@ -61,3 +68,37 @@ class RoutingTree(object):
             self.chip,
             len(self.children),
             "child" if len(self.children) == 1 else "children")
+
+    def traverse(self):
+        """Traverse the tree yielding the direction taken to a node, the
+        co-ordinates of that node and the directions leading from the Node.
+
+        Yield
+        -----
+        (direction, (x, y), {Routes})
+            Direction taken to reach a Node in the tree, the (x, y) co-ordinate
+            of that Node and routes leading to children of the Node.
+        """
+        # A queue of (direction, node) to visit. The direction is the Links
+        # entry which describes the direction in which we last moved to reach
+        # the node (or None for the root).
+        to_visit = deque([(None, self)])
+        while to_visit:
+            direction, node = to_visit.popleft()
+
+            # Determine the set of directions we must travel to reach the
+            # children
+            out_directions = set()
+            for child_direction, child in node.children:
+                # Note that if the direction is unspecified, we simply
+                # (silently) don't add a route for that child.
+                if child_direction is not None:
+                    out_directions.add(child_direction)
+
+                # Search the next steps of the route too
+                if isinstance(child, RoutingTree):
+                    assert child_direction is not None
+                    to_visit.append((child_direction, child))
+
+            # Yield the information pertaining to this Node
+            yield direction, node.chip, out_directions

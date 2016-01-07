@@ -4,8 +4,8 @@ from rig.routing_table import (
     RoutingTableEntry, Routes, table_is_subset_of, MinimisationFailedError
 )
 from rig.routing_table.ordered_covering import (
-    get_generality, get_all_merges, get_insertion_index, Merge, refine_merge,
-    minimise
+    _get_generality, _get_all_merges, _get_insertion_index, _Merge,
+    _refine_merge, minimise, ordered_covering
 )
 
 
@@ -17,23 +17,23 @@ from rig.routing_table.ordered_covering import (
         (0x7fffffff, 0x80000000, 0)
     )
 )
-def test_get_generality(key, mask, generality):
-    assert get_generality(key, mask) == generality
+def test__get_generality(key, mask, generality):
+    assert _get_generality(key, mask) == generality
 
 
-def test_get_all_merges():
+def test__get_all_merges():
     table = [
-        RoutingTableEntry(0, 0, 0),
-        RoutingTableEntry(0, 0, 0),
-        RoutingTableEntry(1, 0, 0),
-        RoutingTableEntry(0, 0, 0),
-        RoutingTableEntry(1, 0, 0),
-        RoutingTableEntry(2, 0, 0),
+        RoutingTableEntry({Routes.west}, 0, 0),
+        RoutingTableEntry({Routes.west}, 0, 0),
+        RoutingTableEntry({Routes.east}, 0, 0),
+        RoutingTableEntry({Routes.west}, 0, 0),
+        RoutingTableEntry({Routes.east}, 0, 0),
+        RoutingTableEntry({Routes.south}, 0, 0),
     ]
     expected_merges = [{0, 1, 3}, {2, 4}]
 
     # Get merges from the table
-    merges = list(get_all_merges(table))
+    merges = list(_get_all_merges(table))
 
     assert len(expected_merges) == len(merges)
     for merge, expected in zip(merges, expected_merges):
@@ -41,72 +41,81 @@ def test_get_all_merges():
         assert merge.entries == expected
 
 
-def test_get_insertion_index():
+def test__get_insertion_index():
     # Construct a routing table containing only generality 31 entries
-    table = [RoutingTableEntry(None, 0b00, 0b10),
-             RoutingTableEntry(None, 0b10, 0b10),
-             RoutingTableEntry(None, 0b00, 0b01),
-             RoutingTableEntry(None, 0b01, 0b01)]
+    table = [RoutingTableEntry({Routes.south}, 0b00, 0b10),
+             RoutingTableEntry({Routes.south}, 0b10, 0b10),
+             RoutingTableEntry({Routes.south}, 0b00, 0b01),
+             RoutingTableEntry({Routes.south}, 0b01, 0b01)]
 
     # Check that the insertion position for any generality 30 expression is 0.
-    assert get_insertion_index(table, 30) == 0
+    assert _get_insertion_index(table, 30) == 0
 
     # Add a generality 30 expression and then check where generality 31
     # expressions would go (they should go to the end of the table)
-    table.insert(0, RoutingTableEntry(None, 0b00, 0b11))
-    assert get_insertion_index(table, 32) == len(table)
+    table.insert(0, RoutingTableEntry({Routes.south}, 0b00, 0b11))
+    assert _get_insertion_index(table, 32) == len(table)
 
     # Check that generality 32 expressions should go to the end of the table
-    assert get_insertion_index(table, 32) == len(table)
-    table.append(RoutingTableEntry(None, 0x0, 0x0))
+    assert _get_insertion_index(table, 32) == len(table)
+    table.append(RoutingTableEntry({Routes.south}, 0x0, 0x0))
 
     # Check that generality 31 expressions should be inserted before this
-    assert get_insertion_index(table, 31) == len(table) - 1
+    assert _get_insertion_index(table, 31) == len(table) - 1
 
 
 class TestMerge(object):
     def test_apply(self):
         """Test applying a merge to a routing table."""
-        table = [RoutingTableEntry(None, 0b00, 0b10),
-                 RoutingTableEntry(None, 0b10, 0b10),
-                 RoutingTableEntry(None, 0b00, 0b01),
-                 RoutingTableEntry(None, 0b01, 0b01)]
+        table = [RoutingTableEntry({Routes.south}, 0b00, 0b10),
+                 RoutingTableEntry({Routes.south}, 0b10, 0b10),
+                 RoutingTableEntry({Routes.south}, 0b00, 0b01),
+                 RoutingTableEntry({Routes.south}, 0b01, 0b01)]
 
         # Merge the first two entries together, check the correct entry is
         # inserted in the correct part of the table and that the alias
         # dictionary is filled in.
-        merge = Merge(table, {0, 1})
+        merge = _Merge(table, {0, 1})
         new_table, new_aliases = merge.apply(dict())
-        assert new_table == [RoutingTableEntry(None, 0b00, 0b01),
-                             RoutingTableEntry(None, 0b01, 0b01),
-                             RoutingTableEntry(None, 0b00, 0b00)]
+        assert new_table == [RoutingTableEntry({Routes.south}, 0b00, 0b01),
+                             RoutingTableEntry({Routes.south}, 0b01, 0b01),
+                             RoutingTableEntry({Routes.south}, 0b00, 0b00)]
         assert new_aliases == {(0b00, 0b00): {(0b00, 0b10), (0b10, 0b10)}}
 
         # Merge the last two entries together, check that correct entry is
         # inserted into the table.
-        merge = Merge(table, {2, 3})
+        merge = _Merge(table, {2, 3})
         new_table, new_aliases = merge.apply(dict())
-        assert new_table == [RoutingTableEntry(None, 0b00, 0b10),
-                             RoutingTableEntry(None, 0b10, 0b10),
-                             RoutingTableEntry(None, 0b00, 0b00)]
+        assert new_table == [RoutingTableEntry({Routes.south}, 0b00, 0b10),
+                             RoutingTableEntry({Routes.south}, 0b10, 0b10),
+                             RoutingTableEntry({Routes.south}, 0b00, 0b00)]
         assert new_aliases == {(0b00, 0b00): {(0b00, 0b01), (0b01, 0b01)}}
 
         # Merge the last two entries together, check that correct entry is
         # inserted into the table. Also check that the aliases dictionary is
         # updated correctly.
-        merge = Merge(table, {2, 3})
+        merge = _Merge(table, {2, 3})
         aliases = {
             (0b00, 0b10): {(0xcafecafe, 0xffffffff)},
             (0b01, 0b01): {(0x0000ffff, 0xffffffff)},
         }
         new_table, new_aliases = merge.apply(aliases)
-        assert new_table == [RoutingTableEntry(None, 0b00, 0b10),
-                             RoutingTableEntry(None, 0b10, 0b10),
-                             RoutingTableEntry(None, 0b00, 0b00)]
+        assert new_table == [RoutingTableEntry({Routes.south}, 0b00, 0b10),
+                             RoutingTableEntry({Routes.south}, 0b10, 0b10),
+                             RoutingTableEntry({Routes.south}, 0b00, 0b00)]
         assert new_aliases == {
             (0b00, 0b10): {(0xcafecafe, 0xffffffff)},
             (0b00, 0b00): {(0b00, 0b01), (0x0000ffff, 0xffffffff)},
         }
+
+        # Check that the in-sets of entries are also merged
+        table = [RoutingTableEntry({Routes.south}, 0b00, 0b10, {Routes.north}),
+                 RoutingTableEntry({Routes.south}, 0b10, 0b10, {Routes.south})]
+        assert _Merge(table, {0, 1}).apply(dict()) == (
+            [RoutingTableEntry({Routes.south}, 0b00, 0b00,
+                               {Routes.south, Routes.north})],
+            {(0b00, 0b00): {(0b00, 0b10), (0b10, 0b10)}}
+        )
 
 
 def test_refines_out_aliased_entries():
@@ -115,15 +124,15 @@ def test_refines_out_aliased_entries():
     """
     # NOTE: TABLE IS NOT ORTHOGONAL!
     table = [
-        RoutingTableEntry(0, 0b1101, 0b1111),  # 1101
-        RoutingTableEntry(0, 0b1011, 0b1111),  # 1011
-        RoutingTableEntry(0, 0b1001, 0b1111),  # 1001
-        RoutingTableEntry(1, 0b1001, 0b1001),  # 1XX1
+        RoutingTableEntry({Routes.west}, 0b1101, 0b1111),  # 1101
+        RoutingTableEntry({Routes.west}, 0b1011, 0b1111),  # 1011
+        RoutingTableEntry({Routes.west}, 0b1001, 0b1111),  # 1001
+        RoutingTableEntry({Routes.east}, 0b1001, 0b1001),  # 1XX1
     ]
-    merge = Merge(table, {0, 1, 2})  # Merge the first three entries
+    merge = _Merge(table, {0, 1, 2})  # Merge the first three entries
 
     # Ultimately no merge should be possible
-    assert refine_merge(merge, dict(), 0).goodness <= 0
+    assert _refine_merge(merge, dict(), 0).goodness <= 0
 
 
 def test_aborts_merge_due_to_down_aliasing():
@@ -131,13 +140,14 @@ def test_aborts_merge_due_to_down_aliasing():
     lead an entry lower down the table to be aliased out.
     """
     table = [
-        RoutingTableEntry(0, 0b001, 0b111),  # 001
-        RoutingTableEntry(0, 0b010, 0b111),  # 010
-        RoutingTableEntry(1, 0b000, 0b000),  # XXX
+        RoutingTableEntry({Routes.west}, 0b001, 0b111),  # 001
+        RoutingTableEntry({Routes.west}, 0b010, 0b111),  # 010
+        RoutingTableEntry({Routes.east}, 0b000, 0b000),  # XXX
     ]
-    merge = Merge(table, {0, 1})
+    merge = _Merge(table, {0, 1})
 
-    assert refine_merge(merge, {(0x0, 0x0): {(0b011, 0b111)}}, 0).goodness <= 0
+    assert \
+        _refine_merge(merge, {(0x0, 0x0): {(0b011, 0b111)}}, 0).goodness <= 0
 
 
 def test_reduces_merge_due_to_down_aliasing():
@@ -145,16 +155,16 @@ def test_reduces_merge_due_to_down_aliasing():
     entry lower down the table to be aliased out.
     """
     table = [
-        RoutingTableEntry(0, 0b000, 0b111),  # 000
-        RoutingTableEntry(0, 0b001, 0b111),  # 001
-        RoutingTableEntry(0, 0b010, 0b111),  # 010
-        RoutingTableEntry(1, 0b000, 0b000),  # XXX
+        RoutingTableEntry({Routes.west}, 0b000, 0b111),  # 000
+        RoutingTableEntry({Routes.west}, 0b001, 0b111),  # 001
+        RoutingTableEntry({Routes.west}, 0b010, 0b111),  # 010
+        RoutingTableEntry({Routes.east}, 0b000, 0b000),  # XXX
     ]
-    merge = Merge(table, {0, 1, 2})
+    merge = _Merge(table, {0, 1, 2})
 
-    merge = refine_merge(merge, {(0x0, 0x0): {(0b011, 0b111)}}, 0)
-    assert (merge == Merge(table, {0, 1}) or
-            merge == Merge(table, {0, 2}))
+    merge = _refine_merge(merge, {(0x0, 0x0): {(0b011, 0b111)}}, 0)
+    assert (merge == _Merge(table, {0, 1}) or
+            merge == _Merge(table, {0, 2}))
 
 
 def test_reduces_merge_due_to_down_aliasing_multiple_bits():
@@ -162,15 +172,15 @@ def test_reduces_merge_due_to_down_aliasing_multiple_bits():
     entry lower down the table to be aliased out.
     """
     table = [
-        RoutingTableEntry(0, 0b1000, 0b1111),  # 1000
-        RoutingTableEntry(0, 0b1001, 0b1111),  # 1001
-        RoutingTableEntry(0, 0b1011, 0b1111),  # 1011
-        RoutingTableEntry(0, 0b1100, 0b1110),  # 110X
-        RoutingTableEntry(1, 0b0000, 0b0000),  # XXXX
+        RoutingTableEntry({Routes.west}, 0b1000, 0b1111),  # 1000
+        RoutingTableEntry({Routes.west}, 0b1001, 0b1111),  # 1001
+        RoutingTableEntry({Routes.west}, 0b1011, 0b1111),  # 1011
+        RoutingTableEntry({Routes.west}, 0b1100, 0b1110),  # 110X
+        RoutingTableEntry({Routes.east}, 0b0000, 0b0000),  # XXXX
     ]
-    merge = Merge(table, {0, 1, 2, 3})  # Merge produces 1XXX
+    merge = _Merge(table, {0, 1, 2, 3})  # Merge produces 1XXX
 
-    new_merge = refine_merge(
+    new_merge = _refine_merge(
         merge, {(0x0, 0x0): {(0b0011, 0b0011),  # XX11
                              (0b1000, 0b1001),  # 1XX0
                              }},
@@ -181,7 +191,7 @@ def test_reduces_merge_due_to_down_aliasing_multiple_bits():
     assert new_merge.goodness <= 0
 
 
-def test_refine_merge_fails_due_to_unchangeable_bit():
+def test__refine_merge_fails_due_to_unchangeable_bit():
     """Check that a merge is reduced if performing the merge would lead an
     entry lower down the table to be aliased out.
 
@@ -203,10 +213,10 @@ def test_refine_merge_fails_due_to_unchangeable_bit():
         RoutingTableEntry({Routes.south}, 0b0010, 0b0010),
         RoutingTableEntry({Routes.south}, 0b0000, 0b0000),
     ]
-    merge = Merge(table, {0, 1})  # Merge produces 00XX
+    merge = _Merge(table, {0, 1})  # Merge produces 00XX
 
     # Ultimately no merge should be possible
-    new_merge = refine_merge(merge, dict(), 0)
+    new_merge = _refine_merge(merge, dict(), 0)
     assert new_merge.goodness <= 0
 
 
@@ -362,3 +372,72 @@ class TestMinimise(object):
 
         # Get the minimised table
         assert minimise(table, target_length=None) == expected_table
+
+    def test_also_removes_default_routes(self):
+        """Attempt to minimise the following table.
+
+            W -> 0000 -> N
+            W -> 0001 -> N
+            N -> 1000 -> S
+
+        The result should be:
+
+            000X -> N
+
+        As `1000 -> S` can be handled by default routing.
+        """
+        RTE = RoutingTableEntry
+        table = [
+            RTE({Routes.north}, 0b0000, 0xf, {Routes.west}),
+            RTE({Routes.north}, 0b0001, 0xf, {Routes.west}),
+            RTE({Routes.south}, 0b1000, 0xf, {Routes.north}),
+        ]
+
+        assert minimise(table, target_length=None) == [
+            RTE({Routes.north}, 0b0000, 0xe, {Routes.west}),
+        ]
+
+
+def test_ordered_covering_simple():
+    """Test that a very simple routing table can be minimised, only one
+    merge should be made and there are no conflicts AND that an alias
+    dictionary is returned.
+
+    Table::
+
+        0000 -> N, NE
+        0001 -> N, NE
+        001X -> S
+
+    Can be minimised to::
+
+        001X -> S
+        000X -> N, NE
+    """
+    # Original table
+    RTE = RoutingTableEntry
+    table = [
+        RTE({Routes.north, Routes.north_east}, 0b0000, 0b1111),
+        RTE({Routes.north, Routes.north_east}, 0b0001, 0b1111),
+        RTE({Routes.south}, 0b0010, 0b1110),
+    ]
+
+    # Expected table
+    expected_table = [
+        RTE({Routes.south}, 0b0010, 0b1110),
+        RTE({Routes.north, Routes.north_east}, 0b0000, 0b1110),
+    ]
+
+    assert table_is_subset_of(table, expected_table), "Test is broken"
+
+    # Minimise and check the result
+    aliases = {(0b0010, 0b1110): {(0b0010, 0b1111), (0b0011, 0b1111)}}
+
+    new_table, new_aliases = ordered_covering(
+        table, target_length=None, aliases=aliases)
+
+    assert new_table == expected_table
+    assert new_aliases == {
+        (0b0010, 0b1110): {(0b0010, 0b1111), (0b0011, 0b1111)},
+        (0b0000, 0b1110): {(0b0000, 0b1111), (0b0001, 0b1111)},
+    }
