@@ -1573,7 +1573,8 @@ class MachineController(ContextMixin):
                            (...), ...], ...}
             Map of chip co-ordinates to routing table entries, as produced, for
             example by
-            :py:func:`~rig.place_and_route.utils.build_routing_tables`.
+            :py:func:`~rig.routing_table.routing_tree_to_tables` and
+            :py:func:`~rig.routing_table.minimise_tables`.
 
         Raises
         ------

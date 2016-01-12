@@ -6,8 +6,89 @@
 This module contains data structures and algorithms for representing and
 manipulating multicast routing tables for SpiNNaker.
 
+Quick-start Examples
+--------------------
+
+The following examples give quick examples of Rig's routing table data
+structures and table minimisation tools.
+
+Using the place-and-route wrapper
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you're using the :py:func:`~rig.place_and_route.place_and_route_wrapper`
+wrapper function to perform place-and-route for your application, routing table
+minimisation is performed automatically when required. No changes are required
+to your application!
+
+Manually defining and minimising individual routing tables
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The brief example below illustrates how a single routing table might be
+defined and minimised.
+
+.. doctest::
+
+    >>> # Define a (trivially minimised) example routing table
+    >>> from rig.routing_table import Routes, RoutingTableEntry
+    >>> original = [
+    ...     RoutingTableEntry({Routes.north}, 0x00000000, 0xFFFFFFFF),
+    ...     RoutingTableEntry({Routes.north}, 0x00000001, 0xFFFFFFFF),
+    ...     RoutingTableEntry({Routes.north}, 0x00000002, 0xFFFFFFFF),
+    ...     RoutingTableEntry({Routes.north}, 0x00000003, 0xFFFFFFFF),
+    ... ]
+
+    >>> # Minimise the routing table using a sensible selection of algorithms
+    >>> from rig.routing_table import minimise_table
+    >>> minimised = minimise_table(original, target_length=None)
+    >>> assert minimised == [
+    ...     RoutingTableEntry({Routes.north}, 0x00000000, 0xFFFFFFFC),
+    ... ]
+
+Generating and loading routing tables from automatic place-and-route tools
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The outline below shows how routing tables might be generated from the results
+of Rig's :py:mod:`place and route <rig.place_and_route>` tools, minimised and
+then loaded onto a SpiNNaker machine.
+
+.. code-block:: python
+
+    # Interrogate the SpiNNaker machine to determine what resources are
+    # available (including the number of multicast routing table entries on
+    # each chip).
+    from rig.machine_control import MachineController
+    machine_controller = MachineController("hostname")
+    system_info = machine_controller.get_system_info()
+    
+    # Place-and-route your application as normal and select suitable
+    # routing keys for each net.
+    from rig.place_and_route import route
+    routes = route(...)
+    net_keys = {Net: (key, mask), ...}
+    
+    # Produce routing tables from the generated routes
+    from rig.routing_table import routing_tree_to_tables
+    routing_tables = routing_tree_to_tables(routes, net_keys)
+    
+    # Minimise the routes (if required), trying a sensible selection of table
+    # minimisation algorithms.
+    from rig.routing_table import (
+        build_routing_table_target_lengths,
+        minimise_tables)
+    target_lengths = build_routing_table_target_lengths(system_info)
+    routing_tables = minimise_tables(routing_tables, target_lengths)
+
+    # Load the minimised routing tables onto SpiNNaker
+    machine_controller.load_routing_tables(routing_tables)
+
+
 :py:class:`.RoutingTableEntry` and :py:class:`.Routes`: Routing table data structures
 -------------------------------------------------------------------------------------
+
+Routing tables in Rig are conventionally represented as a list of
+:py:class:`~rig.routing_table.RoutingTableEntry` objects in the order they
+would appear in a SpiNNaker router. Empty/unused routing table entries are not
+usually included in these representations.
 
 .. autoclass:: rig.routing_table.RoutingTableEntry
     :members:
@@ -15,29 +96,65 @@ manipulating multicast routing tables for SpiNNaker.
 .. autoclass:: rig.routing_table.Routes
     :members:
 
+Routing table construction utility
+----------------------------------
+
+The :py:func:`~rig.routing_table.routing_tree_to_tables` function is provided
+which constructs routing tables of the form described above from
+:py:class:`~rig.place_and_route.routing_tree.RoutingTree` objects produced by an automatic
+routing algorithm.
+
+.. autofunction:: rig.routing_table.routing_tree_to_tables
+
+.. autoexception:: rig.routing_table.MultisourceRouteError
 
 Routing table minimisation algorithms
 -------------------------------------
 
 SpiNNaker's multicast routing tables are a finite resource containing a maximum
 of 1024 entries. Certain applications may find that they exhaust this limited
-resource when naively producing routing tables using functions such as
-:py:func:`rig.place_and_route.utils.build_routing_tables`. By more fully
-exploiting the behaviour of the Ternary Content Addressable Memory (TCAM) used
-in SpiNNaker's multicast router it is often possible to compress (or minimise)
-a given routing table into a more compact, yet logically equivalent, form.
+resource and may wish to attempt to shrink their routing tables by making
+better use of the SpiNNaker router's capabilities. For example, if a packet's
+key does not match any routing entries it will be "default routed" in the
+direction in which it was already travelling and thus no routing table entry is
+required.  Additionally, by more fully exploiting the behaviour of the Ternary
+Content Addressable Memory (TCAM) used in SpiNNaker's multicast router it is
+often possible to compress (or minimise) a given routing table into a more
+compact, yet logically equivalent, form.
 
 This module includes algorithms for minimising routing tables for use by
-SpiNNaker application developers. It also includes tools for verifying the
-equivalence of routing tables to aid developers of new routing table
-minimisation algorithms.
+SpiNNaker application developers. 
 
-All routing table minimisation functions expose the following common API. A
-sensible default algorithm is aliased under the name
-:py:func:`rig.routing_table.minimise`.
+Common-case wrappers
+~~~~~~~~~~~~~~~~~~~~
+
+For most users, the following functions can be used to minimise routing tables
+used by their application. Both accept a target number of routing entries and
+will attempt to apply routing table minimisation algorithms from this module
+until the supplied tables fit.
+
+.. autofunction:: rig.routing_table.minimise_tables
+
+.. autofunction:: rig.routing_table.minimise_table
+
+
+Available algorithms
+~~~~~~~~~~~~~~~~~~~~
+
+The following minimisation algorithms are currently available:
+
+.. toctree::
+    :maxdepth: 1
+    
+    routing_table_minimisation_algorithms/remove_default_routes
+    routing_table_minimisation_algorithms/ordered_covering
 
 :py:func:`.minimise` prototype
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Routing table minimisation functions are always named ``minimise()`` and are
+contained within a Python module named after the algorithm. These
+:py:func:`.minimise` functions have the signature defined below.
 
 .. py:function:: minimise(routing_table, target_length=1024)
     
@@ -102,50 +219,19 @@ sensible default algorithm is aliased under the name
 
 .. autoexception:: rig.routing_table.MinimisationFailedError
 
-Example usage
-~~~~~~~~~~~~~
-
-The brief example below illustrates how a single routing table might be
-minimised.
-
-.. doctest::
-
-    >>> # Define a (trivially minimised) example routing table
-    >>> from rig.routing_table import Routes, RoutingTableEntry
-    >>> original = [
-    ...     RoutingTableEntry({Routes.north}, 0x00000000, 0xFFFFFFFF),
-    ...     RoutingTableEntry({Routes.north}, 0x00000001, 0xFFFFFFFF),
-    ...     RoutingTableEntry({Routes.north}, 0x00000002, 0xFFFFFFFF),
-    ...     RoutingTableEntry({Routes.north}, 0x00000003, 0xFFFFFFFF),
-    ... ]
-
-    >>> # Minimise the routing table as much as possible
-    >>> from rig.routing_table import minimise
-    >>> minimised = minimise(original, target_length=None)
-    >>> assert minimised == [
-    ...     RoutingTableEntry({Routes.north}, 0x00000000, 0xFFFFFFFC),
-    ... ]
-
-.. note::
-
-    In real world applications where the Rig place-and-route tools are being
-    used the
-    :py:func:`rig.place_and_route.utils.build_and_minimise_routing_tables`
-    utility function internally does something similar to this example.
-
-Available algorithms
-~~~~~~~~~~~~~~~~~~~~
-
-The following minimisation algorithms are currently available:
-
-.. toctree::
-    :maxdepth: 1
-    
-    routing_table_minimisation_algorithms/ordered_covering
-
 Routing Table Manipulation Tools
 --------------------------------
 
-.. autofunction:: rig.routing_table.expand_entries
+The following functions may be useful when comparing routing tables, for
+example if testing or evaluating minimisation algorithms.
 
 .. autofunction:: rig.routing_table.table_is_subset_of
+
+.. autofunction:: rig.routing_table.expand_entries
+
+.. autofunction:: rig.routing_table.intersect
+
+Utility Functions
+-----------------
+
+.. autofunction:: rig.routing_table.build_routing_table_target_lengths

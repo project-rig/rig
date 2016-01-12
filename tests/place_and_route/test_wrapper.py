@@ -153,3 +153,55 @@ class TestWrapper(object):
                 used_keys.add(entry.key)
                 assert entry.mask == 0xFFFF
         assert used_keys == set(range(num_vertices))
+
+    def test_table_minimisation(self):
+        """Make sure routing table minimisation is attempted. In this case we
+        have a 6x1 machine where chip 0,0 and 2,0 have one usable core and the
+        rest have no cores and no routing table entries spare. Also, only allow
+        routing east and west to ensure the route is a straight-line. Default
+        route removal should be enough to make a net between two one-core
+        vertices work.
+        """
+
+        v0 = object()
+        v1 = object()
+
+        vertices_resources = {
+            v0: {Cores: 1},
+            v1: {Cores: 1},
+        }
+        vertices_applications = {
+            v0: "v0.aplx",
+            v1: "v1.aplx",
+        }
+        nets = [Net(v0, v1)]
+        net_keys = {nets[0]: (0xDEADBEEF, 0xFFFFFFFF)}
+
+        # NB: ChipInfo's constructor by default makes core 0 non-idle (i.e. a
+        # monitor)
+        working_links = set({Links.east, Links.west})
+        system_info = SystemInfo(6, 1, {
+            (0, 0): ChipInfo(working_links=working_links, num_cores=2),
+            (1, 0): ChipInfo(working_links=working_links, num_cores=0,
+                             largest_free_rtr_mc_block=0),
+            (2, 0): ChipInfo(working_links=working_links, num_cores=2),
+            (3, 0): ChipInfo(working_links=working_links, num_cores=0),
+            (4, 0): ChipInfo(working_links=working_links, num_cores=0),
+            (5, 0): ChipInfo(working_links=working_links, num_cores=0),
+        })
+
+        placements, allocations, application_map, routing_tables = \
+            place_and_route_wrapper(vertices_resources,
+                                    vertices_applications,
+                                    nets,
+                                    net_keys,
+                                    system_info)
+
+        # Sanity check
+        assert (placements == {v0: (0, 0), v1: (2, 0)} or
+                placements == {v0: (2, 0), v1: (0, 0)})
+
+        # The routing entry on 1, 0 should have been filtered out
+        assert len(routing_tables.get((0, 0), [])) == 1
+        assert len(routing_tables.get((1, 0), [])) == 0
+        assert len(routing_tables.get((2, 0), [])) == 1

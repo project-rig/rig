@@ -249,7 +249,11 @@ Sensible default implementations for each function are aliased as:
     containing the source vertex and visiting every chip on which a sink vertex
     is placed on. This data structure can then be converted into routing tables
     ready for loading onto a SpiNNaker machine using the
-    :py:func:`rig.place_and_route.utils.build_routing_tables` function.
+    :py:func:`rig.routing_table.routing_tree_to_tables` function. A number of
+    routing table minimisation algorithms are also provided to cope with
+    situations where the generated tables do not fit. The
+    :py:func:`rig.routing_table.minimise_tables` function should prove
+    sufficient for the majority of applications.
     
     Most applications will probably wish to supply the ``allocations`` optional
     argument which enables the router to produce
