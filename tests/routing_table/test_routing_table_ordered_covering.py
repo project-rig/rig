@@ -397,6 +397,26 @@ class TestMinimise(object):
             RTE({Routes.north}, 0b0000, 0xe, {Routes.west}),
         ]
 
+    def test_must_removes_default_routes(self):
+        """Attempt to minimise the following table.
+
+            W -> 0000 -> E
+            E -> 0001 -> W
+            N -> 1000 -> S
+
+        The result should be an empty table: BUT, entries can only be removed
+        by using default routing and the minimum table size will cause ordered
+        covering to fail.
+        """
+        RTE = RoutingTableEntry
+        table = [
+            RTE({Routes.east}, 0b0000, 0xf, {Routes.west}),
+            RTE({Routes.west}, 0b0001, 0xf, {Routes.east}),
+            RTE({Routes.south}, 0b1000, 0xf, {Routes.north}),
+        ]
+
+        assert len(minimise(table, target_length=2)) == 0
+
 
 def test_ordered_covering_simple():
     """Test that a very simple routing table can be minimised, only one
@@ -441,3 +461,25 @@ def test_ordered_covering_simple():
         (0b0010, 0b1110): {(0b0010, 0b1111), (0b0011, 0b1111)},
         (0b0000, 0b1110): {(0b0000, 0b1111), (0b0001, 0b1111)},
     }
+
+
+def test_ordered_covering_simple_fails_if_too_large():
+    """Test that a very simple routing table can be minimised, and that an
+    exception is raised if that minimisation is still too large.
+
+    Table::
+
+        0000 -> N, NE
+        0001 -> N, NE
+        001X -> S
+    """
+    # Original table
+    RTE = RoutingTableEntry
+    table = [
+        RTE({Routes.north, Routes.north_east}, 0b0000, 0b1111),
+        RTE({Routes.north, Routes.north_east}, 0b0001, 0b1111),
+        RTE({Routes.south}, 0b0010, 0b1110),
+    ]
+
+    with pytest.raises(MinimisationFailedError):
+        ordered_covering(table, target_length=1)
