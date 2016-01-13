@@ -30,6 +30,7 @@ Graph-to-machine mapping
         :maxdepth: 3
         
         place_and_route
+        routing_table_tools_doctest
         geometry
 
 

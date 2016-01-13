@@ -2,15 +2,13 @@
 structures from the products of placement, allocation and routing.
 """
 
-from collections import defaultdict, deque, namedtuple, OrderedDict
+from collections import defaultdict
 
 from six import iteritems, itervalues
 
+import warnings
+
 from rig.place_and_route.machine import Machine, Cores, SDRAM, SRAM
-
-from rig.routing_table import RoutingTableEntry
-
-from rig.place_and_route.routing_tree import RoutingTree
 
 from rig.place_and_route.constraints import ReserveResourceConstraint
 
@@ -133,8 +131,8 @@ def _get_minimal_core_reservations(core_resource, cores, chip=None):
         Which chip the constraints should be applied to or None for a global
         constraint.
 
-    Yields
-    ------
+    Yield
+    -----
     :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
     """
     reservation = None
@@ -256,14 +254,30 @@ def build_application_map(vertices_applications, placements, allocations,
 
 
 def build_routing_tables(routes, net_keys, omit_default_routes=True):
-    """Convert a set of RoutingTrees into a per-chip set of routing tables.
+    """**DEPRECATED** Convert a set of RoutingTrees into a per-chip set of
+    routing tables.
+
+    .. warning::
+        This method has been deprecated in favour of
+        :py:meth:`rig.routing_table.routing_tree_to_tables` and
+        :py:meth:`rig.routing_table.minimise`.
+
+        E.g. most applications should use something like::
+
+            from rig.routing_table import routing_tree_to_tables, minimise
+            tables = minimise(routing_tree_to_tables(routes, net_keys),
+                              target_lengths)
+
+        Where target_length gives the number of available routing entries on
+        the chips in your SpiNNaker system (see
+        :py:func:~rig.routing_table.utils.build_routing_table_target_lengths)
 
     This command produces routing tables with entries optionally omitted when
     the route does not change direction (i.e. when default routing can be
     used).
 
     .. warning::
-        A :py:exc:`rig.place_and_route.utils.MultisourceRouteError` will
+        A :py:exc:`rig.routing_table.MultisourceRouteError` will
         be raised if entries with identical keys and masks but with differing
         routes are generated. This is not a perfect test, entries which would
         otherwise collide are not spotted.
@@ -282,8 +296,8 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     routes : {net: :py:class:`~rig.place_and_route.routing_tree.RoutingTree`, \
               ...}
         The complete set of RoutingTrees representing all routes in the system.
-        (Note: this is the same datastructure produced by routers in the `par`
-        module.)
+        (Note: this is the same datastructure produced by routers in the
+        `place_and_route` module.)
     net_keys : {net: (key, mask), ...}
         The key and mask associated with each net.
     omit_default_routes : bool
@@ -294,82 +308,23 @@ def build_routing_tables(routes, net_keys, omit_default_routes=True):
     -------
     {(x, y): [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
     """
-    # Pairs of inbound and outbound routes.
-    _InOutPair = namedtuple("_InOutPair", "ins, outs")
+    from rig.routing_table import routing_tree_to_tables, remove_default_routes
 
-    # {(x, y): {(key, mask): _InOutPair}}
-    route_sets = defaultdict(OrderedDict)
+    warnings.warn(
+        "build_routing_tables() is deprecated, see "
+        "rig.routing_table.routing_tree_to_tables()"
+        "and rig.routing_table.minimise()", DeprecationWarning
+    )
 
-    for net, routing_tree in iteritems(routes):
-        key, mask = net_keys[net]
+    # Build full routing tables and then remove default entries from them
+    tables = dict()
 
-        # A queue of (direction, node) to visit. The direction is the Links
-        # entry which describes the direction in which we last moved to reach
-        # the node (or None for the root).
-        to_visit = deque([(None, routing_tree)])
-        while to_visit:
-            direction, node = to_visit.popleft()
+    for chip, table in iteritems(routing_tree_to_tables(routes, net_keys)):
+        if omit_default_routes:
+            table = remove_default_routes.minimise(table, target_length=None)
 
-            x, y = node.chip
+        # If the table is empty don't add it to the dictionary of tables.
+        if table:
+            tables[chip] = table
 
-            # Determine the set of directions we must travel to reach the
-            # children
-            out_directions = set()
-            for child_direction, child in node.children:
-                # Note that if the direction is unspecified, we simply
-                # (silently) don't add a route for that child.
-                if child_direction is not None:
-                    out_directions.add(child_direction)
-
-                # Search the next steps of the route too
-                if isinstance(child, RoutingTree):
-                    assert child_direction is not None
-                    to_visit.append((child_direction, child))
-
-            # Add a routing entry when the direction changes
-            if (key, mask) in route_sets[(x, y)]:
-                # If there is an existing route set raise an error if the out
-                # directions are not equivalent.
-                if route_sets[(x, y)][(key, mask)].outs != out_directions:
-                    raise MultisourceRouteError(key, mask, (x, y))
-
-                # Otherwise, add the input directions as this represents a
-                # merge of the routes.
-                route_sets[(x, y)][(key, mask)].ins.add(direction)
-            else:
-                # Otherwise create a new route set
-                route_sets[(x, y)][(key, mask)] = _InOutPair(
-                    set([direction]), set(out_directions)
-                )
-
-    # Construct the routing tables from the route sets
-    routing_tables = defaultdict(list)
-    for (x, y), routes in iteritems(route_sets):
-        for (key, mask), route in iteritems(routes):
-            # Remove default routes where possible
-            if omit_default_routes and (len(route.ins) == 1 and
-                                        route.outs == route.ins):
-                # This route can be removed, so skip it.
-                continue
-
-            # Add the route
-            routing_tables[(x, y)].append(
-                RoutingTableEntry(route.outs, key, mask)
-            )
-
-    return routing_tables
-
-
-class MultisourceRouteError(Exception):
-    """Indicates that two nets with the same key and mask would cause packets
-    to become duplicated.
-    """
-    def __init__(self, key, mask, coordinate):
-        self.key = key
-        self.mask = mask
-        self.x, self.y = coordinate
-
-    def __str__(self):
-        return ("Two different nets with the same key ({0.key:#010x}) and "
-                "mask ({0.mask:#010x}) fork differently at ({0.x}, {0.y})".
-                format(self))
+    return tables

@@ -1,7 +1,7 @@
-:py:mod:`rig.netlist`: Netlist data structures
-----------------------------------------------
+:py:class:`rig.netlist.Net`: Net data structure
+-----------------------------------------------
 
-.. automodule:: rig.netlist
+.. autoclass:: rig.netlist.Net
     :members:
     :special-members:
 
