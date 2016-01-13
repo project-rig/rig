@@ -60,7 +60,7 @@ def test_group_together():
     assert set(order) == set(vertices_resources)
 
     # Should do each group as a group
-    assert ((set(order[0:3]) == set([v0, v1, v2])
-             and set(order[3:6]) == set([v3, v4, v5]))
-            or (set(order[0:3]) == set([v3, v4, v5])
-                and set(order[3:6]) == set([v0, v1, v2])))
+    assert ((set(order[0:3]) == set([v0, v1, v2]) and
+             set(order[3:6]) == set([v3, v4, v5])) or
+            (set(order[0:3]) == set([v3, v4, v5]) and
+                set(order[3:6]) == set([v0, v1, v2])))

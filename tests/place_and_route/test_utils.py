@@ -126,8 +126,7 @@ def test_build_core_constraints(global_core_0):
         (x, y): ChipInfo(
             num_cores=(17 if (x, y) == (1, 0) else 18),
             core_states=[(AppState.run
-                          if ((0 if global_core_0 else 1) <= c <= x
-                              or c == 17)
+                          if ((0 if global_core_0 else 1) <= c <= x or c == 17)
                           else AppState.idle)
                          for c in range(17 if (x, y) == (1, 0) else 18)],
             working_links=set(Links),

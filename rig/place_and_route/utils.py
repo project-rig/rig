@@ -108,9 +108,9 @@ def build_machine(system_info,
                            sram_resource: info.largest_free_sram_block,
                        }
                        for chip, info in iteritems(system_info)
-                       if (info.num_cores != max_cores
-                           or info.largest_free_sdram_block != max_sdram
-                           or info.largest_free_sram_block != max_sram)
+                       if (info.num_cores != max_cores or
+                           info.largest_free_sdram_block != max_sdram or
+                           info.largest_free_sram_block != max_sram)
                    },
                    dead_chips=set(system_info.dead_chips()),
                    dead_links=set(system_info.dead_links()))
@@ -212,8 +212,8 @@ def build_core_constraints(system_info, core_resource=Cores):
         constraints.extend(_get_minimal_core_reservations(
             core_resource,
             [core for core, state in enumerate(chip_info.core_states)
-             if state != AppState.idle
-                and not globally_reserved & (1 << core)],
+             if state != AppState.idle and
+                not globally_reserved & (1 << core)],
             chip))
 
     return constraints
