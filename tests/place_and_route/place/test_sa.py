@@ -26,8 +26,8 @@ def test__net_cost_no_wrap():
             placements[v] = xy
 
     # Should report zero cost for a net with no targets
-    assert sa._net_cost(Net(l2v[(0, 0)][0], []), placements, False, machine) == \
-        0.0
+    assert sa._net_cost(Net(l2v[(0, 0)][0], []),
+                        placements, False, machine) == 0.0
 
     # Should report zero cost for a net with targets in the same chip
     assert sa._net_cost(Net(l2v[(0, 0)][0],
@@ -67,8 +67,8 @@ def test__net_cost_with_wrap():
             placements[v] = xy
 
     # Should report zero cost for a net with no targets
-    assert sa._net_cost(Net(l2v[(0, 0)][0], []), placements, True, machine) == \
-        0.0
+    assert sa._net_cost(Net(l2v[(0, 0)][0], []),
+                        placements, True, machine) == 0.0
 
     # Should report zero cost for a net with targets in the same chip
     assert sa._net_cost(Net(l2v[(0, 0)][0],

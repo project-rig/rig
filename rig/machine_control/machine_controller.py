@@ -1964,8 +1964,8 @@ class ChipInfo(collections.namedtuple(
         # If core_states is omitted, generate a list of core-states the right
         # length for the number of cores suggested)
         if core_states is None:
-            core_states = ([consts.AppState.run]
-                           + [consts.AppState.idle] * num_cores)[:-1]
+            core_states = ([consts.AppState.run] +
+                           [consts.AppState.idle] * num_cores)[:-1]
 
         return super(ChipInfo, cls).__new__(
             cls, num_cores, core_states, working_links,
@@ -2095,22 +2095,22 @@ class SystemInfo(dict):
         """
         if len(chip_core_or_link) == 2:
             return super(SystemInfo, self).__contains__(chip_core_or_link)
-        elif (len(chip_core_or_link) == 3
-                and isinstance(chip_core_or_link[2], Links)):
+        elif (len(chip_core_or_link) == 3 and
+              isinstance(chip_core_or_link[2], Links)):
             x, y, link = chip_core_or_link
             chip = self.get((x, y))
             return chip is not None and link in chip.working_links
-        elif (len(chip_core_or_link) == 3
-                and isinstance(chip_core_or_link[2], six.integer_types)):
+        elif (len(chip_core_or_link) == 3 and
+              isinstance(chip_core_or_link[2], six.integer_types)):
             x, y, p = chip_core_or_link
             chip = self.get((x, y))
             return chip is not None and 0 <= p < chip.num_cores
         elif len(chip_core_or_link) == 4:
             x, y, p, state = chip_core_or_link
             chip = self.get((x, y))
-            return (chip is not None
-                    and 0 <= p < chip.num_cores
-                    and chip.core_states[p] == state)
+            return (chip is not None and
+                    0 <= p < chip.num_cores and
+                    chip.core_states[p] == state)
         else:
             raise ValueError(
                 "Expect either (x, y) (x, y, p), (x, y, p, state) "
