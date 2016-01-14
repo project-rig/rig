@@ -180,11 +180,12 @@ def minimise(routing_table, target_length):
     [:py:class:`~rig.routing_table.RoutingTableEntry`, ...]
         Reduced routing table entries.
     """
-    table, _ = ordered_covering(routing_table, target_length)
+    table, _ = ordered_covering(routing_table, target_length, no_raise=True)
     return remove_default_routes(table, target_length)
 
 
-def ordered_covering(routing_table, target_length, aliases=dict()):
+def ordered_covering(routing_table, target_length, aliases=dict(),
+                     no_raise=False):
     """Reduce the size of a routing table by merging together entries where
     possible.
 
@@ -232,12 +233,17 @@ def ordered_covering(routing_table, target_length, aliases=dict()):
         determining if inserting a new entry will break the correctness of the
         table. This should be supplied when using this method to update an
         already minimised table.
+    no_raise : bool
+        If False (the default) then an error will be raised if the table cannot
+        be minimised to be smaller than `target_length` and `target_length` is
+        not None. If True then a table will be returned regardless of the size
+        of the final table.
 
     Raises
     ------
     MinimisationFailedError
         If the smallest table that can be produced is larger than
-        `target_length`.
+        `target_length` and `no_raise` is False.
 
     Returns
     -------
@@ -269,7 +275,9 @@ def ordered_covering(routing_table, target_length, aliases=dict()):
         routing_table, aliases = merge.apply(aliases)
 
     # If the table is still too big then raise an error
-    if target_length is not None and len(routing_table) > target_length:
+    if (not no_raise and
+            target_length is not None and
+            len(routing_table) > target_length):
         raise MinimisationFailedError(target_length, len(routing_table))
 
     # Return the finished routing table and aliases table
