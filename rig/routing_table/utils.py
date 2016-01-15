@@ -265,13 +265,13 @@ def expand_entry(entry, ignore_xs=0x0):
         if bit & xs:
             # Yield all the entries with this bit set as 0
             entry_0 = RoutingTableEntry(entry.route, entry.key,
-                                        entry.mask | bit)
+                                        entry.mask | bit, entry.sources)
             for new_entry in expand_entry(entry_0, ignore_xs):
                 yield new_entry
 
             # And yield all the entries with this bit set as 1
             entry_1 = RoutingTableEntry(entry.route, entry.key | bit,
-                                        entry.mask | bit)
+                                        entry.mask | bit, entry.sources)
             for new_entry in expand_entry(entry_1, ignore_xs):
                 yield new_entry
 

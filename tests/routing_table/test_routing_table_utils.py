@@ -298,21 +298,29 @@ def test_get_common_xs():
 
 
 def test_expand_entry():
+    RTE = RoutingTableEntry
     # There is one X in the entry, this should result in two new entries being
     # returned with the X set to `0' and `1' respectively.
-    entry = RoutingTableEntry({Routes.north}, 0x0, 0xfffffffe)
+    entry = RTE({Routes.north}, 0x0, 0xfffffffe)
     assert list(expand_entry(entry)) == [
-        RoutingTableEntry({Routes.north}, 0x0, 0xffffffff),
-        RoutingTableEntry({Routes.north}, 0x1, 0xffffffff),
+        RTE({Routes.north}, 0x0, 0xffffffff),
+        RTE({Routes.north}, 0x1, 0xffffffff),
+    ]
+
+    # The same, but ensuring that the source information isn't lost.
+    entry = RTE({Routes.north}, 0x0, 0xfffffffe, {Routes.south})
+    assert list(expand_entry(entry)) == [
+        RTE({Routes.north}, 0x0, 0xffffffff, {Routes.south}),
+        RTE({Routes.north}, 0x1, 0xffffffff, {Routes.south}),
     ]
 
     # There are 3 Xs, but we only allow two of them to be expanded
-    entry = RoutingTableEntry({Routes.north}, 0x0, 0xfffffff8)
+    entry = RTE({Routes.north}, 0x0, 0xfffffff8)
     assert list(expand_entry(entry, ignore_xs=0x4)) == [
-        RoutingTableEntry({Routes.north}, 0x0, 0xfffffffb),
-        RoutingTableEntry({Routes.north}, 0x1, 0xfffffffb),
-        RoutingTableEntry({Routes.north}, 0x2, 0xfffffffb),
-        RoutingTableEntry({Routes.north}, 0x3, 0xfffffffb),
+        RTE({Routes.north}, 0x0, 0xfffffffb),
+        RTE({Routes.north}, 0x1, 0xfffffffb),
+        RTE({Routes.north}, 0x2, 0xfffffffb),
+        RTE({Routes.north}, 0x3, 0xfffffffb),
     ]
 
 
