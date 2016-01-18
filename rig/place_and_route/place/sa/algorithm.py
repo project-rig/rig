@@ -20,9 +20,14 @@ from rig.place_and_route.place.utils import \
     apply_reserve_resource_constraint, apply_same_chip_constraints, \
     finalise_same_chip_constraints
 
+
 # Select a sensible default kernel
-from rig.place_and_route.place.sa.python_kernel \
-    import PythonKernel as default_kernel
+try:  # pragma: no cover
+    from rig.place_and_route.place.sa.c_kernel \
+        import CKernel as default_kernel
+except ImportError:  # pragma: no cover
+    from rig.place_and_route.place.sa.python_kernel \
+        import PythonKernel as default_kernel
 
 
 """
@@ -126,8 +131,20 @@ def place(vertices_resources, nets, machine, constraints,
     Vaughn Betz and Jonathan Rose from the "1997 International Workshop on
     Field Programmable Logic and Applications".
 
-    This algorithm is written in pure Python and is not highly optimised for
-    performance.
+    Two implementations of the algorithm's kernel are available:
+
+    * :py:class:`~rig.place_and_route.place.sa.python_kernel.PythonKernel` A
+      pure Python implementation which is available on all platforms supported
+      by Rig.
+    * :py:class:`~rig.place_and_route.place.sa.c_kernel.CKernel` A C
+      implementation which is typically 50-150x faster than the basic Python
+      kernel. Since this implementation requires a C compiler during
+      installation, this is an optional feature of Rig. See the
+      :py:class:`CKernel's documentation
+      <rig.place_and_route.place.sa.c_kernel.CKernel>` for details.
+
+    The fastest kernel installed is used by default and can be manually chosen
+    using the ``kernel`` argument.
 
     This algorithm produces INFO level logging information describing the
     progress made by the algorithm.

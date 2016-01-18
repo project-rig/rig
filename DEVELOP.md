@@ -40,7 +40,11 @@ using [setuptools](https://pypi.python.org/pypi/setuptools) as usual:
 
     git clone git@github.com:project-rig/rig.git
     cd rig
-    python setup.py develop
+    pip install .
+
+Optional extra features can also be installed as desired:
+
+    pip install .[c_sa]
 
 ### Reporting Issues and Making Suggestions
 

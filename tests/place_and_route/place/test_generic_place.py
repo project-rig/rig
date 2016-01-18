@@ -32,6 +32,16 @@ from rig.place_and_route.place.hilbert import place as hilbert_place
 from rig.place_and_route.place.sa import place as sa_place
 from rig.place_and_route.place.rand import place as rand_place
 
+from rig.place_and_route.place.sa.python_kernel import PythonKernel
+
+
+# Get a list of all available kernels
+try:
+    from rig.place_and_route.place.sa.c_kernel import CKernel
+except ImportError:  # pragma: no cover
+    CKernel = None
+
+
 # This dictionary should be updated to contain all implemented algorithms along
 # with applicable keyword arguments.
 ALGORITHMS_UNDER_TEST = [(default_place, {}),
@@ -39,7 +49,12 @@ ALGORITHMS_UNDER_TEST = [(default_place, {}),
                          (hilbert_place, {}),
                          (hilbert_place, {"breadth_first": False}),
                          (breadth_first_place, {}),
+                         # Test default placer kernel
                          (sa_place, {}),
+                         # Test using other kernels (when available)
+                         (sa_place, {"kernel": PythonKernel}),
+                         pytest.mark.skipif("CKernel is None")(
+                             (sa_place, {"kernel": CKernel})),
                          # Testing with effort = 0 tests the initial (random)
                          # placement solutions of the SA placer.
                          (sa_place, {"effort": 0.0}),
