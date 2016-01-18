@@ -42,9 +42,11 @@ using [setuptools](https://pypi.python.org/pypi/setuptools) as usual:
     cd rig
     pip install .
 
-Optional extra features can also be installed as desired:
+In order to test the C-based simulated annealing placer kernel, you must also
+install [`rig_c_sa`](https://github.com/project-rig/rig_c_sa) which requries a
+C compiler and [libffi](https://sourceware.org/libffi/):
 
-    pip install .[c_sa]
+    pip install rig_c_sa
 
 ### Reporting Issues and Making Suggestions
 

@@ -5,7 +5,8 @@ python:
         - 3.4
         - 3.5
 install:
-        - pip install .[c_sa]
+        - python setup.py install
+        - pip install rig_c_sa
         - pip install -r requirements-test.txt
         - pip install python-coveralls
         - pip install spinnaker_proxy

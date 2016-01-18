@@ -17,17 +17,17 @@ class CKernel(object):  # pragma: no cover
 
     Thanks to being written in C, this kernel is 50-150x faster than
     :py:class:`~rig.place_and_route.place.sa.python_kernel.PythonKernel` while
-    maintaining the same placement quality. Unfortunately, since the
-    installation of this kernel requires a C compiler, the ``c_sa`` 'extra'
-    must be installed, e.g. using::
+    maintaining the same placement quality. Since installing the C
+    kernel requires a compiler it is not included in the standard Rig package.
+    The C kernel can be installed using::
 
-        $ pip install rig[c_sa]
+        $ pip install rig_c_sa
 
-    This 'extra' causes the `rig_c_sa
-    <https://github.com/project-rig/rig_c_sa>`_ C/Python package to be compiled
-    and installed. This requires that you have C compiler installed along with
-    `libffi <https://sourceware.org/libffi/>`_ which are readily available in
-    the package managers of real operating systems.
+    The `rig_c_sa <https://github.com/project-rig/rig_c_sa>`_ package is a
+    Python/C library containing the C components of the algorithm. Installation
+    requires that you have C compiler installed along with `libffi
+    <https://sourceware.org/libffi/>`_ which are readily available in the
+    package managers of real operating systems.
     """
 
     def __init__(self, vertices_resources, movable_vertices, fixed_vertices,

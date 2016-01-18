@@ -96,11 +96,6 @@ setup(
     # Requirements
     install_requires=["numpy>1.6", "six", "sentinel", "pytz", "enum-compat"],
 
-    # Optional C-extensions for performance
-    extras_require={
-        "c_sa": ["rig_c_sa>=0.1.0,<1.0.0"],
-    },
-
     # Scripts
     entry_points={
         "console_scripts": [
