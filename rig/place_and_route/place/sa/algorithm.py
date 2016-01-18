@@ -266,6 +266,7 @@ def place(vertices_resources, nets, machine, constraints,
                len(movable_vertices) == 0 or
                len(nets) == 0)
     if trivial:
+        logger.info("Placement has trivial solution. SA not used.")
         finalise_same_chip_constraints(substitutions, initial_placements)
         return initial_placements
 

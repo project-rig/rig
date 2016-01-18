@@ -31,11 +31,11 @@ def test_callback(return_value, should_terminate):
     the callback doesn't include any "False" vertices, e.g. due to the
     SameChipConstraint.
     """
-    vertices = [object() for _ in range(4)]
+    vertices = [object() for _ in range(32)]
     vertices_resources = {v: {Cores: 1} for v in vertices}
-    nets = [Net(vertices[i], vertices[(i+1) % 4])
+    nets = [Net(vertices[i], vertices[(i+1) % len(vertices)])
             for i in range(4)]
-    machine = Machine(4, 1, {Cores: 2})
+    machine = Machine(4, 4, {Cores: 3})
     constraints = [SameChipConstraint(vertices[:2])]
 
     def fn(iteration_count, placements, current_cost, r_accept,
