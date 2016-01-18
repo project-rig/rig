@@ -31,8 +31,13 @@ def test_callback(return_value, should_terminate):
     the callback doesn't include any "False" vertices, e.g. due to the
     SameChipConstraint.
     """
-    vertices = [object() for _ in range(32)]
-    vertices_resources = {v: {Cores: 1} for v in vertices}
+    # We have 10 vertices, the first two of which are constrained to be on the
+    # same chip. To avoid packing problems in this test, the two same-chip'd
+    # vertices have 1 core each (for a total of 2 cores) and the rest of the
+    # vertices have 2 cores each.
+    vertices = [object() for _ in range(10)]
+    vertices_resources = {v: {Cores: 1 if i < 2 else 2}
+                          for i, v in enumerate(vertices)}
     nets = [Net(vertices[i], vertices[(i+1) % len(vertices)])
             for i in range(4)]
     machine = Machine(4, 4, {Cores: 3})
