@@ -101,8 +101,8 @@ class CKernel(object):  # pragma: no cover
         # inserting the vertices above)
         for x, y in machine:
             for i, resource in enumerate(machine.chip_resources):
-                rig_c_sa.sa_set_chip_resource(self.s, x, y, i,
-                                              machine[(x, y)][resource])
+                rig_c_sa.sa_set_chip_resources(self.s, x, y, i,
+                                               machine[(x, y)][resource])
 
     def run_steps(self, num_steps, distance_limit, temperature):
         # Allocate memory for values returned via arguments
