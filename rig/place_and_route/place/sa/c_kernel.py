@@ -6,9 +6,15 @@ from itertools import chain, repeat
 
 from six import iteritems
 
+import pkg_resources
+
 # An optional Rig dependency.
 from rig_c_sa import ffi
 import rig_c_sa
+
+
+# Make sure installed rig_c_sa version is compatible.
+pkg_resources.require("rig_c_sa>=0.3.1,<1.0.0")
 
 
 class CKernel(object):  # pragma: no cover
