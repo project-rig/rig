@@ -7,10 +7,8 @@ import math
 from rig.place_and_route.place.utils import \
     add_resources, subtract_resources, overallocated
 
-from rig.place_and_route.place.sa.kernel import Kernel
 
-
-class PythonKernel(Kernel):
+class PythonKernel(object):
     """An implementation of the Simulated Annealing placement algorithm kernel
     written in Python.
 

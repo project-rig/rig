@@ -6,6 +6,8 @@ Simulated Annealing Based Placement
 Kernel Prototype
 ----------------
 
+All kernel implementations should obey the following interface:
+
 .. autoclass:: rig.place_and_route.place.sa.kernel.Kernel
     :members:
     :special-members:

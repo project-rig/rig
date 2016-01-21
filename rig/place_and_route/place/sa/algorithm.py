@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover
 """
 This logger is used by the annealing algorithm to indicate progress.
 """
-logger = logging.getLogger("sa")
+logger = logging.getLogger(__name__.split(".")[-1])
 
 
 def _initial_placement(movable_vertices, vertices_resources, machine, random):
@@ -139,7 +139,7 @@ def place(vertices_resources, nets, machine, constraints,
     * :py:class:`~rig.place_and_route.place.sa.c_kernel.CKernel` A C
       implementation which is typically 50-150x faster than the basic Python
       kernel. Since this implementation requires a C compiler during
-      installation, this is an optional feature of Rig. See the
+      installation, it is an optional feature of Rig. See the
       :py:class:`CKernel's documentation
       <rig.place_and_route.place.sa.c_kernel.CKernel>` for details.
 

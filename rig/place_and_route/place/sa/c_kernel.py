@@ -17,7 +17,7 @@ import rig_c_sa
 pkg_resources.require("rig_c_sa>=0.3.1,<1.0.0")
 
 
-class CKernel(object):  # pragma: no cover
+class CKernel(object):
     """An implementation of the Simulated Annealing placement algorithm kernel
     written in C.
 
@@ -32,8 +32,7 @@ class CKernel(object):  # pragma: no cover
     The `rig_c_sa <https://github.com/project-rig/rig_c_sa>`_ package is a
     Python/C library containing the C components of the algorithm. Installation
     requires that you have C compiler installed along with `libffi
-    <https://sourceware.org/libffi/>`_ which are readily available in the
-    package managers of real operating systems.
+    <https://sourceware.org/libffi/>`_.
     """
 
     def __init__(self, vertices_resources, movable_vertices, fixed_vertices,
@@ -62,8 +61,8 @@ class CKernel(object):  # pragma: no cover
             for vertex in net:
                 vertices_nets[vertex].add(net)
 
-        # Create all vertices and set their initial positions. Populates a from
-        # Python vertex object to C sa_vertex_t pointer
+        # Create all vertices and set assign initial positions. Populates a map
+        # from Python vertex object to C sa_vertex_t pointer.
         self.vertices_c = {}
         for i, (vertex, movable) in enumerate(
                 chain(zip(movable_vertices, repeat(True)),
@@ -95,7 +94,6 @@ class CKernel(object):  # pragma: no cover
             n = rig_c_sa.sa_new_net(self.s, len(vertices))
             assert n != ffi.NULL
             self.s.nets[i] = n
-
             n.weight = net.weight
 
             # Add vertices to it

@@ -1,7 +1,9 @@
+# pragma: no cover
+
 """General interface for a SA algorithm kernel."""
 
 
-class Kernel(object):  # pragma: no cover
+class Kernel(object):
     """A general API for a SA algorithm kernel."""
 
     def __init__(self, vertices_resources, movable_vertices, fixed_vertices,
