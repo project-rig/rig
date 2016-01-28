@@ -75,48 +75,62 @@ class TestMachine(object):
 
         # Should always compare equal to itself
         assert m == m
+        assert not (m != m)
 
         # Should compare equal to a copy
         m_ = m.copy()
         assert m == m_
+        assert not (m != m_)
 
         # Should not compare equal when the sizes differ
         m_.width = 2
         assert m != m_
         m_.width = 1
         assert m == m_
+        assert not (m != m_)
         m_.height = 4
         assert m != m_
+        assert not (m == m_)
         m_.height = 3
         assert m == m_
+        assert not (m != m_)
 
         # Nor when resources differ
         m_.chip_resources = {Cores: 10}
         assert m != m_
+        assert not (m == m_)
         m_.chip_resources = {Cores: 3}
         assert m == m_
+        assert not (m != m_)
 
         # Nor when exceptions differ
         m_.chip_resource_exceptions = {(0, 0): {Cores: 10}}
         assert m != m_
+        assert not (m == m_)
         m_.chip_resource_exceptions = {(0, 0): {Cores: 1}}
         assert m == m_
+        assert not (m != m_)
 
         # Nor when dead chips differ
         m_.dead_chips = set([])
         assert m != m_
+        assert not (m == m_)
         m_.dead_chips = set([(0, 1)])
         assert m == m_
+        assert not (m != m_)
 
         # Nor when dead links differ
         m_.dead_links = set([(0, 0, Links.south)])
         assert m != m_
+        assert not (m == m_)
         m_.dead_links = set([(0, 0, Links.north)])
         assert m == m_
+        assert not (m != m_)
 
         # Should compare equal if exceptions result in the same system
         m_.chip_resource_exceptions = {(0, 0): {Cores: 1}, (0, 2): {Cores: 3}}
         assert m == m_
+        assert not (m != m_)
 
     def test_issubset(self):
         """Ensure subset tests work."""

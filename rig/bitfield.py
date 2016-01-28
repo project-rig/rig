@@ -476,6 +476,9 @@ class BitField(object):
                 self.fields is other.fields and
                 self.field_values == other.field_values)
 
+    def __ne__(self, other):
+        return not (self == other)
+
     def __repr__(self):
         """Produce a human-readable representation of this bit field and its
         current value.

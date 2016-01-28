@@ -855,28 +855,34 @@ def test_eq():
     ks1 = BitField(32)
     ks2 = BitField(32)
     assert ks1 != ks2
+    assert not (ks1 == ks2)
 
     ks1.add_field("test", length=2, start_at=1)
     ks2.add_field("test", length=2, start_at=1)
     assert ks1 != ks2
+    assert not (ks1 == ks2)
 
     ks1_val = ks1(test=1)
     ks2_val = ks2(test=1)
     assert ks1_val != ks2_val
+    assert not (ks1_val == ks2_val)
 
     # And that they're still different when completely different fields/values
     # are given
     ks1.add_field("test1", length=10, start_at=20)
     ks2.add_field("test2", length=20, start_at=10)
     assert ks1 != ks2
+    assert not (ks1 == ks2)
 
     ks1_val2 = ks1(test1=10)
     ks2_val2 = ks2(test2=20)
     assert ks1_val2 != ks2_val2
+    assert not (ks1_val2 == ks2_val2)
 
     # Check self-equivilence, even with fields and values set
     ks = BitField(32)
     assert ks == ks
+    assert not (ks != ks)
 
     ks.add_field("test")
     ks.add_field("split")
@@ -887,6 +893,7 @@ def test_eq():
     ks_s1.add_field("s1")
 
     assert ks == ks
+    assert not(ks != ks)
 
     ks_val0 = ks(test=0, split=1, s1=2)
     ks_val1 = ks(test=0)(split=1, s1=2)
@@ -897,9 +904,11 @@ def test_eq():
 
     # Check inequality when values do differ
     assert ks != ks_val0
+    assert not (ks == ks_val0)
 
     ks_val_diff = ks(test=123)
     assert ks_val_diff != ks_val0
+    assert not (ks_val_diff == ks_val0)
 
 
 def test_repr():
