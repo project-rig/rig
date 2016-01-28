@@ -4,8 +4,14 @@ from six import iteritems
 
 import math
 
+import time
+
+import importlib
+
 from rig.place_and_route.place.utils import \
     add_resources, subtract_resources, overallocated
+
+import warnings
 
 
 class PythonKernel(object):
@@ -13,11 +19,22 @@ class PythonKernel(object):
     written in Python.
 
     This implementation is not optimised for runtime but should produce good
-    quality, correct results on any platform.
+    quality, correct results on any platform, albeit slowly.
+
+    This kernel will display a warning/hint if placement is taking a long time
+    suggesting installing ``rig_c_sa`` to enable use of the faster
+    :py:class:`~rig.place_and_route.place.place.sa.c_kernel.CKernel`. To
+    disable this warning, the kernel takes an optional ``no_warn`` argument
+    which, when True, disables the warning.
     """
 
+    """Display a warning/hint to install rig_c_sa if placement takes longer
+    than this many seconds.
+    """
+    WARN_TIME = 2.0 * 60.0
+
     def __init__(self, vertices_resources, movable_vertices, fixed_vertices,
-                 initial_placements, nets, machine, random, **kwargs):
+                 initial_placements, nets, machine, random, no_warn=False):
         self.vertices_resources = vertices_resources
         self.movable_vertices = list(movable_vertices)
         self.fixed_vertices = fixed_vertices
@@ -25,6 +42,11 @@ class PythonKernel(object):
         self.nets = nets
         self.machine = machine
         self.random = random
+
+        if no_warn:
+            self.start_time = None
+        else:
+            self.start_time = time.time()
 
         self.has_wrap_around_links = self.machine.has_wrap_around_links()
 
@@ -44,6 +66,28 @@ class PythonKernel(object):
                     self.v2n[v].append(net)
 
     def run_steps(self, num_steps, distance_limit, temperature):
+        # If the placement runs for a long time, hint that the C-based placer
+        # is much faster.
+        if (self.start_time is not None and
+                time.time() - self.start_time > self.WARN_TIME):
+            # Only show the warning/hint if the C Kernel is not installed.
+            try:
+                # NB: This import is performed using import lib rather than an
+                # import statement to enable easier testing since this function
+                # call can be trivially mocked out.
+                importlib.import_module(
+                    "rig.place_and_route.place.sa.c_kernel")
+            except ImportError:
+                warnings.warn(
+                    "It appears you are placing a large graph using the "
+                    "slow Python-based simulated annealing kernel. "
+                    "Installing the rig_c_sa package may result in a 50-150x "
+                    "speedup without any change to your code.",
+                    stacklevel=3)
+
+            # Prevent future warnings
+            self.start_time = None
+
         num_accepted = 0
         deltas = []
         for _ in range(num_steps):

@@ -14,6 +14,8 @@ from rig.place_and_route.place.sa import python_kernel as pk
 
 import random
 
+import warnings
+
 
 def test__net_cost_no_wrap():
     """Make sure net costs are calculated correctly."""
@@ -392,3 +394,52 @@ def test__step_swap_too_large(has_wrap_around_links):
         assert pk._step(vertices, 1, 1.e1000, placements, l2v, v2n,
                         vertices_resources, fixed_vertices, machine,
                         has_wrap_around_links, r) == (False, 0.0)
+
+
+@pytest.mark.parametrize("no_warn", [True, False])
+@pytest.mark.parametrize("no_c_kernel", [True, False])
+def test_warning(no_warn, no_c_kernel, monkeypatch):
+    """Make sure the rig_c_sa warning/hint is shown after the Python Kernel has
+    been running for some time.
+    """
+    # Mock out the time module to allow controling how much time has ellapsed
+    time = Mock(time=Mock(return_value=100.0))
+    monkeypatch.setattr(pk, "time", time)
+
+    # Mock out the importlib module to mock an import error for rig_c_sa as
+    # required.
+    if no_c_kernel:
+        import_module = Mock(side_effect=ImportError())
+    else:
+        import_module = Mock(return_value=None)
+    importlib = Mock(import_module=import_module)
+    monkeypatch.setattr(pk, "importlib", importlib)
+
+    k = pk.PythonKernel({}, set(), {}, {}, [], Machine(1, 1), random, no_warn)
+
+    # Before timeout, no warnings should be produced
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        k.run_steps(1, 1.0, 1.0)
+        assert len(w) == 0
+
+    # After timeout, one warning may be produced
+    time.time.return_value = time.time() + (3.0 * 60.0)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        k.run_steps(1, 1.0, 1.0)
+
+        if no_warn or not no_c_kernel:
+            # If warnings disabled or the C Kernel is installed, no warning
+            # should be shown.
+            assert len(w) == 0
+        else:
+            assert len(w) == 1
+
+    # After the warning has been produced (or not!), no further warnings should
+    # be produced.
+    time.time.return_value = time.time() + (3.0 * 60.0)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        k.run_steps(1, 1.0, 1.0)
+        assert len(w) == 0
