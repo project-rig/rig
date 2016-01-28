@@ -131,6 +131,9 @@ class Machine(object):
                 self.dead_chips == other.dead_chips and
                 self.dead_links == other.dead_links)
 
+    def __ne__(self, other):
+        return not (self == other)
+
     def issubset(self, other):
         """Test whether the resources available in this machine description are
         a (non-strict) subset of those available in another machine.
