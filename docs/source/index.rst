@@ -14,6 +14,14 @@ The following documentation aims to provide new users with a high-level
 introduction to all of the key parts of Rig and also present a formal API
 reference which is also available via Python's ``help()`` system.
 
+Installation
+------------
+
+.. toctree::
+        :maxdepth: 2
+
+        install
+
 Data packaging for SpiNNaker
 ----------------------------
 

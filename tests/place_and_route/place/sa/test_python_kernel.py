@@ -10,9 +10,11 @@ from rig.netlist import Net
 
 from rig.place_and_route.machine import Machine, Cores, SDRAM
 
-from rig.place_and_route.place import sa
+from rig.place_and_route.place.sa import python_kernel as pk
 
 import random
+
+import warnings
 
 
 def test__net_cost_no_wrap():
@@ -26,32 +28,32 @@ def test__net_cost_no_wrap():
             placements[v] = xy
 
     # Should report zero cost for a net with no targets
-    assert sa._net_cost(Net(l2v[(0, 0)][0], []),
+    assert pk._net_cost(Net(l2v[(0, 0)][0], []),
                         placements, False, machine) == 0.0
 
     # Should report zero cost for a net with targets in the same chip
-    assert sa._net_cost(Net(l2v[(0, 0)][0],
+    assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(0, 0)][1:]),
                         placements, False, machine) == 0.0
 
     # Should report cost 1 for a net to a chip one cell away
-    assert sa._net_cost(Net(l2v[(1, 1)][0],
+    assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(1, 0)][0]),
                         placements, False, machine) == 1.0
-    assert sa._net_cost(Net(l2v[(1, 1)][0],
+    assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(2, 1)][0]),
                         placements, False, machine) == 1.0
 
     # Should report cost for a square net
-    assert sa._net_cost(Net(l2v[(1, 1)][0],
+    assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(2, 2)][0]),
                         placements, False, machine) == 2.0
-    assert sa._net_cost(Net(l2v[(0, 0)][0],
+    assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(2, 2)][0]),
                         placements, False, machine) == 4.0
 
     # Should account for the weight
-    assert sa._net_cost(Net(l2v[(0, 0)][0],
+    assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(2, 2)][0], 0.5),
                         placements, False, machine) == 4.0 / 2.0
 
@@ -67,43 +69,43 @@ def test__net_cost_with_wrap():
             placements[v] = xy
 
     # Should report zero cost for a net with no targets
-    assert sa._net_cost(Net(l2v[(0, 0)][0], []),
+    assert pk._net_cost(Net(l2v[(0, 0)][0], []),
                         placements, True, machine) == 0.0
 
     # Should report zero cost for a net with targets in the same chip
-    assert sa._net_cost(Net(l2v[(0, 0)][0],
+    assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(0, 0)][1:]),
                         placements, True, machine) == 0.0
 
     # Should report cost 1 for a net to a chip one cell away
-    assert sa._net_cost(Net(l2v[(1, 1)][0],
+    assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(1, 0)][0]),
                         placements, True, machine) == 1.0
-    assert sa._net_cost(Net(l2v[(1, 1)][0],
+    assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(2, 1)][0]),
                         placements, True, machine) == 1.0
     # ...with wrapping
-    assert sa._net_cost(Net(l2v[(2, 2)][0],
+    assert pk._net_cost(Net(l2v[(2, 2)][0],
                             l2v[(2, 0)][0]),
                         placements, True, machine) == 1.0
-    assert sa._net_cost(Net(l2v[(2, 2)][0],
+    assert pk._net_cost(Net(l2v[(2, 2)][0],
                             l2v[(0, 2)][0]),
                         placements, True, machine) == 1.0
 
     # Should report cost for a square net
-    assert sa._net_cost(Net(l2v[(1, 1)][0],
+    assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(2, 2)][0]),
                         placements, True, machine) == 2.0
-    assert sa._net_cost(Net(l2v[(0, 0)][0],
+    assert pk._net_cost(Net(l2v[(0, 0)][0],
                             [l2v[(1, 1)][0], l2v[(2, 2)][0]]),
                         placements, True, machine) == 4.0
     # With wrapping
-    assert sa._net_cost(Net(l2v[(0, 0)][0],
+    assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(2, 2)][0]),
                         placements, True, machine) == 2.0
 
     # Should account for the weight
-    assert sa._net_cost(Net(l2v[(0, 0)][0],
+    assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(2, 2)][0], 0.5),
                         placements, True, machine) == 2.0 / 2.0
 
@@ -149,7 +151,7 @@ def test__get_candidate_swap(resources, expectation):
 
     fixed_vertices = {v2: (0, 0)}
 
-    assert sa._get_candidate_swap(resources,
+    assert pk._get_candidate_swap(resources,
                                   (0, 0), l2v, vertices_resources,
                                   fixed_vertices, machine) == expectation
 
@@ -182,7 +184,7 @@ def test__swap():
     placements_ = placements.copy()
 
     # A null swap should achieve nothing
-    sa._swap([], (0, 0), [], (1, 1),
+    pk._swap([], (0, 0), [], (1, 1),
              l2v, vertices_resources, placements, machine)
     assert machine == machine_
     assert l2v == l2v_
@@ -190,7 +192,7 @@ def test__swap():
     assert placements == placements_
 
     # Moving a single object should work
-    sa._swap([l2v[(0, 0)][0]], (0, 0), [], (1, 1),
+    pk._swap([l2v[(0, 0)][0]], (0, 0), [], (1, 1),
              l2v, vertices_resources, placements, machine)
     machine_after_move = machine_.copy()
     machine_after_move[(0, 0)] = {Cores: 2}
@@ -206,7 +208,7 @@ def test__swap():
     assert placements == placements_after_move
 
     # Should be able to swap back again (note the re-ordering within the core)
-    sa._swap([], (0, 0), [l2v[(1, 1)][-1]], (1, 1),
+    pk._swap([], (0, 0), [l2v[(1, 1)][-1]], (1, 1),
              l2v, vertices_resources, placements, machine)
     assert machine == machine_
     l2v_after_move = l2v_.copy()
@@ -216,7 +218,7 @@ def test__swap():
     assert placements == placements_
 
     # Should be able to swap en-mass
-    sa._swap(l2v[(1, 2)][:], (1, 2), l2v[(2, 2)][:], (2, 2),
+    pk._swap(l2v[(1, 2)][:], (1, 2), l2v[(2, 2)][:], (2, 2),
              l2v, vertices_resources, placements, machine)
     assert machine == machine_
     l2v_after_move[(1, 2)] = l2v_[(2, 2)][:]
@@ -247,7 +249,7 @@ def test__step_singleton(has_wrap_around_links):
     # try to swap it would probably be accepted.
     r = random.Random()
     for _ in range(10):
-        assert sa._step(vertices, 1, 1.e1000, placements, l2v, v2n,
+        assert pk._step(vertices, 1, 1.e1000, placements, l2v, v2n,
                         vertices_resources, fixed_vertices, machine,
                         has_wrap_around_links, r) == (False, 0.0)
 
@@ -279,7 +281,7 @@ def test__step_not_same_chip_and_rand_range(has_wrap_around_links):
     r.randint = Mock(side_effect=lambda a, b: next(sequence_iter))
 
     # We don't really care what the outcome of the step is in this case
-    sa._step(vertices, 1, 1.e1000, placements, l2v, v2n,
+    pk._step(vertices, 1, 1.e1000, placements, l2v, v2n,
              vertices_resources, fixed_vertices, machine,
              has_wrap_around_links, r)
 
@@ -327,7 +329,7 @@ def test__step_dest_not_dead(has_wrap_around_links):
 
     # We simply make sure that this reliably doesn't produce a swap
     for _ in range(10):
-        assert sa._step(vertices, 1, 1.e1000, placements, l2v, v2n,
+        assert pk._step(vertices, 1, 1.e1000, placements, l2v, v2n,
                         vertices_resources, fixed_vertices, machine,
                         has_wrap_around_links, r) == (False, 0.0)
 
@@ -357,7 +359,7 @@ def test__step_dest_too_small(has_wrap_around_links):
 
     # We simply make sure that this reliably doesn't produce a swap
     for _ in range(10):
-        assert sa._step(vertices, 1, 1.e1000, placements, l2v, v2n,
+        assert pk._step(vertices, 1, 1.e1000, placements, l2v, v2n,
                         vertices_resources, fixed_vertices, machine,
                         has_wrap_around_links, r) == (False, 0.0)
 
@@ -389,38 +391,55 @@ def test__step_swap_too_large(has_wrap_around_links):
 
     # We simply make sure that this reliably doesn't produce a swap
     for _ in range(10):
-        assert sa._step(vertices, 1, 1.e1000, placements, l2v, v2n,
+        assert pk._step(vertices, 1, 1.e1000, placements, l2v, v2n,
                         vertices_resources, fixed_vertices, machine,
                         has_wrap_around_links, r) == (False, 0.0)
 
 
-@pytest.mark.parametrize("return_value,should_terminate",
-                         [(None, False),
-                          (123, False),
-                          (0, False),
-                          ("hi", False),
-                          ("", False),
-                          ([0], False),
-                          ([], False),
-                          (True, False),
-                          (False, True)])
-def test_callback(return_value, should_terminate):
-    """Ensure that a callback function can be registered and can control the
-    placement process."""
-    vertices = [object() for _ in range(4)]
-    vertices_resources = {v: {Cores: 1} for v in vertices}
-    nets = [Net(vertices[i], vertices[(i+1) % 4])
-            for i in range(4)]
-    machine = Machine(4, 1, {Cores: 1})
+@pytest.mark.parametrize("no_warn", [True, False])
+@pytest.mark.parametrize("no_c_kernel", [True, False])
+def test_warning(no_warn, no_c_kernel, monkeypatch):
+    """Make sure the rig_c_sa warning/hint is shown after the Python Kernel has
+    been running for some time.
+    """
+    # Mock out the time module to allow controling how much time has ellapsed
+    time = Mock(time=Mock(return_value=100.0))
+    monkeypatch.setattr(pk, "time", time)
 
-    cb = Mock(return_value=return_value)
-
-    r = random.Random()
-    r.seed(1)
-    sa.place(vertices_resources, nets, machine, [],
-             on_temperature_change=cb, random=r)
-
-    if should_terminate:
-        assert len(cb.mock_calls) == 1
+    # Mock out the importlib module to mock an import error for rig_c_sa as
+    # required.
+    if no_c_kernel:
+        import_module = Mock(side_effect=ImportError())
     else:
-        assert len(cb.mock_calls) > 1
+        import_module = Mock(return_value=None)
+    importlib = Mock(import_module=import_module)
+    monkeypatch.setattr(pk, "importlib", importlib)
+
+    k = pk.PythonKernel({}, set(), {}, {}, [], Machine(1, 1), random, no_warn)
+
+    # Before timeout, no warnings should be produced
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        k.run_steps(1, 1.0, 1.0)
+        assert len(w) == 0
+
+    # After timeout, one warning may be produced
+    time.time.return_value = time.time() + (3.0 * 60.0)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        k.run_steps(1, 1.0, 1.0)
+
+        if no_warn or not no_c_kernel:
+            # If warnings disabled or the C Kernel is installed, no warning
+            # should be shown.
+            assert len(w) == 0
+        else:
+            assert len(w) == 1
+
+    # After the warning has been produced (or not!), no further warnings should
+    # be produced.
+    time.time.return_value = time.time() + (3.0 * 60.0)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        k.run_steps(1, 1.0, 1.0)
+        assert len(w) == 0

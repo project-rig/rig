@@ -1,3 +1,7 @@
+# Rig optional extra requirements
+rig_c_sa>=0.3.1,<1.0.0
+
+# Test suite requirements
 pytest>=2.6
 pytest-cov
 flake8
