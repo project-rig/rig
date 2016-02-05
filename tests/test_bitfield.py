@@ -849,6 +849,36 @@ class TestFullAuto(object):
         assert ks_h(s=1, s1=1).get_mask(field="s11") == 0x00000001
 
 
+def test_get_location_and_length():
+    ks = BitField(32)
+    ks.add_field("foo")
+    ks.add_field("bar", length=5)
+    ks.add_field("baz", start_at=1)
+    ks.add_field("qux", start_at=10, length=5)
+
+    # Getting non-existant fields should fail
+    with pytest.raises(UnavailableFieldError):
+        ks.get_location_and_length("norf")
+
+    # Getting fields whose location/size is not known should fail
+    with pytest.raises(ValueError):
+        ks.get_location_and_length("foo")
+    with pytest.raises(ValueError):
+        ks.get_location_and_length("bar")
+    with pytest.raises(ValueError):
+        ks.get_location_and_length("baz")
+
+    # Getting fields whose location was predefined should work
+    assert ks.get_location_and_length("qux") == (10, 5)
+
+    # Fixing everything should allow other fields to be determined too
+    ks.assign_fields()
+    assert ks.get_location_and_length("foo") == (0, 1)
+    assert ks.get_location_and_length("bar") == (2, 5)
+    assert ks.get_location_and_length("baz") == (1, 1)
+    assert ks.get_location_and_length("qux") == (10, 5)
+
+
 def test_eq():
     # Check that two bit fields with the same fields and values (but defined
     # seperately) are not equivilent.

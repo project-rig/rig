@@ -416,6 +416,42 @@ class BitField(object):
         """
         return self.fields.get_field(field, self.field_values).tags.copy()
 
+    def get_location_and_length(self, field):
+        """Get the location and length of a field within the bitfield.
+
+        .. note::
+            The named field must be accessible given the current set of values
+            defined.
+
+        Parameters
+        ----------
+        field : str
+            The field of interest.
+
+        Returns
+        -------
+        location, length
+            A pair of integers defining the bit-number of the least-significant
+            bit in the field and the total number of bits in the field
+            respectively.
+
+        Raises
+        ------
+        ValueError
+            If a field's length or position has not been defined. (e.g.
+            :py:meth:`.assign_fields` has not been called).
+        UnavailableFieldError
+            If the field does not exist or is not available.
+        """
+        field_obj = self.fields.get_field(field, self.field_values)
+
+        if field_obj.length is None or field_obj.start_at is None:
+            raise ValueError(
+                "Field '{}' does not have a fixed size/position.".format(
+                    field))
+
+        return (field_obj.start_at, field_obj.length)
+
     def assign_fields(self):
         """Assign a position & length to any fields which do not have one.
 
