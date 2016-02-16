@@ -124,12 +124,11 @@ As a heuristic:
       generality. If ``XX00`` were already present in the table the new entry
       ``0XX0`` must be inserted below it.
 """
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 from rig.routing_table import MinimisationFailedError, RoutingTableEntry
 from rig.routing_table.remove_default_routes import \
     minimise as remove_default_routes
 from rig.routing_table.utils import intersect
-from six import itervalues
 
 
 def minimise(routing_table, target_length):
@@ -776,8 +775,8 @@ def _refine_downcheck(merge, aliases, min_goodness):
                 for i in merge.entries:
                     entry = merge.routing_table[i]
 
-                    if ((not entry.mask & bit) or 
-                        (bool(entry.key & bit) is (not val))):
+                    if ((not entry.mask & bit) or
+                            (bool(entry.key & bit) is (not val))):
                         # If the entry has an X in this position then it will
                         # need to be removed regardless of whether we want to
                         # set a 0 or a 1 in this position, likewise it will
