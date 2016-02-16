@@ -52,7 +52,8 @@ def test__get_insertion_index():
     assert _get_insertion_index(table, 30) == 0
 
     # Add a generality 30 expression and then check where generality 31
-    # expressions would go (they should go to the end of the table)
+    # expressions would go (they should go just before the other generality 31
+    # entries)
     table.insert(0, RoutingTableEntry({Routes.south}, 0b00, 0b11))
     assert _get_insertion_index(table, 32) == len(table)
 
@@ -61,7 +62,7 @@ def test__get_insertion_index():
     table.append(RoutingTableEntry({Routes.south}, 0x0, 0x0))
 
     # Check that generality 31 expressions should be inserted before this
-    assert _get_insertion_index(table, 31) == len(table) - 1
+    assert _get_insertion_index(table, 31) == 1
 
 
 class TestMerge(object):
@@ -233,8 +234,8 @@ class TestMinimise(object):
 
         Can be minimised to::
 
-            001X -> S
             000X -> N, NE
+            001X -> S
         """
         # Original table
         RTE = RoutingTableEntry
@@ -246,8 +247,8 @@ class TestMinimise(object):
 
         # Expected table
         expected_table = [
-            RTE({Routes.south}, 0b0010, 0b1110),
             RTE({Routes.north, Routes.north_east}, 0b0000, 0b1110),
+            RTE({Routes.south}, 0b0010, 0b1110),
         ]
 
         assert table_is_subset_of(table, expected_table), "Test is broken"
@@ -343,9 +344,9 @@ class TestMinimise(object):
         The result (worked out by hand) should be:
 
             0000 -> N NE
-            0X00 -> S SW
-            1X00 -> N NE
             X001 -> E
+            1X00 -> N NE
+            0X00 -> S SW
             X1XX -> SW
         """
         RTE = RoutingTableEntry
@@ -362,12 +363,11 @@ class TestMinimise(object):
 
         expected_table = [
             RTE({Routes.north, Routes.north_east}, 0b0000, 0b1111),
-            RTE({Routes.south, Routes.south_west}, 0b0000, 0b1011),
-            RTE({Routes.north, Routes.north_east}, 0b1000, 0b1011),
             RTE({Routes.east}, 0b0001, 0b0111),
+            RTE({Routes.north, Routes.north_east}, 0b1000, 0b1011),
+            RTE({Routes.south, Routes.south_west}, 0b0000, 0b1011),
             RTE({Routes.south_west}, 0b0100, 0b0100),
         ]
-
         assert table_is_subset_of(table, expected_table), "Test is broken"
 
         # Get the minimised table
@@ -431,8 +431,8 @@ def test_ordered_covering_simple():
 
     Can be minimised to::
 
-        001X -> S
         000X -> N, NE
+        001X -> S
     """
     # Original table
     RTE = RoutingTableEntry
@@ -444,8 +444,8 @@ def test_ordered_covering_simple():
 
     # Expected table
     expected_table = [
-        RTE({Routes.south}, 0b0010, 0b1110),
         RTE({Routes.north, Routes.north_east}, 0b0000, 0b1110),
+        RTE({Routes.south}, 0b0010, 0b1110),
     ]
 
     assert table_is_subset_of(table, expected_table), "Test is broken"

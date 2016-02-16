@@ -93,34 +93,36 @@ We need a set of rules for:
 ------------------
 
 The algorithm implemented here, "Ordered Covering", provides the following
-rules:
+rule:
 
- 1. Routing tables are to be kept sorted in increasing order of "generality",
-    that is the number of ``X``s in the entry. An entry with the key-mask pair
-    ``00XX`` must be placed below any entries with fewer ``X``s in their
-    key-mask pairs (e.g., below ``0000`` and ``000X``).
+ * The only merges allowed are those which:
 
-    a) New entries must also be inserted below any entries of the same
-       generality. If ``XX00`` were already present in the table the new entry
-       ``0XX0`` must be inserted below it.
-
- 2. The only merges allowed are those which:
-
-    a) would not cause one of the entries in the merge to be "hidden" below
-       an entry of lesser generality than the merged entry but which matched
-       any of the same keys. For example, merging ``0010`` and ``0001`` would
-       not be allowed if the new entry would be placed below the existing
-       entry ``000X`` as this would "hide" ``0001``.
-    b) would not cause an entry "contained" within an entry of higher
-       generality to be hidden by the insertion of a new entry. For example, if
-       the entry ``XXXX`` had been formed by merging the entries ``0011`` and
-       ``1100`` then merging of the entries ``1101`` and ``1110`` would not be
-       allowed as it would cause the entry ``11XX`` to be inserted above
-       ``XXXX`` in the table and would hide ``1100``.
+   a) would not cause one of the entries in the merge to be "hidden" below
+      an entry of lesser generality than the merged entry but which matched
+      any of the same keys. For example, merging ``0010`` and ``0001`` would
+      not be allowed if the new entry would be placed below the existing
+      entry ``000X`` as this would "hide" ``0001``.
+   b) would not cause an entry "contained" within an entry of higher
+      generality to be hidden by the insertion of a new entry. For example, if
+      the entry ``XXXX`` had been formed by merging the entries ``0011`` and
+      ``1100`` then merging of the entries ``1101`` and ``1110`` would not be
+      allowed as it would cause the entry ``11XX`` to be inserted above
+      ``XXXX`` in the table and would hide ``1100``.
 
 Following these rules ensures that the minimised table will be functionally
 equivalent to the original table provided that the original table was invariant
 under reordering OR was provided in increasing order of generality.
+
+As a heuristic:
+
+ * Routing tables are to be kept sorted in increasing order of "generality",
+   that is the number of ``X``s in the entry. An entry with the key-mask pair
+   ``00XX`` must be placed below any entries with fewer ``X``s in their
+   key-mask pairs (e.g., below ``0000`` and ``000X``).
+
+   a) New entries must also be inserted below any entries of the same
+      generality. If ``XX00`` were already present in the table the new entry
+      ``0XX0`` must be inserted below it.
 """
 from collections import defaultdict, namedtuple
 from rig.routing_table import MinimisationFailedError, RoutingTableEntry
@@ -370,6 +372,10 @@ def _get_insertion_index(routing_table, generality):
     """Determine the index in the routing table where a new entry should be
     inserted.
     """
+    # We insert before blocks of equivalent generality, so decrement the given
+    # generality.
+    generality -= 1
+
     # Wrapper for _get_generality which accepts a routing entry
     def gg(entry):
         return _get_generality(entry.key, entry.mask)
@@ -467,33 +473,45 @@ class _Merge(namedtuple("_Merge", ["routing_table", "entries", "key", "mask",
         {(key, mask): {(key, mask), ...}}
             A new aliases dictionary.
         """
-        # Generate a new copy of the routing table
-        routing_entries = list(self.routing_table)
+        # Create a new routing table of the correct size
+        new_size = len(self.routing_table) - len(self.entries) + 1
+        new_table = [None for _ in range(new_size)]
+
+        # Create a copy of the aliases dictionary
         aliases = dict(aliases)
 
-        # Add the new entry
+        # Get the new entry
         new_entry = RoutingTableEntry(
-            route=routing_entries[next(iter(self.entries))].route,
+            route=self.routing_table[next(iter(self.entries))].route,
             key=self.key, mask=self.mask, sources=self.sources
         )
-        routing_entries.insert(self.insertion_index, new_entry)
         aliases[(self.key, self.mask)] = our_aliases = set([])
 
-        # Remove all the old entries.
-        # NOTE: This relies on the fact that merging can only ever increase
-        # generality: the entry that was just inserted MUST be below the
-        # entries that we need to remove and hence doesn't affect their
-        # indices.
-        offset = 0
-        for i in sorted(self.entries):
-            entry = routing_entries.pop(i - offset)
-            offset += 1
-            km = (entry.key, entry.mask)
+        # Iterate through the old table copying entries acrosss
+        insert = 0
+        for remove, entry in enumerate(self.routing_table):
+            # If this is the insertion point then insert
+            if remove == self.insertion_index:
+                new_table[insert] = new_entry
+                insert += 1
 
-            # Add to the alias list
-            our_aliases.update(aliases.pop(km, set([km])))
+            if remove not in self.entries:
+                # If this entry isn't to be removed then copy it across to the
+                # new table.
+                new_table[insert] = entry
+                insert += 1
+            else:
+                # If this entry is to be removed then add it to the aliases
+                # dictionary.
+                km = (entry.key, entry.mask)
+                our_aliases.update(aliases.pop(km, {km}))
 
-        return routing_entries, aliases
+        # If inserting beyond the end of the old table then insert at the end
+        # of the new table.
+        if self.insertion_index == len(self.routing_table):
+            new_table[insert] = new_entry
+
+        return new_table, aliases
 
 
 def _refine_merge(merge, aliases, min_goodness):
@@ -738,7 +756,7 @@ def _refine_downcheck(merge, aliases, min_goodness):
 
                 # Add this settable mask and the required values to the
                 # settables list.
-                bits_and_vals.update((bit, bool(key & bit)) for bit in
+                bits_and_vals.update((bit, not bool(key & bit)) for bit in
                                      all_bits if bit & settable)
 
         if most_stringent == 0:
@@ -748,30 +766,32 @@ def _refine_downcheck(merge, aliases, min_goodness):
             merge = _Merge(merge.routing_table, set())
             break
         else:
-            # Build a map from bit positions and values to the entries which
-            # would need to be removed to set that bit in the merge key-mask
-            # appropriately.
-            options = defaultdict(set)
-            for i in merge.entries:
-                entry = merge.routing_table[i]
+            # Get the smallest number of entries to remove to modify the
+            # resultant key-mask to avoid covering a lower entry. Prefer to
+            # modify more significant bits of the key mask.
+            remove = set()  # Entries to remove
+            for bit, val in sorted(bits_and_vals, reverse=True):
+                working_remove = set()  # Holder for working remove set
 
-                # For every bit position and value:
-                for bit, val in bits_and_vals:
-                    if not entry.mask & bit:
+                for i in merge.entries:
+                    entry = merge.routing_table[i]
+
+                    if ((not entry.mask & bit) or 
+                        (bool(entry.key & bit) is (not val))):
                         # If the entry has an X in this position then it will
                         # need to be removed regardless of whether we want to
-                        # set a 0 or a 1 in this position.
-                        options[(bit, False)].add(i)
-                        options[(bit, True)].add(i)
-                    elif bool(bit & entry.key) is val:
-                        # If there is a 0 in this position and we want a 0 (val
-                        # is True) then mark this entry for removal. Likewise
-                        # if there is a 1 in this position and we want a 1.
-                        options[(bit, val)].add(i)
+                        # set a 0 or a 1 in this position, likewise it will
+                        # need to be removed if it is a 0 and we want a 1 or
+                        # vice-versa.
+                        working_remove.add(i)
 
-            # Get the smallest set of entries to remove and remove them
-            choice = min(itervalues(options), key=len)
-            merge = _Merge(merge.routing_table, merge.entries - choice)
+                # If the current remove set is empty or the new remove set is
+                # smaller update the remove set.
+                if not remove or len(working_remove) < len(remove):
+                    remove = working_remove
+
+            # Remove the selected entries from the merge
+            merge = _Merge(merge.routing_table, merge.entries - remove)
     else:
         # NOTE: If there are no covered entries, that is, if the merge is
         # better than min goodness AND valid this `else` clause is not reached.
