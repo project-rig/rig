@@ -174,16 +174,25 @@ class TestApplySameChipConstraints(object):
         # * One which is empty (shouldn't change anything, nor fail!)
         # * One which contains just v0 which shouldn't change anything
         # * One which constrains v0 and v1 together
-        # * One which constrains v1 and v2 together
+        # * One which constrains v1 and v2 together (and contains a duplicate)
+        # * Two constraints which have an intersection of two vertices.
         v0 = object()
         v1 = object()
         v2 = object()
         v3 = object()
+        v4 = object()
+        v5 = object()
+        v6 = object()
+        v7 = object()
         vertices_resources = {
             v0: {Cores: 1},
             v1: {Cores: 2, SDRAM: 4},
             v2: {SDRAM: 8},
             v3: {Cores: 16, SDRAM: 32},
+            v4: {Cores: 1},
+            v5: {Cores: 1},
+            v6: {Cores: 1},
+            v7: {Cores: 1},
         }
         nets = [
             Net(v0, [v0, v1, v2, v3], 123),
@@ -195,7 +204,9 @@ class TestApplySameChipConstraints(object):
             SameChipConstraint([]),
             SameChipConstraint([v0]),
             SameChipConstraint([v0, v1]),
-            SameChipConstraint([v1, v2]),
+            SameChipConstraint([v1, v2, v2]),  # NB: Duplicate v2
+            SameChipConstraint([v4, v5, v6]),
+            SameChipConstraint([v5, v6, v7]),
 
             # One should be modified due to the SameChipConstraint, the other
             # should not.
@@ -215,18 +226,23 @@ class TestApplySameChipConstraints(object):
         vr_out, n_out, c_out, substitutions = apply_same_chip_constraints(
             vertices_resources, nets, constraints)
 
-        # Should have a substitution only for the two constraints which
+        # Should have a substitution only for the four constraints which
         # actually achieve anything
-        assert len(substitutions) == 2
+        assert len(substitutions) == 4
         assert substitutions[0].vertices == [v0, v1]
-        assert substitutions[1].vertices == [substitutions[0], v2]
+        assert substitutions[1].vertices == [substitutions[0], v2, v2]
+        assert substitutions[2].vertices == [v4, v5, v6]
+        assert substitutions[3].vertices == [
+            substitutions[2], substitutions[2], v7]
 
         # The vertex used for the merged vertices
-        vm = substitutions[1]
+        vm1 = substitutions[1]
+        vm2 = substitutions[3]
 
         # The merged vertices should have their resources combined
         assert vr_out == {
-            vm: {Cores: 3, SDRAM: 12},
+            vm1: {Cores: 3, SDRAM: 12},
+            vm2: {Cores: 4},
             v3: {Cores: 16, SDRAM: 32},
         }
 
@@ -234,38 +250,41 @@ class TestApplySameChipConstraints(object):
         # vertices substituted in
         assert len(n_out) == len(nets)
 
-        assert n_out[0].source == vm
-        assert n_out[0].sinks == [vm, vm, vm, v3]
+        assert n_out[0].source == vm1
+        assert n_out[0].sinks == [vm1, vm1, vm1, v3]
         assert n_out[0].weight == 123
 
-        assert n_out[1].source == vm
-        assert n_out[1].sinks == [vm]
+        assert n_out[1].source == vm1
+        assert n_out[1].sinks == [vm1]
         assert n_out[1].weight == 456
 
         assert n_out[2].source == v3
-        assert n_out[2].sinks == [vm]
+        assert n_out[2].sinks == [vm1]
         assert n_out[2].weight == 789
 
         # The constraints should be updated accordingly
         assert len(c_out) == len(constraints)
         assert c_out[0].vertices == []
-        assert c_out[1].vertices == [vm]
-        assert c_out[2].vertices == [vm, vm]
-        assert c_out[3].vertices == [vm, vm]
+        assert c_out[1].vertices == [vm1]
+        assert c_out[2].vertices == [vm1, vm1]
+        assert c_out[3].vertices == [vm1, vm1, vm1]
 
-        assert c_out[4].vertex == vm
-        assert c_out[4].location == (1, 2)
+        assert c_out[4].vertices == [vm2, vm2, vm2]
+        assert c_out[5].vertices == [vm2, vm2, vm2]
 
-        assert c_out[5].vertex == v3
-        assert c_out[5].location == (3, 4)
-
-        assert c_out[6].vertex == vm
-        assert c_out[6].route == Routes.north
+        assert c_out[6].vertex == vm1
+        assert c_out[6].location == (1, 2)
 
         assert c_out[7].vertex == v3
-        assert c_out[7].route == Routes.south
+        assert c_out[7].location == (3, 4)
 
-        assert c_out[8] is constraints[8]
+        assert c_out[8].vertex == vm1
+        assert c_out[8].route == Routes.north
+
+        assert c_out[9].vertex == v3
+        assert c_out[9].route == Routes.south
+
+        assert c_out[10] is constraints[10]
 
 
 class TestFinaliseSameChipConstraints(object):
@@ -293,13 +312,14 @@ class TestFinaliseSameChipConstraints(object):
 
     def test_multiple(self):
         # Test that the finalise_same_chip_constraints works when there's
-        # several overlapping substitutions to be made
+        # several overlapping substitutions to be made and some duplicates in
+        # the expansion list
         v0 = object()
         v1 = object()
         v2 = object()
         v3 = object()
         m0 = MergedVertex([v0, v1])
-        m1 = MergedVertex([m0, v2])
+        m1 = MergedVertex([m0, v2, v2])  # NB: Duplicate
 
         placements = {
             m1: (0, 1),

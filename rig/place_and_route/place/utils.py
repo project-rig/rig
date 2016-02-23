@@ -173,21 +173,21 @@ def apply_same_chip_constraints(vertices_resources, nets, constraints):
         merged_vertex = MergedVertex(same_chip_constraint.vertices)
         substitutions.append(merged_vertex)
 
+        # A set containing the set of vertices to be merged (to remove
+        # duplicates)
+        merged_vertices = set(same_chip_constraint.vertices)
+
         # Remove the merged vertices from the set of vertices resources and
         # accumulate the total resources consumed. Note add_resources is not
         # used since we don't know if the resources consumed by each vertex are
         # overlapping.
         total_resources = {}
-        for vertex in same_chip_constraint.vertices:
+        for vertex in merged_vertices:
             resources = vertices_resources.pop(vertex)
             for resource, value in iteritems(resources):
                 total_resources[resource] = (total_resources.get(resource, 0) +
                                              value)
         vertices_resources[merged_vertex] = total_resources
-
-        # A set containing the set of vertices to be merged (for efficient
-        # lookup purposes)
-        merged_vertices = set(same_chip_constraint.vertices)
 
         # Update any nets which pointed to a merged vertex
         for net_num, net in enumerate(nets):
