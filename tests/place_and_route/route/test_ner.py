@@ -357,6 +357,9 @@ def test_a_star():
                 path = a_star(sink, heuristic_source, sources,
                               machine, wrap_around)
 
+                # Should be returning Routes, not Links
+                assert all(isinstance(d, Routes) for d, n in path)
+
                 # Path should start at one of the sources
                 assert path[0][1] in sources
 
@@ -396,8 +399,11 @@ def test_a_star_impossible():
 
     # Ensure, conversely, we can get a route from (1, 0) to (0, 0) thus showing
     # we're obeying link liveness in the correct direction.
-    assert a_star((0, 0), (1, 0), set([(1, 0)]), machine, True) \
-        == [(Links.west, (1, 0))]
+    path = a_star((0, 0), (1, 0), set([(1, 0)]), machine, True)
+    assert path == [(Routes.west, (1, 0))]
+
+    # Should be returning Routes, not Links
+    assert all(isinstance(d, Routes) for d, n in path)
 
 
 def test_avoid_dead_links_no_change():
