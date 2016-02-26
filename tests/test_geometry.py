@@ -409,6 +409,11 @@ def test_spinn5_local_eth_coord():
     assert spinn5_local_eth_coord(1, 0, 2, 2) == (0, 0)
     assert spinn5_local_eth_coord(1, 1, 2, 2) == (0, 0)
 
+    # Types are normal Python integers
+    x, y = spinn5_local_eth_coord(1, 1, 12, 12)
+    assert isinstance(x, int)
+    assert isinstance(y, int)
+
 
 @pytest.mark.parametrize("dx", [0, 12, 24, 36])
 @pytest.mark.parametrize("dy", [0, 12, 24, 36])
@@ -431,6 +436,11 @@ def test_spinn5_chip_coord(dx, dy):
     assert spinn5_chip_coord(4 + dx, 8 + dy) == (0, 0)
     assert spinn5_chip_coord(3 + dx, 7 + dy) == (7, 3)
     assert spinn5_chip_coord(0 + dx, 4 + dy) == (4, 0)
+
+    # Types are normal Python integers
+    x, y = spinn5_chip_coord(3, 7)
+    assert isinstance(x, int)
+    assert isinstance(y, int)
 
 
 def test_spinn5_fpga_link():

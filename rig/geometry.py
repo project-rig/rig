@@ -268,7 +268,7 @@ def spinn5_local_eth_coord(x, y, w, h):
         Height of the system in chips.
     """
     dx, dy = SPINN5_ETH_OFFSET[y % 12][x % 12]
-    return ((x + dx) % w), ((y + dy) % h)
+    return ((x + int(dx)) % w), ((y + int(dy)) % h)
 
 
 SPINN5_ETH_OFFSET = np.array([
@@ -317,7 +317,7 @@ def spinn5_chip_coord(x, y):
     y : int
     """
     dx, dy = SPINN5_ETH_OFFSET[y % 12][x % 12]
-    return (-dx, -dy)
+    return (-int(dx), -int(dy))
 
 
 def spinn5_fpga_link(x, y, link):
