@@ -232,7 +232,7 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
 
     Returns
     -------
-    [(:py:class:`~rig.links.Links`, (x, y)), ...]
+    [(:py:class:`~rig.routing_table.Routes`, (x, y)), ...]
         A path starting with a coordinate in `sources` and terminating at
         connected neighbour of `sink` (i.e. the path does not include `sink`).
         The direction given is the link down which to proceed from the given
@@ -302,10 +302,10 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
 
     # Reconstruct the discovered path, starting from the source we found and
     # working back until the sink.
-    path = [(visited[selected_source][0], selected_source)]
+    path = [(Routes(visited[selected_source][0]), selected_source)]
     while visited[path[-1][1]][1] != sink:
         node = visited[path[-1][1]][1]
-        direction = visited[node][0]
+        direction = Routes(visited[node][0])
         path.append((direction, node))
 
     return path
