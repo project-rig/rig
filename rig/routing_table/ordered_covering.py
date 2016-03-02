@@ -488,13 +488,13 @@ class _Merge(namedtuple("_Merge", ["routing_table", "entries", "key", "mask",
 
         # Iterate through the old table copying entries acrosss
         insert = 0
-        for remove, entry in enumerate(self.routing_table):
+        for i, entry in enumerate(self.routing_table):
             # If this is the insertion point then insert
-            if remove == self.insertion_index:
+            if i == self.insertion_index:
                 new_table[insert] = new_entry
                 insert += 1
 
-            if remove not in self.entries:
+            if i not in self.entries:
                 # If this entry isn't to be removed then copy it across to the
                 # new table.
                 new_table[insert] = entry
@@ -755,7 +755,7 @@ def _refine_downcheck(merge, aliases, min_goodness):
 
                 # Add this settable mask and the required values to the
                 # settables list.
-                bits_and_vals.update((bit, not bool(key & bit)) for bit in
+                bits_and_vals.update((bit, not (key & bit)) for bit in
                                      all_bits if bit & settable)
 
         if most_stringent == 0:
