@@ -1021,6 +1021,10 @@ class MachineController(ContextMixin):
         int
             Address of the start of the region.
 
+            The allocated SDRAM remains valid until either the 'stop' signal is
+            sent to the application ID associated with the allocation or
+            :py:meth:`.sdram_free` is called on the address returned.
+
         Raises
         ------
         rig.machine_control.machine_controller.SpiNNakerMemoryError
@@ -1102,6 +1106,26 @@ class MachineController(ContextMixin):
 
         return MemoryIO(self, x, y, start_address, start_address + size,
                         buffer_size=buffer_size)
+
+    @ContextMixin.use_contextual_arguments()
+    def sdram_free(self, ptr, x=Required, y=Required):
+        """Free an allocated block of memory in SDRAM.
+
+        .. note::
+
+            All unfreed SDRAM allocations associated with an application are
+            automatically freed when the 'stop' signal is sent (e.g. after
+            leaving a :py:meth:`.application` block). As such, this method is
+            only useful when specific blocks are to be freed while retaining
+            others.
+
+        Parameters
+        ----------
+        ptr : int
+            Address of the block of memory to free.
+        """
+        self._send_scp(x, y, 0, SCPCommands.alloc_free,
+                       consts.AllocOperations.free_sdram_by_ptr, ptr)
 
     def _get_next_nn_id(self):
         """Get the next nearest neighbour ID."""

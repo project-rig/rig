@@ -539,6 +539,34 @@ class TestMachineControllerLive(object):
                 (_, app_id, _) = entry
                 assert app_id == 0
 
+    @pytest.mark.order_after("live_test_load_application")
+    def test_sdram_alloc_and_free(self, controller):
+        """Test subsequent allocation, freeing and reallocation of a large
+        block of memory.
+
+        This is an implicit test that FREE actually works.
+        """
+        with controller(x=0, y=0):
+            # Allocate 90MiB
+            ptr = controller.sdram_alloc(90*(1 << 20))
+
+            # A second allocation should fail
+            with pytest.raises(SpiNNakerMemoryError):
+                controller.sdram_alloc(90*(1 << 20))
+
+            # Free the block
+            controller.sdram_free(ptr)
+
+            # Re-allocate, this will fail if the free didn't work
+            ptr = controller.sdram_alloc(90*(1 << 20))
+
+            # A second allocation should fail
+            with pytest.raises(SpiNNakerMemoryError):
+                controller.sdram_alloc(90*(1 << 20))
+
+            # Free the block again
+            controller.sdram_free(ptr)
+
 
 class TestMachineController(object):
     """Test the machine controller against the ideal protocol.
@@ -1193,6 +1221,21 @@ class TestMachineController(object):
         # NO write OR fill should have occurred
         assert cn._send_scp.call_count == 1  # No fill
         assert not cn.write.called  # No write
+
+    @pytest.mark.parametrize("app_id, x, y, ptr", [
+        (53, 1, 5, 0x8600000), (46, 3, 2, 0x1)])
+    def test_sdram_free(self, app_id, x, y, ptr):
+        """Test that sdram_free sends an appropriately formatted packet."""
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+
+        # Assert that an appropriate packet is sent
+        with cn(app_id=app_id):
+            cn.sdram_free(ptr, x=x, y=y)
+        cn._send_scp.assert_called_once_with(
+            x, y, 0, SCPCommands.alloc_free,
+            consts.AllocOperations.free_sdram_by_ptr, ptr)
 
     @pytest.mark.parametrize(
         "x, y, app_id, tag, addr, size, buffer_size",
