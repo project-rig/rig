@@ -73,7 +73,8 @@ class RoutingTableEntry(namedtuple("RoutingTableEntry",
             return "{} -> {}".format(keymask, route)
         else:
             # Otherwise get the sources
-            source = " ".join(s.initial for s in self.sources if s is not None)
+            source = " ".join(s.initial for s in
+                              sorted(self.sources - {None}))
             return "{} -> {} -> {}".format(source, keymask, route)
 
 
