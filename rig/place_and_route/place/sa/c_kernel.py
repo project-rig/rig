@@ -2,8 +2,6 @@
 
 from collections import defaultdict
 
-from itertools import chain, repeat
-
 from six import iteritems
 
 import pkg_resources
@@ -64,9 +62,7 @@ class CKernel(object):
         # Create all vertices and set assign initial positions. Populates a map
         # from Python vertex object to C sa_vertex_t pointer.
         self.vertices_c = {}
-        for i, (vertex, movable) in enumerate(
-                chain(zip(movable_vertices, repeat(True)),
-                      zip(fixed_vertices, repeat(False)))):
+        for i, vertex in enumerate(vertices_resources):
             # Create the vertex
             v = rig_c_sa.sa_new_vertex(self.s, len(vertices_nets[vertex]))
             assert v != ffi.NULL
@@ -82,7 +78,8 @@ class CKernel(object):
 
             # Add to chip selected by initial placement
             x, y = initial_placements[vertex]
-            rig_c_sa.sa_add_vertex_to_chip(self.s, v, x, y, movable)
+            rig_c_sa.sa_add_vertex_to_chip(self.s, v, x, y,
+                                           vertex in movable_vertices)
 
         # Create all nets
         for i, net in enumerate(nets):
