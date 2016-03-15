@@ -810,12 +810,12 @@ class TestMachineController(object):
         assert cn._get_connection(8, 5) in ("default", "0,0", "4,8")
 
     def test_discover_connections(self):
-        # In this test, the discovered system is a 6-board system with the
-        # board with a dead chip on (16, 8), the Ethernet link at (4, 8) being
-        # down, the connection to (8, 4) resulting in timeouts and the
-        # connection to (20, 4) already present.
+        # In this test, the discovered system is a 12-board system with the
+        # board with a dead chip on (16, 8), a SCPErroring chip at (0, 12) the
+        # Ethernet link at (4, 8) being down, the connection to (8, 4)
+        # resulting in timeouts and the connection to (20, 4) already present.
         cn = MachineController("localhost")
-        w, h = 24, 12
+        w, h = 24, 24
         cn.get_p2p_routing_table = mock.Mock(return_value={
             (x, y): (consts.P2PTableEntry.north
                      if (x, y) != (16, 8) else
@@ -827,6 +827,8 @@ class TestMachineController(object):
         def get_ip_address(x, y):
             if (x, y) == (4, 8):
                 return None
+            elif (x, y) == (0, 12):
+                raise SCPError("Fail.")
             else:
                 return "127.0.0.1"
         cn.get_ip_address = mock.Mock(side_effect=get_ip_address)
@@ -838,12 +840,19 @@ class TestMachineController(object):
 
         cn.connections[(20, 4)] = mock.Mock()
 
-        assert cn.discover_connections() == 2
+        assert cn.discover_connections() == 7
         assert cn._width == w
         assert cn._height == h
-        assert set(cn.connections) == set([None, (0, 0), (12, 0), (20, 4)])
+        assert set(cn.connections) == set([
+            None, (0, 0), (12, 0), (20, 4),
+            (4, 20), (8, 16), (12, 12), (16, 20), (20, 16)])
         assert isinstance(cn.connections[(0, 0)], SCPConnection)
         assert isinstance(cn.connections[(12, 0)], SCPConnection)
+        assert isinstance(cn.connections[(4, 20)], SCPConnection)
+        assert isinstance(cn.connections[(8, 16)], SCPConnection)
+        assert isinstance(cn.connections[(12, 12)], SCPConnection)
+        assert isinstance(cn.connections[(16, 20)], SCPConnection)
+        assert isinstance(cn.connections[(20, 16)], SCPConnection)
 
     @pytest.mark.parametrize("size", [128, 256])
     def test_scp_data_length(self, size):

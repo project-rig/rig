@@ -383,12 +383,18 @@ class MachineController(ContextMixin):
 
         for x, y in spinn5_eth_coords(self._width, self._height):
             if (x, y) in working_chips and (x, y) not in self.connections:
-                ip = self.get_ip_address(x, y)
+                # Discover the chip's IP address
+                try:
+                    ip = self.get_ip_address(x, y)
+                except SCPError:
+                    continue
+
                 if ip is not None:
                     # Create a connection to the IP
                     self.connections[(x, y)] = \
                         SCPConnection(ip, self.scp_port,
                                       self.n_tries, self.timeout)
+
                     # Attempt to use the connection (and remove it if it
                     # doesn't work)
                     try:
