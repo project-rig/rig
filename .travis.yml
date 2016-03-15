@@ -7,7 +7,7 @@ python:
 install:
         - python setup.py install
         - pip install -r requirements-test.txt
-        - pip install python-coveralls
+        - pip install codecov
         - pip install spinnaker_proxy
 before_script:
         - spinnaker_proxy.py -qct cspc276.cs.man.ac.uk &
@@ -31,7 +31,7 @@ script:
         # Code quality check
         - flake8 rig tests
 after_success:
-        - coveralls
+        - codecov
 after_script:
         - kill $SPINNAKER_PROXY_PID
         - sleep 0.5

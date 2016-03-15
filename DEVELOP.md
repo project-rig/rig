@@ -203,7 +203,7 @@ We use [TravisCI](https://travis-ci.org/project-rig/rig) to automatically run
 the whole Rig test test suite against a live SpiNN-5 board on any code pushed
 to the Rig GitHub repository.
 
-[Coveralls](https://coveralls.io/r/project-rig/rig) automatically checks that
+[Codecov](https://codecov.io/github/project-rig/rig) automatically checks that
 the test-coverage of tests executed by TravisCI does not drop below 100%.
 
 ### Test suite novelties
