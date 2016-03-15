@@ -13,7 +13,7 @@ from rig.machine_control.machine_controller import SystemInfo, ChipInfo
 from rig.machine_control import consts
 
 
-class Vertex(object):
+class Vertex(object):  # pragma: no cover
     """A generic object which is used as the vertex type in these tests.
 
     Explicitly meets the requirements of a vertex object according to the
