@@ -539,6 +539,34 @@ class TestMachineControllerLive(object):
                 (_, app_id, _) = entry
                 assert app_id == 0
 
+    @pytest.mark.order_after("live_test_load_application")
+    def test_sdram_alloc_and_free(self, controller):
+        """Test subsequent allocation, freeing and reallocation of a large
+        block of memory.
+
+        This is an implicit test that FREE actually works.
+        """
+        with controller(x=0, y=0):
+            # Allocate 90MiB
+            ptr = controller.sdram_alloc(90*(1 << 20))
+
+            # A second allocation should fail
+            with pytest.raises(SpiNNakerMemoryError):
+                controller.sdram_alloc(90*(1 << 20))
+
+            # Free the block
+            controller.sdram_free(ptr)
+
+            # Re-allocate, this will fail if the free didn't work
+            ptr = controller.sdram_alloc(90*(1 << 20))
+
+            # A second allocation should fail
+            with pytest.raises(SpiNNakerMemoryError):
+                controller.sdram_alloc(90*(1 << 20))
+
+            # Free the block again
+            controller.sdram_free(ptr)
+
 
 class TestMachineController(object):
     """Test the machine controller against the ideal protocol.
@@ -1194,14 +1222,29 @@ class TestMachineController(object):
         assert cn._send_scp.call_count == 1  # No fill
         assert not cn.write.called  # No write
 
+    @pytest.mark.parametrize("app_id, x, y, ptr", [
+        (53, 1, 5, 0x8600000), (46, 3, 2, 0x1)])
+    def test_sdram_free(self, app_id, x, y, ptr):
+        """Test that sdram_free sends an appropriately formatted packet."""
+        # Create the mock controller
+        cn = MachineController("localhost")
+        cn._send_scp = mock.Mock()
+
+        # Assert that an appropriate packet is sent
+        with cn(app_id=app_id):
+            cn.sdram_free(ptr, x=x, y=y)
+        cn._send_scp.assert_called_once_with(
+            x, y, 0, SCPCommands.alloc_free,
+            consts.AllocOperations.free_sdram_by_ptr, ptr)
+
     @pytest.mark.parametrize(
-        "x, y, app_id, tag, addr, size, buffer_size",
-        [(0, 1, 30, 8, 0x67800000, 100, 20),
-         (3, 4, 33, 2, 0x12134560, 300, 100)]
+        "x, y, app_id, tag, addr, size",
+        [(0, 1, 30, 8, 0x67800000, 100),
+         (3, 4, 33, 2, 0x12134560, 300)]
     )
     @pytest.mark.parametrize("clear", (True, False))
     def test_sdram_alloc_as_filelike(self, app_id, size, tag, addr, x, y,
-                                     buffer_size, clear):
+                                     clear):
         """Test allocing and getting a file-like object returned."""
         # Create the mock controller
         cn = MachineController("localhost")
@@ -1210,7 +1253,7 @@ class TestMachineController(object):
 
         # Try the allocation
         fp = cn.sdram_alloc_as_filelike(size, tag, x, y, app_id=app_id,
-                                        buffer_size=buffer_size, clear=clear)
+                                        clear=clear)
 
         # Check that the arguments were passed on correctly
         cn.sdram_alloc.assert_called_once_with(size, tag, x, y, app_id, clear)
@@ -1223,9 +1266,6 @@ class TestMachineController(object):
         assert fp._machine_controller is cn
         assert fp._x == x
         assert fp._y == y
-
-        # Check the buffer size
-        assert fp.buffer_size == buffer_size
 
     @pytest.mark.parametrize("x, y, p", [(0, 1, 2), (2, 5, 6)])
     @pytest.mark.parametrize(
@@ -2602,7 +2642,6 @@ class TestMemoryIO(object):
         sdram_file = MemoryIO(mock_controller, x, y,
                               start_address, start_address+500)
         assert sdram_file.tell() == 0
-        assert sdram_file.buffer_size == 0
 
         # Perform the reads, check that the address is progressed
         calls = []
@@ -2634,15 +2673,21 @@ class TestMemoryIO(object):
 
         assert mock_controller.write.call_count == 1
 
-    def test_close(self, mock_controller):
+    @pytest.mark.parametrize("use_with", (False, True))
+    def test_close(self, mock_controller, use_with):
         sdram_file = MemoryIO(mock_controller, 0, 0,
                               start_address=0, end_address=10)
 
         # Assert that after closing a file pointer it will not do anything
         assert not sdram_file.closed
-        sdram_file.close()
-        assert sdram_file.closed
-        sdram_file.close()  # This shouldn't do anything
+
+        if use_with:
+            with sdram_file:
+                assert not sdram_file.closed
+        else:
+            sdram_file.close()
+            assert sdram_file.closed
+            sdram_file.close()  # This shouldn't do anything
 
         # Nothing else should work
         with pytest.raises(OSError):
@@ -2714,33 +2759,56 @@ class TestMemoryIO(object):
 
         # Perform a slice
         new_file = sdram_file[:100]
-        assert isinstance(new_file, MemoryIO)
-        assert new_file._machine_controller is mock_controller
-        assert new_file._x == sdram_file._x
-        assert new_file._y == sdram_file._y
         assert new_file._start_address == 0
         assert new_file._end_address == 100
         assert len(new_file) == 100
 
+        # Assert this slice can read and write
+        new_file.write(b'TEST')
+        mock_controller.write.assert_called_with(0, b'TEST', 1, 4, 0)
+
+        new_file.read(4)
+        mock_controller.read.assert_called_with(4, 4, 1, 4, 0)
+
         # Perform a slice using part slices
         new_file = sdram_file[500:]
-        assert isinstance(new_file, MemoryIO)
-        assert new_file._machine_controller is mock_controller
-        assert new_file._x == sdram_file._x
-        assert new_file._y == sdram_file._y
         assert new_file._start_address == 500
         assert new_file._end_address == sdram_file._end_address
         assert len(new_file) == 0x1000 - 500
 
+        # Assert this slice can read and write
+        new_file.write(b'TEST')
+        mock_controller.write.assert_called_with(500, b'TEST', 1, 4, 0)
+
+        new_file.read(4)
+        mock_controller.read.assert_called_with(504, 4, 1, 4, 0)
+
         # Perform a slice using negative slices
         new_file = sdram_file[-100:-25]
-        assert isinstance(new_file, MemoryIO)
-        assert new_file._machine_controller is mock_controller
-        assert new_file._x == sdram_file._x
-        assert new_file._y == sdram_file._y
         assert new_file._start_address == sdram_file._end_address - 100
         assert new_file._end_address == sdram_file._end_address - 25
         assert len(new_file) == 75
+
+        # Assert this slice can read and write
+        new_file.write(b'TEST')
+        mock_controller.write.assert_called_with(0x1000-100, b'TEST', 1, 4, 0)
+
+        new_file.seek(1)
+        new_file.read(3)
+        mock_controller.read.assert_called_with(0x1000-99, 3, 1, 4, 0)
+
+        # Perform a slice of a slice
+        new_file = new_file[5:10]
+        assert new_file._start_address == sdram_file._end_address - 95
+        assert new_file._end_address == sdram_file._end_address - 90
+
+        # Assert this slice can read and write
+        new_file.write(b'TEST')
+        mock_controller.write.assert_called_with(0x1000-95, b'TEST', 1, 4, 0)
+
+        new_file.seek(2)
+        new_file.read(3)
+        mock_controller.read.assert_called_with(0x1000-93, 3, 1, 4, 0)
 
     @pytest.mark.parametrize("start, stop", [(-11, None), (0, 11)])
     def test_slice_saturates_new_file_like(self, mock_controller, start, stop):
@@ -2748,10 +2816,6 @@ class TestMemoryIO(object):
 
         # Perform a slice which extends beyond the end of the file
         new_file = sdram_file[start:stop]
-        assert isinstance(new_file, MemoryIO)
-        assert new_file._machine_controller is mock_controller
-        assert new_file._x == sdram_file._x
-        assert new_file._y == sdram_file._y
         assert new_file._start_address == sdram_file._start_address
         assert new_file._end_address == sdram_file._end_address
 
@@ -2799,148 +2863,46 @@ class TestMemoryIO(object):
         assert new_file._start_address == 110
         assert new_file._end_address == 110
 
-    @pytest.mark.parametrize(
-        "get_node",
-        [lambda w, x, y, z: w,
-         lambda w, x, y, z: x,
-         lambda w, x, y, z: y,
-         lambda w, x, y, z: z,
-         ]
-    )
-    @pytest.mark.parametrize(
-        "flush_event",
-        [lambda filelike: filelike.flush(),
-         lambda filelike: filelike.read(1),
-         lambda filelike: filelike.close()]
-    )
-    def test_coalescing_writes(self, get_node, flush_event):
-        """Tests that writes from multiple slices of the same file-like view of
-        memory are buffered until some event occurs which flushes the buffer.
-        """
-        # Set up
-        cn = mock.Mock(spec_set=MachineController)
-        parent = MemoryIO(cn, 5, 6, 0, 8, buffer_size=8)
-        child_0 = parent[:4]
-        child_00 = child_0[2:]
-        child_1 = parent[4:]
+    def test_free(self, mock_controller):
+        # Create a file-like view of SDRAM
+        a = MemoryIO(mock_controller, 1, 2, 100, 200)
 
-        # Writes to child 0 followed by writes to child 1 should NOT result in
-        # any writes
-        child_00.write(b'\x10\x20')
-        child_1.write(b'\x30\x40')
-        assert not cn.write.called  # No write should have occurred
+        # Create a sliced-view of this block of memory
+        b = a[:10]
 
-        # Performing the flush event on one of the children OR the parent
-        flush_event(get_node(parent, child_0, child_00, child_1))
+        # Ensure that operations on the parent don't fail
+        a.read(1)
+        a.seek(0)
+        a.write(b'x')
 
-        # The write should have been performed
-        cn.write.assert_called_once_with(2, b'\x10\x20\x30\x40', 5, 6, 0)
+        # Ensure that operations on the child don't fail
+        b.read(1)
+        b.seek(0)
+        b.write(b'x')
 
-    def test_coalescing_writes_flushes_on_non_coalesced_write(self):
-        """Tests that writes from multiple slices of the same file-like view of
-        memory are buffered until a non-contiguous write occurs.
-        """
-        # Set up
-        cn = mock.Mock(spec_set=MachineController)
-        parent = MemoryIO(cn, 9, 2, 0, 8, buffer_size=8)
+        # Ensure that we cannot free the sliced-view of memory
+        with pytest.raises(AttributeError):
+            b.free()
 
-        with parent:
-            child_0 = parent[:4]
-            child_1 = parent[4:]
+        # Ensure that freeing the parent works and results in a call to the
+        # machine controller.
+        a.free()
+        mock_controller.sdram_free.assert_called_with(100, 1, 2)
 
-            child_0.write(b'\x12')  # Does not meet child 1
-            child_1.write(b'\x30\x40')
+        # Ensure that any operation with the parent or child fails
+        for fp in (a, b):
+            with pytest.raises(OSError):
+                fp.read(1)
 
-        # The writes should have been performed
-        cn.write.assert_has_calls([
-            mock.call(0, b'\x12', 9, 2, 0),
-            mock.call(4, b'\x30\x40', 9, 2, 0),
-        ])
+            with pytest.raises(OSError):
+                fp.seek(0)
 
-    def test_coalescing_writes_flushes_on_non_coalesced_write_2(self):
-        """Tests that writes from multiple slices of the same file-like view of
-        memory are buffered until a non-contiguous write occurs.
-        """
-        # Set up
-        cn = mock.Mock(spec_set=MachineController)
-        parent = MemoryIO(cn, 9, 2, 0, 8, buffer_size=8)
+            with pytest.raises(OSError):
+                fp.write(b'x')
 
-        with parent:
-            child_0 = parent[:4]
-            child_1 = parent[4:]
-
-            child_1.write(b'\x30\x40')
-            child_0.write(b'\x12')  # Does not meet child 1
-
-        # The writes should have been performed
-        cn.write.assert_has_calls([
-            mock.call(4, b'\x30\x40', 9, 2, 0),
-            mock.call(0, b'\x12', 9, 2, 0),
-        ])
-
-    def test_buffer_overflows(self):
-        """Tests that writes from multiple slices of the same file-like view of
-        memory are buffered until a non-contiguous write occurs.
-        """
-        # Set up
-        cn = mock.Mock(spec_set=MachineController)
-        parent = MemoryIO(cn, 9, 2, 0, 8, buffer_size=3)
-
-        with parent:
-            child_0 = parent[:4]
-            child_1 = parent[4:]
-
-            child_0.seek(2)
-            child_0.write(b'AB')
-            child_1.write(b'CD')
-
-        # The writes should have been performed
-        cn.write.assert_has_calls([
-            mock.call(2, b'ABC', 9, 2, 0),
-            mock.call(5, b'D', 9, 2, 0),
-        ])
-
-    def test_completely_non_coalesced(self):
-        """Tests that writes from multiple slices of the same file-like view of
-        memory are buffered until a non-contiguous write occurs.
-        """
-        # Set up
-        cn = mock.Mock(spec_set=MachineController)
-        parent = MemoryIO(cn, 9, 2, 0, 8, buffer_size=2)
-
-        with parent:
-            child_0 = parent[:4]
-            child_1 = parent[4:]
-
-            child_0.write(b'AB')
-            child_1.write(b'CD')
-
-        # The writes should have been performed
-        cn.write.assert_has_calls([
-            mock.call(0, b'AB', 9, 2, 0),
-            mock.call(4, b'CD', 9, 2, 0),
-        ])
-
-    def test_coalescing_writes_overwrites(self):
-        """Test that multiple writes to the same area of memory are buffered
-        until flushed.
-        """
-        # Set up
-        cn = mock.Mock(spec_set=MachineController)
-        parent = MemoryIO(cn, 9, 2, 0, 8, buffer_size=8)
-
-        # None of these writes should flush the buffer
-        for start, data in [(0, b'\x44'*8), (2, b'\x22'), (7, b'\x00')]:
-            parent.seek(start)
-            assert not cn.write.called
-            parent.write(data)
-            assert not cn.write.called
-
-        # The write should have been performed
-        parent.flush()
-        cn.write.assert_called_once_with(
-            0, b'\x44\x44\x22\x44\x44\x44\x44\x00', 9, 2, 0
-        )
+        # Ensure that we can't free the parent again
+        with pytest.raises(OSError):
+            a.free()
 
 
 @pytest.mark.parametrize(

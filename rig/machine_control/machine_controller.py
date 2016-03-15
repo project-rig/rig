@@ -1021,6 +1021,10 @@ class MachineController(ContextMixin):
         int
             Address of the start of the region.
 
+            The allocated SDRAM remains valid until either the 'stop' signal is
+            sent to the application ID associated with the allocation or
+            :py:meth:`.sdram_free` is called on the address returned.
+
         Raises
         ------
         rig.machine_control.machine_controller.SpiNNakerMemoryError
@@ -1049,18 +1053,10 @@ class MachineController(ContextMixin):
 
     @ContextMixin.use_contextual_arguments()
     def sdram_alloc_as_filelike(self, size, tag=0, x=Required, y=Required,
-                                app_id=Required, buffer_size=0, clear=False):
+                                app_id=Required, clear=False):
         """Like :py:meth:`.sdram_alloc` but returns a :py:class:`file-like
         object <.MemoryIO>` which allows safe reading and writing to the block
         that is allocated.
-
-        Other Parameters
-        ----------------
-        buffer_size : int
-            The number of bytes to store in the write buffer for the file-like.
-            If this is set to anything but `0` (the default) then
-            :py:meth:`~.MemoryIO.flush` should be called to ensure that all
-            writes are completed.
 
         Returns
         -------
@@ -1099,9 +1095,27 @@ class MachineController(ContextMixin):
         """
         # Perform the malloc
         start_address = self.sdram_alloc(size, tag, x, y, app_id, clear)
+        return MemoryIO(self, x, y, start_address, start_address + size)
 
-        return MemoryIO(self, x, y, start_address, start_address + size,
-                        buffer_size=buffer_size)
+    @ContextMixin.use_contextual_arguments()
+    def sdram_free(self, ptr, x=Required, y=Required):
+        """Free an allocated block of memory in SDRAM.
+
+        .. note::
+
+            All unfreed SDRAM allocations associated with an application are
+            automatically freed when the 'stop' signal is sent (e.g. after
+            leaving a :py:meth:`.application` block). As such, this method is
+            only useful when specific blocks are to be freed while retaining
+            others.
+
+        Parameters
+        ----------
+        ptr : int
+            Address of the block of memory to free.
+        """
+        self._send_scp(x, y, 0, SCPCommands.alloc_free,
+                       consts.AllocOperations.free_sdram_by_ptr, ptr)
 
     def _get_next_nn_id(self):
         """Get the next nearest neighbour ID."""
@@ -2338,82 +2352,39 @@ class SpiNNakerLoadingError(Exception):
 
 
 def _if_not_closed(f):
-    """Run the method iff. the memory view hasn't been closed."""
+    """Run the method iff. the memory view hasn't been closed and the parent
+    object has not been freed."""
     @add_signature_to_docstring(f)
     @functools.wraps(f)
     def f_(self, *args, **kwargs):
-        if self.closed:
+        if self.closed or self._parent._freed:
             raise OSError
         return f(self, *args, **kwargs)
 
     return f_
 
 
-class MemoryIO(object):
-    """A file-like view into a subspace of the memory-space of a chip.
-
-    A `MemoryIO` is sliceable to allow construction of new, more specific,
-    file-like views of memory.
-
-    For example::
-
-        >>> # Read, write and seek through memory as if it was a file
-        >>> f = MemoryIO(mc, 0, 1, 0x67800000, 0x6780000c)  # doctest: +SKIP
-        >>> f.write(b"Hello, world")                        # doctest: +SKIP
-        12
-        >>> f.seek(0)                                       # doctest: +SKIP
-        >>> f.read()                                        # doctest: +SKIP
-        b"Hello, world"
-
-        >>> # Slice the MemoryIO to produce a new MemoryIO which can only
-        >>> # access a subset of the memory.
-        >>> g = f[0:5]                                      # doctest: +SKIP
-        >>> g.read()                                        # doctest: +SKIP
-        b"Hello"
-        >>> g.seek(0)                                       # doctest: +SKIP
-        >>> g.write(b"Howdy, partner!")                     # doctest: +SKIP
-        5
-        >>> f.seek(0)                                       # doctest: +SKIP
-        >>> f.read()                                        # doctest: +SKIP
-        b"Howdy, world"
-    """
-
-    def __init__(self, machine_controller, x, y, start_address, end_address,
-                 buffer_size=0, _write_buffer=None):
+class SlicedMemoryIO(object):
+    """A file-like view into a subspace of the memory-space of a chip."""
+    def __init__(self, parent, start_address, end_address):
         """Create a file-like view onto a subset of the memory-space of a chip.
 
         Parameters
         ----------
-        machine_controller : :py:class:`~.MachineController`
-            A communicator to handle transmitting and receiving packets from
-            the SpiNNaker machine.
-        x : int
-            x co-ordinate of the chip.
-        y : int
-            y co-ordinate of the chip.
+        parent : :py:class:`MemoryIO`
+            Parent file-like view of memory. Only the parent `MemoryIO` may be
+            freed.
         start_address : int
             Starting address in memory.
         end_address : int
             End address in memory.
-        buffer_size : int
-            Number of bytes to store in the write buffer.
-        _write_buffer : :py:class:`._WriteBufferChild`
-            Internal use only, the write buffer to use to combine writes.
 
         If `start_address` is greater or equal to `end_address` then
         `end_address` is ignored and `start_address` is used instead.
         """
         # Store parameters
         self.closed = False
-        self._x = x
-        self._y = y
-        self._machine_controller = machine_controller
-
-        # Get, or create, a write buffer
-        if _write_buffer is None:
-            _write_buffer = _WriteBuffer(x, y, 0, machine_controller,
-                                         buffer_size)
-        self._write_buffer = _write_buffer
+        self._parent = parent
 
         # Store and clip the addresses
         self._start_address = start_address
@@ -2421,11 +2392,6 @@ class MemoryIO(object):
 
         # Current offset from start address
         self._offset = 0
-
-    @property
-    def buffer_size(self):
-        """Return the number of bytes in the write buffer."""
-        return self._write_buffer.buffer_size
 
     def close(self):
         """Flush and close the file-like."""
@@ -2474,11 +2440,7 @@ class MemoryIO(object):
                                   self._start_address + sl.stop)
 
             # Construct the new file-like
-            return type(self)(
-                self._machine_controller, self._x, self._y,
-                start_address, end_address,
-                _write_buffer=self._write_buffer
-            )
+            return SlicedMemoryIO(self._parent, start_address, end_address)
         else:
             raise ValueError("Can only make contiguous slices of MemoryIO")
 
@@ -2512,9 +2474,6 @@ class MemoryIO(object):
         :py:class:`bytes`
             Data read from SpiNNaker as a bytestring.
         """
-        # Flush this write buffer
-        self.flush()
-
         # If n_bytes is negative then calculate it as the number of bytes left
         if n_bytes < 0:
             n_bytes = self._end_address - self.address
@@ -2527,8 +2486,7 @@ class MemoryIO(object):
             return b''
 
         # Perform the read and increment the offset
-        data = self._machine_controller.read(
-            self.address, n_bytes, self._x, self._y, 0)
+        data = self._parent._perform_read(self.address, n_bytes)
         self._offset += n_bytes
         return data
 
@@ -2564,7 +2522,7 @@ class MemoryIO(object):
             bytes = bytes[:n_bytes]
 
         # Perform the write and increment the offset
-        self._write_buffer.add_new_write(self.address, bytes)
+        self._parent._perform_write(self.address, bytes)
         self._offset += len(bytes)
         return len(bytes)
 
@@ -2575,7 +2533,7 @@ class MemoryIO(object):
         This must be called to ensure that all writes to SpiNNaker made using
         this file-like object (and its siblings, if any) are completed.
         """
-        self._write_buffer.flush()
+        pass
 
     @_if_not_closed
     def tell(self):
@@ -2628,85 +2586,98 @@ class MemoryIO(object):
             )
 
 
-class _WriteBuffer(object):
-    """Write buffer used by :py:class:`.MemoryIO` to combine multiple writes
-    together.
+def _if_not_freed(f):
+    """Run the method iff. the memory view hasn't been closed."""
+    @add_signature_to_docstring(f)
+    @functools.wraps(f)
+    def f_(self, *args, **kwargs):
+        if self._freed:
+            raise OSError
+        return f(self, *args, **kwargs)
+
+    return f_
+
+
+class MemoryIO(SlicedMemoryIO):
+    """A file-like view into a subspace of the memory-space of a chip.
+
+    A `MemoryIO` is sliceable to allow construction of new, more specific,
+    file-like views of memory.
+
+    For example::
+
+        >>> # Read, write and seek through memory as if it was a file
+        >>> f = MemoryIO(mc, 0, 1, 0x67800000, 0x6780000c)  # doctest: +SKIP
+        >>> f.write(b"Hello, world")                        # doctest: +SKIP
+        12
+        >>> f.seek(0)                                       # doctest: +SKIP
+        >>> f.read()                                        # doctest: +SKIP
+        b"Hello, world"
+
+        >>> # Slice the MemoryIO to produce a new MemoryIO which can only
+        >>> # access a subset of the memory.
+        >>> g = f[0:5]                                      # doctest: +SKIP
+        >>> g.read()                                        # doctest: +SKIP
+        b"Hello"
+        >>> g.seek(0)                                       # doctest: +SKIP
+        >>> g.write(b"Howdy, partner!")                     # doctest: +SKIP
+        5
+        >>> f.seek(0)                                       # doctest: +SKIP
+        >>> f.read()                                        # doctest: +SKIP
+        b"Howdy, world"
     """
 
-    def __init__(self, x, y, p, controller, buffer_size=0):
-        self.x = x
-        self.y = y
-        self.p = p
-        self.controller = controller
+    def __init__(self, machine_controller, x, y, start_address, end_address):
+        """Create a file-like view onto a subset of the memory-space of a chip.
 
-        # A buffer of writes
-        self.buffer = bytearray(buffer_size)
-        self.start_address = None
+        Parameters
+        ----------
+        machine_controller : :py:class:`~.MachineController`
+            A communicator to handle transmitting and receiving packets from
+            the SpiNNaker machine.
+        x : int
+            x co-ordinate of the chip.
+        y : int
+            y co-ordinate of the chip.
+        start_address : int
+            Starting address in memory.
+        end_address : int
+            End address in memory.
 
-        self.current_end = 0
-        self.buffer_size = buffer_size
+        If `start_address` is greater or equal to `end_address` then
+        `end_address` is ignored and `start_address` is used instead.
+        """
+        super(MemoryIO, self).__init__(parent=self,
+                                       start_address=start_address,
+                                       end_address=end_address)
 
-    def add_new_write(self, start_address, data):
-        """Add a new write to the buffer."""
-        if len(data) > self.buffer_size:
-            # Perform the write if we couldn't buffer it at all
-            self.flush()  # Flush to ensure ordering is preserved
-            self.controller.write(start_address, data,
-                                  self.x, self.y, self.p)
-            return
+        # Store parameters
+        self._x = x
+        self._y = y
+        self._machine_controller = machine_controller
+        self._freed = False
 
-        if self.start_address is None:
-            # No value currently buffered, add this one
-            self.start_address = start_address
+    @_if_not_freed
+    def free(self):
+        """Free the memory referred to by the file-like, any subsequent
+        operations on this file-like or slices of it will fail.
+        """
+        # Free the memory
+        self._machine_controller.sdram_free(self._start_address,
+                                            self._x, self._y)
 
-        # If we can fit this write into the buffer then include it,
-        # otherwise we flush the current buffer and start again
-        start_offset = start_address - self.start_address
-        end_offset = start_offset + len(data)  # Byte AFTER the end of the data
+        # Mark as freed
+        self._freed = True
 
-        if start_offset < 0:
-            # The write starts from before this buffer, so we flush and add a
-            # new write
-            self.flush()
-            self.add_new_write(start_address, data)
-        elif (start_offset <= self.current_end and
-                end_offset <= self.buffer_size):
-            # The write is entirely contained within the buffer and starts
-            # within the area of the buffer which already contains data, so we
-            # can just modify the buffer.
-            self.buffer[start_offset:end_offset] = data
-            self.current_end = max(end_offset, self.current_end)
-        else:
-            # The write either starts outside the used area of the buffer, or
-            # would overflow the buffer.
-            if (start_offset < self.buffer_size and
-                    start_offset <= self.current_end):
-                # We would overflow the buffer, so store as much into the
-                # buffer as possible.
-                end = self.buffer_size - start_offset
-                self.buffer[start_offset:] = data[:end]
-                self.current_end = self.buffer_size
+    @_if_not_freed
+    def _perform_read(self, addr, size):
+        """Perform a read using the machine controller."""
+        return self._machine_controller.read(addr, size, self._x, self._y, 0)
 
-                # Then prepare the next block of data for buffering
-                start_address += end
-                data = data[end:]
-
-            # Flush the buffer before storing the next write
-            self.flush()
-            self.add_new_write(start_address, data)
-
-    def flush(self):
-        """Write the current buffer out."""
-        if self.start_address is not None:
-            # Write out all the values from the buffer
-            self.controller.write(
-                self.start_address, self.buffer[:self.current_end],
-                self.x, self.y, self.p
-            )
-
-            # Reset the buffer
-            self.start_address = None
-            self.current_end = 0
+    @_if_not_freed
+    def _perform_write(self, addr, data):
+        """Perform a write using the machine controller."""
+        return self._machine_controller.write(addr, data, self._x, self._y, 0)
 
 
 def unpack_routing_table_entry(packed):

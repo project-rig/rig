@@ -8,9 +8,8 @@ from rig.place_and_route import Cores, SDRAM
 
 
 @pytest.mark.parametrize("core_as_tag", [True, False])
-@pytest.mark.parametrize("buffer_size", [None, 400])
 @pytest.mark.parametrize("clear", [True, False])
-def test_sdram_alloc_for_vertices(core_as_tag, buffer_size, clear):
+def test_sdram_alloc_for_vertices(core_as_tag, clear):
     """Test allocing and getting a map of vertices to file-like objects
     when multiple blocks of memory are requested.
     """
@@ -44,12 +43,9 @@ def test_sdram_alloc_for_vertices(core_as_tag, buffer_size, clear):
 
     # Perform the SDRAM allocation
     with cn(app_id=33):
-        kwargs = dict(core_as_tag=core_as_tag, clear=clear)
-        if buffer_size is not None:
-            kwargs["buffer_size"] = buffer_size
-
         allocs = sdram_alloc_for_vertices(cn, placements, allocations,
-                                          **kwargs)
+                                          core_as_tag=core_as_tag,
+                                          clear=clear)
 
     # Ensure the correct calls were made to sdram_alloc
     cn.sdram_alloc.assert_has_calls([
@@ -67,7 +63,6 @@ def test_sdram_alloc_for_vertices(core_as_tag, buffer_size, clear):
     if core_as_tag:
         assert allocs[vertices[0]]._start_address == 0x67800000
         assert allocs[vertices[0]]._end_address == 0x67800000 + 400
-    assert allocs[vertices[0]].buffer_size == 0 or buffer_size
 
     assert isinstance(allocs[vertices[1]], MemoryIO)
     assert allocs[vertices[1]]._x == 0
@@ -76,7 +71,6 @@ def test_sdram_alloc_for_vertices(core_as_tag, buffer_size, clear):
     if core_as_tag:
         assert allocs[vertices[1]]._start_address == 0x60000000
         assert allocs[vertices[1]]._end_address == 0x60000000 + 200
-    assert allocs[vertices[1]].buffer_size == 0 or buffer_size
 
     assert isinstance(allocs[vertices[2]], MemoryIO)
     assert allocs[vertices[2]]._x == 1
@@ -85,4 +79,3 @@ def test_sdram_alloc_for_vertices(core_as_tag, buffer_size, clear):
     if core_as_tag:
         assert allocs[vertices[2]]._start_address == 0x67800000
         assert allocs[vertices[2]]._end_address == 0x67800000 + 100
-    assert allocs[vertices[2]].buffer_size == 0 or buffer_size
