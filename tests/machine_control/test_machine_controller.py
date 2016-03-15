@@ -2810,7 +2810,6 @@ class TestMemoryIO(object):
         new_file.read(3)
         mock_controller.read.assert_called_with(0x1000-93, 3, 1, 4, 0)
 
-
     @pytest.mark.parametrize("start, stop", [(-11, None), (0, 11)])
     def test_slice_saturates_new_file_like(self, mock_controller, start, stop):
         sdram_file = MemoryIO(mock_controller, 1, 4, 0, 10)
@@ -2863,6 +2862,47 @@ class TestMemoryIO(object):
         assert len(new_file) == 0
         assert new_file._start_address == 110
         assert new_file._end_address == 110
+
+    def test_free(self, mock_controller):
+        # Create a file-like view of SDRAM
+        a = MemoryIO(mock_controller, 1, 2, 100, 200)
+
+        # Create a sliced-view of this block of memory
+        b = a[:10]
+
+        # Ensure that operations on the parent don't fail
+        a.read(1)
+        a.seek(0)
+        a.write(b'x')
+
+        # Ensure that operations on the child don't fail
+        b.read(1)
+        b.seek(0)
+        b.write(b'x')
+
+        # Ensure that we cannot free the sliced-view of memory
+        with pytest.raises(AttributeError):
+            b.free()
+
+        # Ensure that freeing the parent works and results in a call to the
+        # machine controller.
+        a.free()
+        mock_controller.sdram_free.assert_called_with(100, 1, 2)
+
+        # Ensure that any operation with the parent or child fails
+        for fp in (a, b):
+            with pytest.raises(OSError):
+                fp.read(1)
+
+            with pytest.raises(OSError):
+                fp.seek(0)
+
+            with pytest.raises(OSError):
+                fp.write(b'x')
+
+        # Ensure that we can't free the parent again
+        with pytest.raises(OSError):
+            a.free()
 
 
 @pytest.mark.parametrize(

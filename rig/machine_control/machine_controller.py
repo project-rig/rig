@@ -2352,11 +2352,12 @@ class SpiNNakerLoadingError(Exception):
 
 
 def _if_not_closed(f):
-    """Run the method iff. the memory view hasn't been closed."""
+    """Run the method iff. the memory view hasn't been closed and the parent
+    object has not been freed."""
     @add_signature_to_docstring(f)
     @functools.wraps(f)
     def f_(self, *args, **kwargs):
-        if self.closed:
+        if self.closed or self._parent._freed:
             raise OSError
         return f(self, *args, **kwargs)
 
@@ -2585,6 +2586,18 @@ class SlicedMemoryIO(object):
             )
 
 
+def _if_not_freed(f):
+    """Run the method iff. the memory view hasn't been closed."""
+    @add_signature_to_docstring(f)
+    @functools.wraps(f)
+    def f_(self, *args, **kwargs):
+        if self._freed:
+            raise OSError
+        return f(self, *args, **kwargs)
+
+    return f_
+
+
 class MemoryIO(SlicedMemoryIO):
     """A file-like view into a subspace of the memory-space of a chip.
 
@@ -2642,11 +2655,26 @@ class MemoryIO(SlicedMemoryIO):
         self._x = x
         self._y = y
         self._machine_controller = machine_controller
+        self._freed = False
 
+    @_if_not_freed
+    def free(self):
+        """Free the memory referred to by the file-like, any subsequent
+        operations on this file-like or slices of it will fail.
+        """
+        # Free the memory
+        self._machine_controller.sdram_free(self._start_address,
+                                            self._x, self._y)
+
+        # Mark as freed
+        self._freed = True
+
+    @_if_not_freed
     def _perform_read(self, addr, size):
         """Perform a read using the machine controller."""
         return self._machine_controller.read(addr, size, self._x, self._y, 0)
 
+    @_if_not_freed
     def _perform_write(self, addr, data):
         """Perform a write using the machine controller."""
         return self._machine_controller.write(addr, data, self._x, self._y, 0)
