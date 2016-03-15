@@ -13,9 +13,9 @@ Rig
 .. image:: https://travis-ci.org/project-rig/rig.svg?branch=master
    :alt: Build Status
    :target: https://travis-ci.org/project-rig/rig
-.. image:: https://coveralls.io/repos/project-rig/rig/badge.svg?branch=master
+.. image:: https://img.shields.io/codecov/c/github/project-rig/rig/master.svg
    :alt: Coverage Status
-   :target: https://coveralls.io/r/project-rig/rig?branch=master
+   :target: https://codecov.io/github/project-rig/rig
 
 Rig is a Python library which contains a collection of complementary tools for
 developing applications for the massively-parallel
