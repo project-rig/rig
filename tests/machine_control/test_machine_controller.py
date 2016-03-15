@@ -2759,33 +2759,57 @@ class TestMemoryIO(object):
 
         # Perform a slice
         new_file = sdram_file[:100]
-        assert isinstance(new_file, MemoryIO)
-        assert new_file._machine_controller is mock_controller
-        assert new_file._x == sdram_file._x
-        assert new_file._y == sdram_file._y
         assert new_file._start_address == 0
         assert new_file._end_address == 100
         assert len(new_file) == 100
 
+        # Assert this slice can read and write
+        new_file.write(b'TEST')
+        mock_controller.write.assert_called_with(0, b'TEST', 1, 4, 0)
+
+        new_file.read(4)
+        mock_controller.read.assert_called_with(4, 4, 1, 4, 0)
+
         # Perform a slice using part slices
         new_file = sdram_file[500:]
-        assert isinstance(new_file, MemoryIO)
-        assert new_file._machine_controller is mock_controller
-        assert new_file._x == sdram_file._x
-        assert new_file._y == sdram_file._y
         assert new_file._start_address == 500
         assert new_file._end_address == sdram_file._end_address
         assert len(new_file) == 0x1000 - 500
 
+        # Assert this slice can read and write
+        new_file.write(b'TEST')
+        mock_controller.write.assert_called_with(500, b'TEST', 1, 4, 0)
+
+        new_file.read(4)
+        mock_controller.read.assert_called_with(504, 4, 1, 4, 0)
+
         # Perform a slice using negative slices
         new_file = sdram_file[-100:-25]
-        assert isinstance(new_file, MemoryIO)
-        assert new_file._machine_controller is mock_controller
-        assert new_file._x == sdram_file._x
-        assert new_file._y == sdram_file._y
         assert new_file._start_address == sdram_file._end_address - 100
         assert new_file._end_address == sdram_file._end_address - 25
         assert len(new_file) == 75
+
+        # Assert this slice can read and write
+        new_file.write(b'TEST')
+        mock_controller.write.assert_called_with(0x1000-100, b'TEST', 1, 4, 0)
+
+        new_file.seek(1)
+        new_file.read(3)
+        mock_controller.read.assert_called_with(0x1000-99, 3, 1, 4, 0)
+
+        # Perform a slice of a slice
+        new_file = new_file[5:10]
+        assert new_file._start_address == sdram_file._end_address - 95
+        assert new_file._end_address == sdram_file._end_address - 90
+
+        # Assert this slice can read and write
+        new_file.write(b'TEST')
+        mock_controller.write.assert_called_with(0x1000-95, b'TEST', 1, 4, 0)
+
+        new_file.seek(2)
+        new_file.read(3)
+        mock_controller.read.assert_called_with(0x1000-93, 3, 1, 4, 0)
+
 
     @pytest.mark.parametrize("start, stop", [(-11, None), (0, 11)])
     def test_slice_saturates_new_file_like(self, mock_controller, start, stop):
@@ -2793,10 +2817,6 @@ class TestMemoryIO(object):
 
         # Perform a slice which extends beyond the end of the file
         new_file = sdram_file[start:stop]
-        assert isinstance(new_file, MemoryIO)
-        assert new_file._machine_controller is mock_controller
-        assert new_file._x == sdram_file._x
-        assert new_file._y == sdram_file._y
         assert new_file._start_address == sdram_file._start_address
         assert new_file._end_address == sdram_file._end_address
 

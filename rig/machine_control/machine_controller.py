@@ -2363,47 +2363,16 @@ def _if_not_closed(f):
     return f_
 
 
-class MemoryIO(object):
-    """A file-like view into a subspace of the memory-space of a chip.
-
-    A `MemoryIO` is sliceable to allow construction of new, more specific,
-    file-like views of memory.
-
-    For example::
-
-        >>> # Read, write and seek through memory as if it was a file
-        >>> f = MemoryIO(mc, 0, 1, 0x67800000, 0x6780000c)  # doctest: +SKIP
-        >>> f.write(b"Hello, world")                        # doctest: +SKIP
-        12
-        >>> f.seek(0)                                       # doctest: +SKIP
-        >>> f.read()                                        # doctest: +SKIP
-        b"Hello, world"
-
-        >>> # Slice the MemoryIO to produce a new MemoryIO which can only
-        >>> # access a subset of the memory.
-        >>> g = f[0:5]                                      # doctest: +SKIP
-        >>> g.read()                                        # doctest: +SKIP
-        b"Hello"
-        >>> g.seek(0)                                       # doctest: +SKIP
-        >>> g.write(b"Howdy, partner!")                     # doctest: +SKIP
-        5
-        >>> f.seek(0)                                       # doctest: +SKIP
-        >>> f.read()                                        # doctest: +SKIP
-        b"Howdy, world"
-    """
-
-    def __init__(self, machine_controller, x, y, start_address, end_address):
+class SlicedMemoryIO(object):
+    """A file-like view into a subspace of the memory-space of a chip."""
+    def __init__(self, parent, start_address, end_address):
         """Create a file-like view onto a subset of the memory-space of a chip.
 
         Parameters
         ----------
-        machine_controller : :py:class:`~.MachineController`
-            A communicator to handle transmitting and receiving packets from
-            the SpiNNaker machine.
-        x : int
-            x co-ordinate of the chip.
-        y : int
-            y co-ordinate of the chip.
+        parent : :py:class:`MemoryIO`
+            Parent file-like view of memory. Only the parent `MemoryIO` may be
+            freed.
         start_address : int
             Starting address in memory.
         end_address : int
@@ -2414,9 +2383,7 @@ class MemoryIO(object):
         """
         # Store parameters
         self.closed = False
-        self._x = x
-        self._y = y
-        self._machine_controller = machine_controller
+        self._parent = parent
 
         # Store and clip the addresses
         self._start_address = start_address
@@ -2472,10 +2439,7 @@ class MemoryIO(object):
                                   self._start_address + sl.stop)
 
             # Construct the new file-like
-            return type(self)(
-                self._machine_controller, self._x, self._y,
-                start_address, end_address
-            )
+            return SlicedMemoryIO(self._parent, start_address, end_address)
         else:
             raise ValueError("Can only make contiguous slices of MemoryIO")
 
@@ -2521,8 +2485,7 @@ class MemoryIO(object):
             return b''
 
         # Perform the read and increment the offset
-        data = self._machine_controller.read(
-            self.address, n_bytes, self._x, self._y, 0)
+        data = self._parent._perform_read(self.address, n_bytes)
         self._offset += n_bytes
         return data
 
@@ -2558,8 +2521,7 @@ class MemoryIO(object):
             bytes = bytes[:n_bytes]
 
         # Perform the write and increment the offset
-        self._machine_controller.write(self.address, bytes,
-                                       self._x, self._y, 0)
+        self._parent._perform_write(self.address, bytes)
         self._offset += len(bytes)
         return len(bytes)
 
@@ -2621,6 +2583,73 @@ class MemoryIO(object):
                 "from_what: can only take values 0 (from start), "
                 "1 (from current) or 2 (from end) not {}".format(from_what)
             )
+
+
+class MemoryIO(SlicedMemoryIO):
+    """A file-like view into a subspace of the memory-space of a chip.
+
+    A `MemoryIO` is sliceable to allow construction of new, more specific,
+    file-like views of memory.
+
+    For example::
+
+        >>> # Read, write and seek through memory as if it was a file
+        >>> f = MemoryIO(mc, 0, 1, 0x67800000, 0x6780000c)  # doctest: +SKIP
+        >>> f.write(b"Hello, world")                        # doctest: +SKIP
+        12
+        >>> f.seek(0)                                       # doctest: +SKIP
+        >>> f.read()                                        # doctest: +SKIP
+        b"Hello, world"
+
+        >>> # Slice the MemoryIO to produce a new MemoryIO which can only
+        >>> # access a subset of the memory.
+        >>> g = f[0:5]                                      # doctest: +SKIP
+        >>> g.read()                                        # doctest: +SKIP
+        b"Hello"
+        >>> g.seek(0)                                       # doctest: +SKIP
+        >>> g.write(b"Howdy, partner!")                     # doctest: +SKIP
+        5
+        >>> f.seek(0)                                       # doctest: +SKIP
+        >>> f.read()                                        # doctest: +SKIP
+        b"Howdy, world"
+    """
+
+    def __init__(self, machine_controller, x, y, start_address, end_address):
+        """Create a file-like view onto a subset of the memory-space of a chip.
+
+        Parameters
+        ----------
+        machine_controller : :py:class:`~.MachineController`
+            A communicator to handle transmitting and receiving packets from
+            the SpiNNaker machine.
+        x : int
+            x co-ordinate of the chip.
+        y : int
+            y co-ordinate of the chip.
+        start_address : int
+            Starting address in memory.
+        end_address : int
+            End address in memory.
+
+        If `start_address` is greater or equal to `end_address` then
+        `end_address` is ignored and `start_address` is used instead.
+        """
+        super(MemoryIO, self).__init__(parent=self,
+                                       start_address=start_address,
+                                       end_address=end_address)
+
+        # Store parameters
+        self._x = x
+        self._y = y
+        self._machine_controller = machine_controller
+
+    def _perform_read(self, addr, size):
+        """Perform a read using the machine controller."""
+        return self._machine_controller.read(addr, size, self._x, self._y, 0)
+
+    def _perform_write(self, addr, data):
+        """Perform a write using the machine controller."""
+        return self._machine_controller.write(addr, data, self._x, self._y, 0)
 
 
 def unpack_routing_table_entry(packed):
