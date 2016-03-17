@@ -19,7 +19,7 @@ script:
         # './rig/'.
         - >
             py.test tests/ \
-                    --spinnaker localhost 8 8 --spinn5 \
+                    --spinnaker localhost --spinn5 \
                     --bmp spinn-4c.cs.man.ac.uk \
                     --cov "$(./utils/rig_path.py)" \
                     --cov tests \

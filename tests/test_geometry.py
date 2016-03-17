@@ -364,6 +364,10 @@ def test_spinn5_eth_coords():
     assert set(spinn5_eth_coords(2, 2)) == set([(0, 0)])
     assert set(spinn5_eth_coords(8, 8)) == set([(0, 0)])
 
+    # Machines with no 0, 0
+    assert set(spinn5_eth_coords(12, 8, 4, 0)) == set([(0, 4), (4, 0)])
+    assert set(spinn5_eth_coords(12, 8, 0, 4)) == set([(0, 4), (4, 0)])
+
 
 def test_spinn5_local_eth_coord():
     # Points lie on actual eth chips
@@ -409,6 +413,17 @@ def test_spinn5_local_eth_coord():
     assert spinn5_local_eth_coord(1, 0, 2, 2) == (0, 0)
     assert spinn5_local_eth_coord(1, 1, 2, 2) == (0, 0)
 
+    # Still works for machines with no (0, 0)
+    assert spinn5_local_eth_coord(4, 0, 12, 8, 4, 0) == (4, 0)
+    assert spinn5_local_eth_coord(4, 1, 12, 8, 4, 0) == (4, 0)
+    assert spinn5_local_eth_coord(5, 0, 12, 8, 4, 0) == (4, 0)
+    assert spinn5_local_eth_coord(5, 1, 12, 8, 4, 0) == (4, 0)
+
+    assert spinn5_local_eth_coord(0, 4, 12, 8, 4, 0) == (0, 4)
+    assert spinn5_local_eth_coord(0, 5, 12, 8, 4, 0) == (0, 4)
+    assert spinn5_local_eth_coord(1, 4, 12, 8, 4, 0) == (0, 4)
+    assert spinn5_local_eth_coord(1, 5, 12, 8, 4, 0) == (0, 4)
+
     # Types are normal Python integers
     x, y = spinn5_local_eth_coord(1, 1, 12, 12)
     assert isinstance(x, int)
@@ -436,6 +451,16 @@ def test_spinn5_chip_coord(dx, dy):
     assert spinn5_chip_coord(4 + dx, 8 + dy) == (0, 0)
     assert spinn5_chip_coord(3 + dx, 7 + dy) == (7, 3)
     assert spinn5_chip_coord(0 + dx, 4 + dy) == (4, 0)
+
+    # Should work for machines without (0, 0)
+    assert spinn5_chip_coord(4 + dx, 0 + dy, 4, 0) == (0, 0)
+    assert spinn5_chip_coord(4 + dx, 1 + dy, 4, 0) == (0, 1)
+    assert spinn5_chip_coord(5 + dx, 0 + dy, 4, 0) == (1, 0)
+    assert spinn5_chip_coord(5 + dx, 1 + dy, 4, 0) == (1, 1)
+    assert spinn5_chip_coord(0 + dx, 4 + dy, 4, 0) == (0, 0)
+    assert spinn5_chip_coord(0 + dx, 5 + dy, 4, 0) == (0, 1)
+    assert spinn5_chip_coord(1 + dx, 4 + dy, 4, 0) == (1, 0)
+    assert spinn5_chip_coord(1 + dx, 5 + dy, 4, 0) == (1, 1)
 
     # Types are normal Python integers
     x, y = spinn5_chip_coord(3, 7)
@@ -483,3 +508,7 @@ def test_spinn5_fpga_link():
 
     assert spinn5_fpga_link(4, 0, Links.south) == (0, 7)
     assert spinn5_fpga_link(4, 0, Links.south_west) == (0, 8)
+
+    # Make sure things still work when (0, 0) does not exist
+    assert spinn5_fpga_link(4, 0, Links.south_west, 4, 0) == (1, 0)
+    assert spinn5_fpga_link(0, 4, Links.south_west, 0, 4) == (1, 0)

@@ -113,11 +113,11 @@ version.
 Some tests in the test suite require a connected SpiNNaker system.
 
 **For a minimal live-hardware test,** the attached SpiNNaker system must not be
-booted and have at least 2x2 SpiNNaker chips with the majority of cores
-operational. To include tests which can operate against a generic SpiNNaker
-system, run:
+booted and have at least chips (0, 0), (1, 0), (0, 1) and (1, 1) with the
+majority of cores operational. To include tests which can operate against a
+generic SpiNNaker system, run:
 
-    py.test tests --spinnaker SPINN_HOSTNAME WIDTH HEIGHT
+    py.test tests --spinnaker SPINN_HOSTNAME
 
 **For a comprehensive live-hardware test,** the test suite should be run
 against a system consisting of a single SpiNN-5 board like so:
@@ -130,8 +130,8 @@ against a system consisting of a single SpiNN-5 board like so:
 
 The test suite supports the following commandline arguments:
 
-* `--spinnaker SPINN_HOSTNAME WIDTH HEIGHT` -- run tests against the specified
-  SpiNNaker system.
+* `--spinnaker SPINN_HOSTNAME` -- run tests against the specified SpiNNaker
+  system.
 * `--spinn5` -- include tests which specifically require a SpiNN-5 board to be
   attached.
 * `--bmp BMP_HOSTNAME` -- run BMP communication tests against the suggested
@@ -330,7 +330,7 @@ a bug.
 * [Documentation hosting (ReadTheDocs)](https://readthedocs.org/projects/rig/)
 * [Issue tracking (GitHub)](https://github.com/project-rig/rig/issues)
 * [Continuous integration (TravisCI)](https://travis-ci.org/project-rig/rig)
-* [Test-coverage checking (Coveralls)](https://coveralls.io/r/project-rig/rig)
+* [Test-coverage checking (Codecov)](https://codecov.io/github/project-rig/rig)
 * [SpiNNaker test hardware (University of Manchester)](http://apt.cs.manchester.ac.uk/)
 
 If you feel that you require access to any of the above services, please raise

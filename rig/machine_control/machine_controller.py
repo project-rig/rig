@@ -80,7 +80,8 @@ class MachineController(ContextMixin):
         ----------
         initial_host : string
             Hostname or IP address of the SpiNNaker chip to connect to. If the
-            board has not yet been booted, this will become chip (0, 0).
+            board has not yet been booted, this will be used to boot the
+            machine.
         scp_port : int
             Port number for SCP connections.
         boot_port : int
@@ -111,6 +112,7 @@ class MachineController(ContextMixin):
         self._nn_id = 0  # ID for nearest neighbour packets
         self._scp_data_length = None
         self._window_size = None
+        self._root_chip = None
 
         # Load default structs if none provided
         self.structs = structs
@@ -151,7 +153,7 @@ class MachineController(ContextMixin):
         """
         # If not known, query the machine
         if self._scp_data_length is None:
-            data = self.get_software_version(0, 0)
+            data = self.get_software_version(255, 255, 0)
             self._scp_data_length = data.buffer_size
         return self._scp_data_length
 
@@ -165,6 +167,14 @@ class MachineController(ContextMixin):
         if self._window_size is None:
             return 1
         return self._window_size
+
+    @property
+    def root_chip(self):
+        """The coordinates (x, y) of the chip used to boot the machine."""
+        # If not known, query the machine
+        if self._root_chip is None:
+            self._root_chip = self.get_software_version(255, 255, 0).position
+        return self._root_chip
 
     @ContextMixin.use_contextual_arguments(
         x=Required, y=Required, p=Required)
@@ -195,11 +205,13 @@ class MachineController(ContextMixin):
 
     def _get_connection(self, x, y):
         """Get the appropriate connection for a chip."""
-        if self._width is None or self._height is None:
+        if (self._width is None or self._height is None or
+                self._root_chip is None):
             return self.connections[None]
         else:
             # If possible, use the local Ethernet connected chip
-            eth_chip = spinn5_local_eth_coord(x, y, self._width, self._height)
+            eth_chip = spinn5_local_eth_coord(x, y, self._width, self._height,
+                                              *self._root_chip)
             conn = self.connections.get(eth_chip)
             if conn is not None:
                 return conn
@@ -232,20 +244,19 @@ class MachineController(ContextMixin):
         connection = self._get_connection(x, y)
         return connection.send_scp(length, x, y, p, *args, **kwargs)
 
-    def boot(self, width, height,
+    def boot(self, width=None, height=None,
              only_if_needed=True, check_booted=True, **boot_kwargs):
-        """Boot a SpiNNaker machine of the given size.
+        """Boot a SpiNNaker machine.
 
         The system will be booted from the Ethernet connected chip whose
         hostname was given as the argument to the MachineController. With the
         default arguments this method will only boot systems which have not
-        already been booted and will check to ensure that the machine was
-        successfully booted (and raise a :py:exc:`.SpiNNakerBootError` on
-        failure).
+        already been booted and will wait until machine is completely booted
+        (and raise a :py:exc:`.SpiNNakerBootError` on failure).
 
-        This method is a wrapper around
-        :py:func:`rig.machine_control.boot.boot` which sets the structs in this
-        MachineController to those used to boot the machine.
+        This method uses :py:func:`rig.machine_control.boot.boot` to send boot
+        commands to the machine and update the struct files contained within
+        this object according to those used during boot.
 
         .. warning::
 
@@ -257,12 +268,21 @@ class MachineController(ContextMixin):
 
         Parameters
         ----------
-        width : int
-            Width of the machine (0 < w < 256)
-
-        height : int
-            Height of the machine (0 < h < 256)
-
+        width, height : *Deprecated*
+            **Deprecated.** In older versions of SC&MP, it was necessary to
+            indicate the size of the machine being booted. These parameters are
+            now ignored and setting them will produce a deprecation warning.
+        scamp_binary : filename or None
+            Filename of the binary to boot the machine with or None to use the
+            SC&MP binary bundled with Rig.
+        sark_struct : filename or None
+            The 'sark.struct' file which defines the datastructures or None to
+            use the one bundled with Rig.
+        boot_delay : float
+            Number of seconds to pause between sending boot data packets.
+        post_boot_delay : float
+            Number of seconds to wait after sending last piece of boot data to
+            give SC&MP time to re-initialise the Ethernet interface.
         only_if_needed : bool
             If ``only_if_needed`` is True (the default), this method checks to
             see if the machine is already booted and only attempts to boot the
@@ -276,10 +296,14 @@ class MachineController(ContextMixin):
                 If the machine has already been booted, sending the boot
                 commands again will not 'reboot' the machine with the newly
                 supplied boot image, even if ``only_if_needed`` is False.
-
         check_booted : bool
-            If ``check_booted`` is True this method checks if the machine was
-            successfully booted. If False, this check is skipped.
+            If ``check_booted`` is True this method waits for the machine to be
+            fully booted before returning. If False, this check is skipped and
+            the function returns as soon as the machine's Ethernet interface is
+            likely to be up (but not necessarily before booting has completed).
+        **sv_defaults : {name: value, ...}
+            Any additional keyword arguments may be used to override the
+            default values in the 'sv' struct defined in the struct file.
 
         Returns
         -------
@@ -305,6 +329,11 @@ class MachineController(ContextMixin):
         LED 0 are required by an application since by default, only LED 0 is
         enabled.
         """
+        # Report deprecated width/height arguments
+        if width is not None or height is not None:
+            warnings.warn("Machine width and height are no longer needed when "
+                          "booting a machine.", DeprecationWarning)
+
         # Check to see if the machine is already booted first
         if only_if_needed:
             # We create a new MachineController which fails quickly if it
@@ -312,7 +341,7 @@ class MachineController(ContextMixin):
             # booted).
             quick_fail_mc = MachineController(self.initial_host, n_tries=1)
             try:
-                info = quick_fail_mc.get_software_version(0, 0, 0)
+                info = quick_fail_mc.get_software_version(255, 255, 0)
                 if "SpiNNaker" not in info.version_string:
                     raise SpiNNakerBootError(
                         "Remote host is not a SpiNNaker machine and so cannot "
@@ -326,14 +355,17 @@ class MachineController(ContextMixin):
 
         # Actually boot the machine
         boot_kwargs.setdefault("boot_port", self.boot_port)
-        self.structs = boot.boot(self.initial_host, width=width, height=height,
-                                 **boot_kwargs)
+        self.structs = boot.boot(self.initial_host, **boot_kwargs)
         assert len(self.structs) > 0
 
-        # Check the machine is now booted
+        # Wait for the machine to completely boot
         if check_booted:
             try:
-                self.get_software_version(0, 0, 0)
+                p2p_address = (255, 255)
+                while p2p_address == (255, 255):
+                    time.sleep(0.1)
+                    p2p_address = self.get_software_version(
+                        255, 255, 0).position
             except SCPError:
                 # Machine did not respond
                 raise SpiNNakerBootError(
@@ -343,7 +375,7 @@ class MachineController(ContextMixin):
         return True
 
     @ContextMixin.use_contextual_arguments()
-    def discover_connections(self, x=0, y=0):
+    def discover_connections(self, x=255, y=255):
         """Attempt to discover all available Ethernet connections to a machine.
 
         After calling this method, :py:class:`.MachineController` will attempt
@@ -381,7 +413,8 @@ class MachineController(ContextMixin):
 
         num_new_connections = 0
 
-        for x, y in spinn5_eth_coords(self._width, self._height):
+        for x, y in spinn5_eth_coords(self._width, self._height,
+                                      *self.root_chip):
             if (x, y) in working_chips and (x, y) not in self.connections:
                 # Discover the chip's IP address
                 try:
@@ -398,7 +431,7 @@ class MachineController(ContextMixin):
                     # Attempt to use the connection (and remove it if it
                     # doesn't work)
                     try:
-                        self.get_software_version(x, y)
+                        self.get_software_version(x, y, 0)
                         num_new_connections += 1
                     except SCPError:
                         self.connections.pop((x, y)).close()
@@ -424,7 +457,7 @@ class MachineController(ContextMixin):
         return context
 
     @ContextMixin.use_contextual_arguments()
-    def get_software_version(self, x, y, processor=0):
+    def get_software_version(self, x=255, y=255, processor=0):
         """Get the software version for a given SpiNNaker core.
 
         Returns
@@ -442,11 +475,22 @@ class MachineController(ContextMixin):
         vcpu = sver.arg1 & 0xff
 
         # arg2 => version number and buffer size
-        version = (sver.arg2 >> 16) / 100.
+        version = (sver.arg2 >> 16)
         buffer_size = (sver.arg2 & 0xffff)
 
+        # Version string tacked on the end
+        version_string = sver.data.decode("utf-8")
+
+        if version < 0xFFFF:
+            # Old-style version
+            version = (version // 100, version % 100, 0)
+        else:
+            # New-style version number is appended to the version string.
+            version_string, _, version = version_string.partition("\0")
+            version = tuple(map(int, version.strip("\0").split(".")))
+
         return CoreInfo(p2p_address, pcpu, vcpu, version, buffer_size,
-                        sver.arg3, sver.data.decode("utf-8"))
+                        sver.arg3, version_string.rstrip("\0"))
 
     @ContextMixin.use_contextual_arguments()
     def get_ip_address(self, x, y):
@@ -825,6 +869,11 @@ class MachineController(ContextMixin):
         state["cpu_state"] = consts.AppState(state["cpu_state"])
         state["rt_code"] = consts.RuntimeException(state["rt_code"])
 
+        sw_ver = state.pop("sw_ver")
+        state["version"] = ((sw_ver >> 16) & 0xFF,
+                            (sw_ver >> 8) & 0xFF,
+                            (sw_ver >> 0) & 0xFF)
+
         for newname, oldname in [("iobuf_address", "iobuf"),
                                  ("program_state_register", "psr"),
                                  ("stack_pointer", "sp"),
@@ -1009,14 +1058,6 @@ class MachineController(ContextMixin):
 
                 void *allocated_data = sark_tag_ptr(sark_core_id(), 0);
 
-            .. note::
-
-                The ``sark_tag_ptr`` function will be introduced in SARK 1.40
-                after being erroneously omitted from SARK 1.3x. As an interim
-                measure, users may simply copy an implementation of the
-                function into their own project from :ref:`here
-                <sark-tag-ptr>`.
-
         clear : bool
             If True the requested memory will be filled with zeros before the
             pointer is returned.  If False (the default) the memory will be
@@ -1136,7 +1177,7 @@ class MachineController(ContextMixin):
         """
         sfr = fr | (1 << 31)
         self._send_scp(
-            0, 0, 0, SCPCommands.nearest_neighbour_packet,
+            255, 255, 0, SCPCommands.nearest_neighbour_packet,
             (NNCommands.flood_fill_start << 24) | (pid << 16) |
             (n_blocks << 8), 0x0, sfr
         )
@@ -1157,7 +1198,7 @@ class MachineController(ContextMixin):
         """
         arg1 = (NNCommands.flood_fill_core_select << 24) | core_mask
         arg2 = region
-        self._send_scp(0, 0, 0, SCPCommands.nearest_neighbour_packet,
+        self._send_scp(255, 255, 0, SCPCommands.nearest_neighbour_packet,
                        arg1, arg2, fr)
 
     def _send_ffd(self, pid, aplx_data, address):
@@ -1175,7 +1216,7 @@ class MachineController(ContextMixin):
 
             arg1 = (NNConstants.forward << 24 | NNConstants.retry << 16 | pid)
             arg2 = (block << 16) | (size << 8)
-            self._send_scp(0, 0, 0, SCPCommands.flood_fill_data,
+            self._send_scp(255, 255, 0, SCPCommands.flood_fill_data,
                            arg1, arg2, address, data)
 
             # Increment the address and the block counter
@@ -1192,7 +1233,7 @@ class MachineController(ContextMixin):
         """
         arg1 = (NNCommands.flood_fill_end << 24) | pid
         arg2 = (app_id << 24) | (app_flags << 18)
-        self._send_scp(0, 0, 0, SCPCommands.nearest_neighbour_packet,
+        self._send_scp(255, 255, 0, SCPCommands.nearest_neighbour_packet,
                        arg1, arg2, fr)
 
     @ContextMixin.use_contextual_arguments(app_id=Required, wait=True)
@@ -1295,7 +1336,7 @@ class MachineController(ContextMixin):
 
             # Send the data
             base_address = self.read_struct_field(
-                "sv", "sdram_sys", 0, 0)
+                "sv", "sdram_sys", 255, 255)
             self._send_ffd(pid, aplx_data, base_address)
 
             # Send the flood-fill END packet
@@ -1459,7 +1500,7 @@ class MachineController(ContextMixin):
         arg1 = consts.signal_types[signal]
         arg2 = (signal << 16) | 0xff00 | app_id
         arg3 = 0x0000ffff  # Meaning "transmit to all"
-        self._send_scp(0, 0, 0, SCPCommands.signal, arg1, arg2, arg3)
+        self._send_scp(255, 255, 0, SCPCommands.signal, arg1, arg2, arg3)
 
     @ContextMixin.use_contextual_arguments()
     def count_cores_in_state(self, state, app_id):
@@ -1518,7 +1559,7 @@ class MachineController(ContextMixin):
 
         # Transmit and return the count
         return self._send_scp(
-            0, 0, 0, SCPCommands.signal, arg1, arg2, arg3).arg1
+            255, 255, 0, SCPCommands.signal, arg1, arg2, arg3).arg1
 
     @ContextMixin.use_contextual_arguments()
     def wait_for_cores_to_reach_state(self, state, count, app_id,
@@ -1787,7 +1828,7 @@ class MachineController(ContextMixin):
         return self.read_struct_field("sv", "num_cpus", x, y)
 
     @ContextMixin.use_contextual_arguments()
-    def get_system_info(self, x=0, y=0):
+    def get_system_info(self, x=255, y=255):
         """Discover the integrity and resource availability of a whole
         SpiNNaker system.
 
@@ -1815,8 +1856,8 @@ class MachineController(ContextMixin):
         x : int
         y : int
             The coordinates of the chip from which system exploration should
-            begin, by default (0, 0). Most users will not need to change these
-            parameters.
+            begin, by default (255, 255). Most users will not need to change
+            these parameters.
 
         Returns
         -------
@@ -1848,7 +1889,7 @@ class MachineController(ContextMixin):
 
         return sys_info
 
-    def get_machine(self, x=0, y=0, default_num_cores=18):
+    def get_machine(self, x=255, y=255, default_num_cores=18):
         """**Deprecated.** Probe the machine to discover which cores and links
         are working.
 
@@ -1876,8 +1917,8 @@ class MachineController(ContextMixin):
 
         .. note::
             The chip (x, y) supplied is the one where the search for working
-            chips begins. Selecting anything other than (0, 0), the default,
-            may be useful when debugging very broken machines.
+            chips begins. Selecting anything other than (255, 255), the
+            default, may be useful when debugging very broken machines.
 
         Parameters
         ----------
@@ -1928,9 +1969,8 @@ class CoreInfo(collections.namedtuple(
     virt_cpu : int
         The virtual ID of the core. This is the number used by all high-level
         software APIs.
-    version : float
-        Software version number. (Major version is integral part, minor version
-        is fractional part).
+    version : (major, minor, patch)
+        Software version number.
     buffer_size : int
         Maximum supported size (in bytes) of the data portion of an SCP packet.
     build_date : int
@@ -2139,10 +2179,10 @@ class SystemInfo(dict):
 
 class ProcessorStatus(collections.namedtuple(
     "ProcessorStatus", "registers program_state_register stack_pointer "
-                       "link_register rt_code cpu_flags cpu_state "
+                       "link_register rt_code phys_cpu cpu_state "
                        "mbox_ap_msg mbox_mp_msg mbox_ap_cmd mbox_mp_cmd "
                        "sw_count sw_file sw_line time app_name iobuf_address "
-                       "app_id user_vars")):
+                       "app_id version user_vars")):
     """Information returned about the status of a processor.
 
     Parameters
@@ -2158,7 +2198,8 @@ class ProcessorStatus(collections.namedtuple(
         Link register (dumped during a runtime exception and zero by default).
     rt_code : :py:class:`~rig.machine_control.consts.RuntimeException`
         Code for any run-time exception which may have occurred.
-    cpu_flags : int
+    phys_cpu : int
+        The physical CPU ID.
     cpu_state : :py:class:`~rig.machine_control.consts.AppState`
         Current state of the processor.
     mbox_ap_msg : int
@@ -2180,6 +2221,8 @@ class ProcessorStatus(collections.namedtuple(
         Address of the output buffer used by the processor.
     app_id : int
         ID of the application currently running on the processor.
+    version : (major, minor, patch)
+        The version number of the application running on the core.
     user_vars : list
         List of 4 integer values that may be set by the user.
     """

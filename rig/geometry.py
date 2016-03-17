@@ -178,8 +178,8 @@ def concentric_hexagons(radius, start=(0, 0)):
 
 
 def standard_system_dimensions(num_boards):
-    """Calculate the standard network dimensions (in chips) for a system with
-    the specified number of SpiNN-5 boards.
+    """Calculate the standard network dimensions (in chips) for a full torus
+    system with the specified number of SpiNN-5 boards.
 
     Returns
     -------
@@ -220,7 +220,7 @@ def standard_system_dimensions(num_boards):
     return (w * 12, h * 12)
 
 
-def spinn5_eth_coords(width, height):
+def spinn5_eth_coords(width, height, root_x=0, root_y=0):
     """Generate a list of board coordinates with Ethernet connectivity in a
     SpiNNaker machine.
 
@@ -229,11 +229,18 @@ def spinn5_eth_coords(width, height):
 
     Parameters
     ----------
-    width : int
-        Width of the system in chips.
-    height : int
-        Height of the system in chips.
+    width, height : int
+        Width and height of the system in chips.
+    root_x, root_y : int
+        The coordinates of the root chip (i.e. the chip used to boot the
+        machine), e.g. from
+        :py:attr:`rig.machine_control.MachineController.root_chip`.
     """
+    # In oddly-shaped machines where chip (0, 0) does not exist, we must offset
+    # the coordinates returned in accordance with the root chip's location.
+    root_x %= 12
+    root_x %= 12
+
     # Internally, work with the width and height rounded up to the next
     # multiple of 12
     w = ((width + 11) // 12) * 12
@@ -242,14 +249,14 @@ def spinn5_eth_coords(width, height):
     for x in range(0, w, 12):
         for y in range(0, h, 12):
             for dx, dy in ((0, 0), (4, 8), (8, 4)):
-                nx = (x + dx) % w
-                ny = (y + dy) % h
+                nx = (x + dx + root_x) % w
+                ny = (y + dy + root_y) % h
                 # Skip points which are outside the range available
                 if nx < width and ny < height:
                     yield (nx, ny)
 
 
-def spinn5_local_eth_coord(x, y, w, h):
+def spinn5_local_eth_coord(x, y, w, h, root_x=0, root_y=0):
     """Get the coordinates of a chip's local ethernet connected chip.
 
     Returns the coordinates of the ethernet connected chip on the same board as
@@ -260,14 +267,16 @@ def spinn5_local_eth_coord(x, y, w, h):
 
     Parameters
     ----------
-    x : int
-    y : int
-    w : int
-        Width of the system in chips.
-    h : int
-        Height of the system in chips.
+    x, y : int
+        Chip whose coordinates are of interest.
+    w, h : int
+        Width and height of the system in chips.
+    root_x, root_y : int
+        The coordinates of the root chip (i.e. the chip used to boot the
+        machine), e.g. from
+        :py:attr:`rig.machine_control.MachineController.root_chip`.
     """
-    dx, dy = SPINN5_ETH_OFFSET[y % 12][x % 12]
+    dx, dy = SPINN5_ETH_OFFSET[(y - root_y) % 12][(x - root_x) % 12]
     return ((x + int(dx)) % w), ((y + int(dy)) % h)
 
 
@@ -302,7 +311,7 @@ Note: the order of indexes: ``SPINN5_ETH_OFFSET[y][x]``!
 """
 
 
-def spinn5_chip_coord(x, y):
+def spinn5_chip_coord(x, y, root_x=0, root_y=0):
     """Get the coordinates of a chip on its board.
 
     Given the coordinates of a chip in a multi-board system, calculates the
@@ -313,14 +322,18 @@ def spinn5_chip_coord(x, y):
 
     Parameters
     ----------
-    x : int
-    y : int
+    x, y : int
+        The coordinates of the chip of interest
+    root_x, root_y : int
+        The coordinates of the root chip (i.e. the chip used to boot the
+        machine), e.g. from
+        :py:attr:`rig.machine_control.MachineController.root_chip`.
     """
-    dx, dy = SPINN5_ETH_OFFSET[y % 12][x % 12]
+    dx, dy = SPINN5_ETH_OFFSET[(y - root_y) % 12][(x - root_x) % 12]
     return (-int(dx), -int(dy))
 
 
-def spinn5_fpga_link(x, y, link):
+def spinn5_fpga_link(x, y, link, root_x=0, root_y=0):
     """Get the identity of the FPGA link which corresponds with the supplied
     link.
 
@@ -330,8 +343,14 @@ def spinn5_fpga_link(x, y, link):
 
     Parameters
     ----------
-    x : int
-    y : int
+    x, y : int
+        The chip whose link is of interest.
+    link : :py:class:`~rig.links.Link`
+        The link of interest.
+    root_x, root_y : int
+        The coordinates of the root chip (i.e. the chip used to boot the
+        machine), e.g. from
+        :py:attr:`rig.machine_control.MachineController.root_chip`.
 
     Returns
     -------
@@ -349,7 +368,7 @@ def spinn5_fpga_link(x, y, link):
 
         Returns None if the supplied link does not pass through an FPGA.
     """
-    x, y = spinn5_chip_coord(x, y)
+    x, y = spinn5_chip_coord(x, y, root_x, root_y)
     return SPINN5_FPGA_LINKS.get((x, y, link))
 
 

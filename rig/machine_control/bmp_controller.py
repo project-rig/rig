@@ -190,11 +190,22 @@ class BMPController(ContextMixin):
         board_id = sver.arg1 & 0xff
 
         # arg2
-        version = (sver.arg2 >> 16) / 100.
+        version = (sver.arg2 >> 16)
         buffer_size = (sver.arg2 & 0xffff)
 
+        # Version string tacked on the end
+        version_string = sver.data.decode("utf-8")
+
+        if version < 0xFFFF:
+            # Old-style version
+            version = (version // 100, version % 100, 0)
+        else:
+            # New-style version number is appended to the version string.
+            version_string, _, version = version_string.partition("\0")
+            version = tuple(map(int, version.strip("\0").split(".")))
+
         return BMPInfo(code_block, frame_id, can_id, board_id, version,
-                       buffer_size, sver.arg3, sver.data.decode("utf-8"))
+                       buffer_size, sver.arg3, version_string.rstrip("\0"))
 
     @ContextMixin.use_contextual_arguments()
     def set_power(self, state, cabinet, frame, board,
@@ -404,9 +415,8 @@ class BMPInfo(collections.namedtuple(
     board_id : int
         The position of the board in a frame. (This should correspond exactly
         with a board's board-coordinate.
-    version : float
-        Software version number. (Major version is integral part, minor version
-        is fractional part).
+    version : (major, minor, patch)
+        Software version number.
     buffer_size : int
         Maximum supported size (in bytes) of the data portion of an SCP packet.
     build_date : int

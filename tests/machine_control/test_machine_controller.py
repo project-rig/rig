@@ -10,8 +10,6 @@ import time
 import itertools
 import warnings
 
-from test_scp_connection import SendReceive, mock_conn  # noqa
-
 from rig.machine_control.consts import (
     SCPCommands, LEDAction, NNCommands, NNConstants)
 from rig.machine_control.machine_controller import (
@@ -73,20 +71,20 @@ def aplx_file(request):
 @pytest.mark.order_id("spinnaker_boot", "spinnaker_hw_test")
 @pytest.mark.order_after("bmp_power_cycle")
 @pytest.mark.no_boot  # Don't run if booting is disabled
-def test_boot(controller, spinnaker_width, spinnaker_height):
+def test_boot(controller):
     """Test that the board can be booted."""
     # Boot the board (which will throw an exception if the board could not be
     # booted)
-    controller.boot(width=spinnaker_width, height=spinnaker_height)
+    controller.boot()
 
     # To ensure that the check worked, also explicitly check that the board is
     # booted, messy!
-    sver = controller.get_software_version(0, 0, 0)
+    sver = controller.get_software_version(255, 255, 0)
     assert "SpiNNaker" in sver.version_string
-    assert sver.version >= 1.3
+    assert sver.version >= (2, 0, 0)
 
     # Make sure if we try and boot again, it is not re-booted
-    assert not controller.boot(width=spinnaker_width, height=spinnaker_height)
+    assert not controller.boot()
 
 
 @pytest.mark.order_id("spinnaker_hw_test")
@@ -94,8 +92,7 @@ def test_boot(controller, spinnaker_width, spinnaker_height):
 @pytest.mark.incremental
 class TestMachineControllerLive(object):
     """Test the machine controller against a running SpiNNaker machine."""
-    def test_get_software_version(self, controller, spinnaker_width,
-                                  spinnaker_height):
+    def test_get_software_version(self, controller):
         """Test getting the software version data."""
         # (Assuming a 4-node board) Get the software version for a number of
         # cores.
@@ -104,7 +101,7 @@ class TestMachineControllerLive(object):
                 sver = controller.get_software_version(x=x, y=y, processor=0)
                 assert sver.virt_cpu == 0
                 assert "SpiNNaker" in sver.version_string
-                assert sver.version >= 1.3
+                assert sver.version >= (2, 0, 0)
                 assert sver.position == (x, y)
 
     def test_get_ip_address(self, controller):
@@ -261,7 +258,7 @@ class TestMachineControllerLive(object):
         assert len(controller.structs) > 0, \
             "Controller has no structs, check test fixture."
         controller.load_application(
-            pkg_resources.resource_filename("rig", "binaries/rig_test.aplx"),
+            pkg_resources.resource_filename("rig", "binaries/test.aplx"),
             targets, use_count=False
         )
 
@@ -318,7 +315,7 @@ class TestMachineControllerLive(object):
                     consts.AppState.idle)
                 controller.load_application(
                     pkg_resources.resource_filename("rig",
-                                                    "binaries/rig_test.aplx"),
+                                                    "binaries/test.aplx"),
                     {(0, 1): set([10])},
                     wait=True
                 )
@@ -347,21 +344,16 @@ class TestMachineControllerLive(object):
                     # Get the status and assert that the core is running, the
                     # app_id is correct and the cpu_state is fine.
                     status = controller.get_processor_status(p)
-                    assert status.app_name == "rig_test"
+                    assert status.app_name == "test"
                     assert status.cpu_state is consts.AppState.run
                     assert status.rt_code is consts.RuntimeException.none
 
     @pytest.mark.order_before("live_test_load_application")
-    def test_get_system_info(self, live_system_info, spinnaker_width,
-                             spinnaker_height):
+    def test_get_system_info(self, live_system_info):
         # Just check that the output is sane, doesn't verify that it is
         # actually correct. This test will fail if the target machine is very
         # dead...
         si = live_system_info
-
-        # This test will fail if the system has dead chips on its periphery
-        assert si.width == spinnaker_width
-        assert si.height == spinnaker_height
 
         # Check that *most* chips aren't dead
         assert len(si) > (si.width * si.height) / 2
@@ -399,8 +391,8 @@ class TestMachineControllerLive(object):
             Links.east,
         ])
 
-    def test_get_system_info_spinn_5(self, live_system_info, spinnaker_width,
-                                     spinnaker_height, is_spinn_5_board):
+    def test_get_system_info_spinn_5(self, live_system_info,
+                                     is_spinn_5_board):
         # Verify get_machine in the special case when the attached machine is a
         # single SpiNN-5 or SpiNN-4 board. Verifies sanity of returned values.
         si = live_system_info
@@ -637,7 +629,9 @@ class TestMachineController(object):
             return
 
         working_core_info = CoreInfo(
-            (0, 0), 0, 0, 1.3, 256, 0, "SpiNNaker Test")
+            (0, 0), 0, 0, (2, 0, 0), 256, 0, "SpiNNaker Test")
+        unbooted_core_info = CoreInfo(
+            (255, 255), 0, 0, (2, 0, 0), 256, 0, "SpiNNaker Test")
 
         # Make a mock version of get_software_version which responds according
         # to the parameters of this test.
@@ -654,6 +648,8 @@ class TestMachineController(object):
             # If we check for the working system we should return working core
             # info only if the boot succeeds
             if boot_succeeds:
+                get_software_version_responses.append(unbooted_core_info)
+                get_software_version_responses.append(unbooted_core_info)
                 get_software_version_responses.append(working_core_info)
             else:
                 get_software_version_responses.append(SCPError())
@@ -671,8 +667,7 @@ class TestMachineController(object):
         monkeypatch.setattr(boot, "boot", mock_boot)
 
         if boot_succeeds or not check_booted:
-            did_boot = mc.boot(2, 4,
-                               only_if_needed=only_if_needed,
+            did_boot = mc.boot(only_if_needed=only_if_needed,
                                check_booted=check_booted)
 
             # The machine should only get sent a boot command if it was not
@@ -682,30 +677,53 @@ class TestMachineController(object):
         else:
             # If the boot fails (and we checked) an exception should be thrown
             with pytest.raises(SpiNNakerBootError):
-                mc.boot(2, 4,
-                        only_if_needed=only_if_needed,
+                mc.boot(only_if_needed=only_if_needed,
                         check_booted=check_booted)
 
         # If the machine should have been booted, make sure it was called with
         # the arguments we passed in
         if not (already_booted and only_if_needed):
             mock_boot.assert_called_once_with("localhost",
-                                              boot_port=consts.BOOT_PORT,
-                                              width=2, height=4)
+                                              boot_port=consts.BOOT_PORT)
 
         # Check the correct number of get_software_version calls are made
-        if only_if_needed and check_booted and not already_booted:
-            assert len(mock_get_software_version.mock_calls) == 2
-        elif not (only_if_needed or check_booted):
-            assert len(mock_get_software_version.mock_calls) == 0
-        else:
-            assert len(mock_get_software_version.mock_calls) == 1
+        num_expected = 0
+        if only_if_needed:
+            num_expected += 1
+        if not(only_if_needed and already_booted):
+            if check_booted and boot_succeeds:
+                num_expected += 3
+            elif check_booted:
+                num_expected += 1
+        assert num_expected == len(mock_get_software_version.mock_calls)
+
+        # All calls to get_software_version must have been to chip 255, 255
+        for call in mock_get_software_version.mock_calls:
+            assert call == mock.call(255, 255, 0)
+
+    def test_boot_width_height_deprecated(self, monkeypatch):
+        mc = MachineController("localhost")
+
+        # The fake boot command should simply return some structs, in this case
+        # the mock just hands back the structs already loaded by the
+        # MachineController.
+        mock_boot = mock.Mock(return_value=mc.structs)
+        monkeypatch.setattr(boot, "boot", mock_boot)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            mc.boot(8, 8, only_if_needed=False, check_booted=False)
+
+            # Should be flagged as deprecated
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
 
     def test_boot_alien_machine(self, monkeypatch):
         """Make sure the boot command fails if you try to boot a BMP."""
         # Respond as if a BMP
         core_info = CoreInfo(
-            (0, 0), 0, 0, 1.3, 256, 0, "BC&MP/Spin5-BMP\x00")
+            (0, 0), 0, 0, (1, 3, 0), 256, 0, "BC&MP/Spin5-BMP\x00")
 
         mock_get_software_version = mock.Mock(return_value=core_info)
         monkeypatch.setattr(MachineController, "get_software_version",
@@ -715,9 +733,10 @@ class TestMachineController(object):
 
         # Boot should fail due to already being booted as a BMP
         with pytest.raises(SpiNNakerBootError):
-            mc.boot(2, 4)
+            mc.boot()
 
-    def test_get_software_version(self, mock_conn):  # noqa
+    @pytest.mark.parametrize("new_style_version", [False, True])
+    def test_get_software_version(self, new_style_version):
         """Check that the reporting of the software version is correct.
 
         SCP Layout
@@ -729,29 +748,34 @@ class TestMachineController(object):
         arg1 : - p2p address in bits 31:16
                - physical CPU address in bits 15:8
                - virtual CPU address in bits 7:0
-        arg2 : - version number * 100 in bits 31:16
+        arg2 : - version number * 100 in bits 31:16 for old-style version
+               - or 0xFFFF in bits 31:16 for new style.
                - buffer size (number of extra data bytes that can be included
                  in an SCP packet) in bits 15:0
         arg3 : build data in seconds since the Unix epoch.
-        data : String encoding of build information.
+        data : String encoding of build information, null terminated. Followed
+               by new-style version number if used.
         """
         # Create the machine controller
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
         cn._send_scp.return_value = mock.Mock(spec_set=SCPPacket)
         cn._send_scp.return_value.arg1 = ((1 << 8 | 2) << 16) | (3 << 8) | 4
-        cn._send_scp.return_value.arg2 = (256 << 16) | 256
+        cn._send_scp.return_value.arg2 = ((0xFFFF if new_style_version
+                                           else 256) << 16) | 256
         cn._send_scp.return_value.arg3 = 888999
-        cn._send_scp.return_value.data = b"Hello, World!"
+        cn._send_scp.return_value.data = b"Hello, World!\0"
+        if new_style_version:
+            cn._send_scp.return_value.data += b"2.56.0\0"
 
         # Run the software version command
-        sver = cn.get_software_version(0, 1, 2)
+        sver = cn.get_software_version(1, 2, 3)
 
         # Assert that the response is correct
         assert sver.position == (1, 2)
         assert sver.physical_cpu == 3
         assert sver.virt_cpu == 4
-        assert sver.version == 2.56
+        assert sver.version == (2, 56, 0)
         assert sver.buffer_size == 256
         assert sver.build_date == 888999
         assert sver.version_string == "Hello, World!"
@@ -795,6 +819,7 @@ class TestMachineController(object):
         # in all cases when possible
         cn._width = 12
         cn._height = 12
+        cn._root_chip = (0, 0)
 
         assert cn._get_connection(0, 0) == "0,0"
         assert cn._get_connection(1, 0) == "0,0"
@@ -833,9 +858,11 @@ class TestMachineController(object):
                 return "127.0.0.1"
         cn.get_ip_address = mock.Mock(side_effect=get_ip_address)
 
-        def get_software_version(x, y):
+        def get_software_version(x=255, y=255, p=0):
             if (x, y) == (8, 4):
                 raise SCPError("Fail.")
+            if (x, y) == (255, 255):
+                return mock.Mock(position=(0, 0))
         cn.get_software_version = mock.Mock(side_effect=get_software_version)
 
         cn.connections[(20, 4)] = mock.Mock()
@@ -863,7 +890,18 @@ class TestMachineController(object):
             None, None, None, None, size, None, None)
 
         assert cn.scp_data_length == size
-        cn.get_software_version.assert_called_once_with(0, 0)
+        cn.get_software_version.assert_called_once_with(255, 255, 0)
+
+    def test_root_chip(self):
+        cn = MachineController("localhost")
+        cn._root_chip = None
+        cn.get_software_version = mock.Mock()
+        cn.get_software_version.return_value = CoreInfo(
+            (4, 0), None, None, None, None, None, None)
+
+        assert cn.root_chip == (4, 0)
+        assert cn.root_chip == (4, 0)
+        cn.get_software_version.assert_called_once_with(255, 255, 0)
 
     @pytest.mark.parametrize(
         "buffer_size, window_size, x, y, p, start_address, data",
@@ -1360,8 +1398,8 @@ class TestMachineController(object):
                               (3, 2, 10, 0x00ff00ff)])
     @pytest.mark.parametrize(
         "field, data, converted",
-        [("app_name", b"rig_test\x00\x00\x00\x00\x00\x00\x00\x00", "rig_test"),
-         ("cpu_flags", b"\x08", 8)]
+        [("app_name", b"test" + (b"\0"*12), "test"),
+         ("rt_code", b"\x08", 8)]
     )
     def test_read_vcpu_struct(self, x, y, p, vcpu_base, field, data,
                               converted):
@@ -1398,8 +1436,8 @@ class TestMachineController(object):
                               (3, 2, 10, 0x00ff00ff)])
     @pytest.mark.parametrize(
         "field, value, data",
-        [("app_name", "rig_test", b"rig_test\x00\x00\x00\x00\x00\x00\x00\x00"),
-         ("cpu_flags", 8, b"\x08")]
+        [("app_name", "test", b"test" + (b"\0"*12)),
+         ("rt_code", 8, b"\x08")]
     )
     def test_write_vcpu_struct(self, x, y, p, vcpu_base, field, value, data):
         struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
@@ -1462,7 +1500,7 @@ class TestMachineController(object):
             sp=0x00000009,
             lr=0x0000000a,
             rt_code=int(consts.RuntimeException.api_startup_failure),
-            cpu_flags=0x0000000c,
+            sw_ver=0x00010203,
             cpu_state=int(consts.AppState.sync0),
             app_id=30,
             app_name=b"Hello World!\x00\x00\x00\x00",
@@ -1486,11 +1524,11 @@ class TestMachineController(object):
         assert ps.program_state_register == 8
         assert ps.stack_pointer == 9
         assert ps.link_register == 0xa
-        assert ps.cpu_flags == 0xc
         assert ps.cpu_state is consts.AppState.sync0
         assert ps.app_id == 30
         assert ps.app_name == "Hello World!"
         assert ps.rt_code is consts.RuntimeException.api_startup_failure
+        assert ps.version == (1, 2, 3)
 
     @pytest.mark.parametrize("_x, _y", [(0, 5), (7, 10)])
     @pytest.mark.parametrize("iobuf_addresses",
@@ -1611,7 +1649,8 @@ class TestMachineController(object):
                 cn.flood_fill_aplx(aplx_file, targets)
 
         # Check the base address was retrieved
-        cn.read_struct_field.assert_called_once_with("sv", "sdram_sys", 0, 0)
+        cn.read_struct_field.assert_called_once_with(
+            "sv", "sdram_sys", 255, 255)
 
         # Determine the expected core mask
         coremask = 0x00000000
@@ -1630,7 +1669,8 @@ class TestMachineController(object):
         assert cn._send_scp.call_count == n_blocks + 2 + len(targets)
         # Flood-fill start
         (x, y, p, cmd, arg1, arg2, arg3) = cn._send_scp.call_args_list[0][0]
-        assert x == y == p == 0
+        assert x == y == 255
+        assert p == 0
         assert cmd == SCPCommands.nearest_neighbour_packet
         op = (arg1 & 0xff000000) >> 24
         assert op == NNCommands.flood_fill_start
@@ -1646,7 +1686,8 @@ class TestMachineController(object):
         # Flood fill core select
         (x, y, p, cmd, arg1, arg2, arg3) = cn._send_scp.call_args_list[1][0]
 
-        assert x == y == p == 0
+        assert x == y == 255
+        assert p == 0
         assert cmd == SCPCommands.nearest_neighbour_packet
         op = (arg1 & 0xff000000) >> 24
         assert op == NNCommands.flood_fill_core_select
@@ -1908,7 +1949,7 @@ class TestMachineController(object):
         # Check an appropriate packet was sent
         assert cn._send_scp.call_count == 1
         cargs = cn._send_scp.call_args[0]
-        assert cargs[:3] == (0, 0, 0)  # x, y, p
+        assert cargs[:3] == (255, 255, 0)  # x, y, p
 
         (cmd, arg1, arg2, arg3) = cargs[3:8]
         assert cmd == SCPCommands.signal
@@ -1939,7 +1980,7 @@ class TestMachineController(object):
         # Check an appropriate packet was sent
         assert cn._send_scp.call_count == 1
         cargs = cn._send_scp.call_args[0]
-        assert cargs[:3] == (0, 0, 0)  # x, y, p
+        assert cargs[:3] == (255, 255, 0)  # x, y, p
 
         (cmd, arg1, arg2, arg3) = cargs[3:8]
         assert cmd == SCPCommands.signal

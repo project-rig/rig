@@ -29,81 +29,68 @@ BOOT_DATA_LENGTH = 128
 
 # Boot options for different kinds of single-board SpiNNaker systems.
 spin1_boot_options = {
-    "width": 2, "height": 2, "hardware_version": 0,
-    "led_config": 0x00076104,
+    "hw_ver": 1,
+    "led0": 0x00076104,
 }
 """Boot options for :py:func:`.boot` for SpiNN-1 boards."""
 
 spin2_boot_options = {
-    "width": 2, "height": 2, "hardware_version": 2,
-    "led_config": 0x00006103,
+    "hw_ver": 2,
+    "led0": 0x00006103,
 }
 """Boot options for :py:func:`.boot` for SpiNN-2 boards."""
 
 spin3_boot_options = {
-    "width": 2, "height": 2, "hardware_version": 3,
-    "led_config": 0x00000502,
+    "hw_ver": 3,
+    "led0": 0x00000502,
 }
 """Boot options for :py:func:`.boot` for SpiNN-3 boards."""
 
 spin4_boot_options = {
-    "width": 8, "height": 8, "hardware_version": 4,
-    "led_config": 0x00000001,
+    "hw_ver": 4,
+    "led0": 0x00000001,
 }
-"""Boot options for :py:func:`.boot` for standalone SpiNN-4 boards."""
+"""Boot options for :py:func:`.boot` for SpiNN-4 boards."""
 
 spin5_boot_options = {
-    "width": 8, "height": 8, "hardware_version": 5,
-    "led_config": 0x00000001,
+    "hw_ver": 5,
+    "led0": 0x00000001,
 }
-"""Boot options for :py:func:`.boot` for standalone SpiNN-5 boards."""
+"""Boot options for :py:func:`.boot` for SpiNN-5 boards."""
 
 
-def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
-         cpu_frequency=200, hardware_version=0,
-         led_config=0x00000001, boot_data=None, structs=None,
-         boot_delay=0.05, post_boot_delay=5.0):
+def boot(hostname, boot_port=consts.BOOT_PORT,
+         scamp_binary=None, sark_struct=None,
+         boot_delay=0.05, post_boot_delay=2.0,
+         **sv_defaults):
     """Boot a SpiNNaker machine of the given size.
 
     Parameters
     ----------
     hostname : str
-        Hostname or IP address of the SpiNNaker chip to boot [as chip (0, 0)].
-    width : int
-        Width of the machine (0 < w < 256)
-    height : int
-        Height of the machine (0 < h < 256)
-    cpu_frequency : int
-        CPU clock-frequency.  **Note**: The default (200 MHz) is known
-        safe.
-    hardware_version : int
-        Version number of the SpiNNaker boards used in the system (e.g. SpiNN-5
-        boards would be 5). At the time of writing this value is ignored and
-        can be safely set to the default value of 0.
-    led_config : int
-        Defines LED pin numbers for the SpiNNaker boards used in the system.
-        The four least significant bits (3:0) give the number of LEDs. The next
-        four bits give the pin number of the first LED, the next four the pin
-        number of the second LED, and so forth. At the time of writing, all
-        SpiNNaker board versions have their first LED attached to pin 0 and
-        thus the default value of 0x00000001 is safe.
-    boot_data : bytes or None
-        Data to boot the machine with
-    structs : dict or None
-        The structs to use to supply boot parameters to the machine or None to
-        use the default struct.
+        Hostname or IP address of the SpiNNaker chip to use to boot the system.
+    boot_port : int
+        The port number to sent boot packets to.
+    scamp_binary : filename or None
+        Filename of the binary to boot the machine with or None to use the
+        SC&MP binary bundled with Rig.
+    sark_struct : filename or None
+        The 'sark.struct' file which defines the datastructures or None to use
+        the one bundled with Rig.
     boot_delay : float
         Number of seconds to pause between sending boot data packets.
     post_boot_delay : float
-        Time in seconds to sleep after the boot has finished. This delay is
-        important since after boot it takes some time for P2P routing tables to
-        be built by SARK (order 5 seconds). Before these tables have been
-        assembled, many useful commands will not function.
+        Number of seconds to wait after sending last piece of boot data to give
+        SC&MP time to re-initialise the Ethernet interface. Note that this does
+        *not* wait for the system to fully boot.
+    **sv_defaults : {name: value, ...}
+        Any additional keyword arguments may be used to override the default
+        values in the 'sv' struct defined in the struct file.
 
     Notes
     -----
-    The constants `rig.machine_control.boot.spinX_boot_options` can be used to
-    specify boot parameters, for example::
+    The constants `rig.machine_control.boot.spinX_boot_options` provide boot
+    parameters for specific SpiNNaker board revisions, for example::
 
         boot("board1", **spin3_boot_options)
 
@@ -115,22 +102,21 @@ def boot(hostname, width, height, boot_port=consts.BOOT_PORT,
         Layout of structs in memory.
     """
     # Get the boot data if not specified.
-    if boot_data is None:  # pragma: no branch
-        boot_data = pkg_resources.resource_string("rig",
-                                                  "boot/scamp-1-34.boot")
+    scamp_binary = (scamp_binary if scamp_binary is not None else
+                    pkg_resources.resource_filename("rig", "boot/scamp.boot"))
+    sark_struct = (sark_struct if sark_struct is not None else
+                   pkg_resources.resource_filename("rig", "boot/sark.struct"))
+    with open(scamp_binary, "rb") as f:
+        boot_data = f.read()
 
     # Read the struct file and modify the "sv" struct to contain the
     # configuration values and write this into the boot data.
-    if structs is None:  # pragma: no branch
-        struct_data = pkg_resources.resource_string("rig",
-                                                    "boot/sark.struct")
-        structs = struct_file.read_struct_file(struct_data)
+    with open(sark_struct, "rb") as f:
+        struct_data = f.read()
+    structs = struct_file.read_struct_file(struct_data)
     sv = structs[b"sv"]
-    sv.update_default_values(p2p_dims=(width << 8) | height,
-                             hw_ver=hardware_version,
-                             cpu_clk=cpu_frequency,
-                             led0=led_config,
-                             unix_time=int(time.time()),
+    sv.update_default_values(**sv_defaults)
+    sv.update_default_values(unix_time=int(time.time()),
                              boot_sig=int(time.time()),
                              root_chip=1)
     struct_packed = sv.pack()

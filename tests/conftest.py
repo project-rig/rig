@@ -7,50 +7,34 @@ from toposort import toposort
 
 @pytest.fixture(scope='session')
 def spinnaker_ip(request):
-    return request.config.getoption('spinnaker', skip=True)[0]
+    return request.config.getoption('spinnaker', skip=True)
 
 
 @pytest.fixture(scope='session')
 def bmp_ip(request):
-    return request.config.getoption('bmp', skip=True)[0]
+    return request.config.getoption('bmp', skip=True)
 
 
 @pytest.fixture(scope='session')
-def spinnaker_width(request):
-    return int(request.config.getoption('spinnaker', skip=True)[1])
-
-
-@pytest.fixture(scope='session')
-def spinnaker_height(request):
-    return int(request.config.getoption('spinnaker', skip=True)[2])
-
-
-@pytest.fixture(scope='session')
-def is_spinn_5_board(request, spinnaker_width, spinnaker_height):
+def is_spinn_5_board(request):
     spinn_5 = bool(request.config.getoption('spinn5'))
     if not spinn_5:  # pragma: no cover
         pytest.skip()
-    else:  # pragma: no cover
-        # SpiNN-5 boards are always 8x8
-        assert spinnaker_width == 8
-        assert spinnaker_height == 8
-
-        return spinn_5
+    return spinn_5
 
 
 def pytest_addoption(parser):
     # Add the option to run tests against a SpiNNaker machine
     parser.addoption("--no-boot", action="store_false",
                      help="Skip booting/power-cycling the board during tests.")
-    parser.addoption("--spinnaker", nargs=3,
+    parser.addoption("--spinnaker", type=str,
                      help="Run tests on a SpiNNaker machine. "
                           "Specify the IP address or hostname "
-                          "of the SpiNNaker machine to use and the width and "
-                          "the height of the machine.")
+                          "of the SpiNNaker machine to use.")
     parser.addoption("--spinn5", action="store_true", default=False,
                      help="The SpiNNaker machine is a single SpiNN-5 "
                           "board.")
-    parser.addoption("--bmp", nargs=1,
+    parser.addoption("--bmp", type=str,
                      help="Run tests against a real SpiNNaker board's BMP. "
                           "Specify the IP address or hostname of "
                           "the BMP to use.")

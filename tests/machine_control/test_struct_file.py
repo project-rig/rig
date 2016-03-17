@@ -1,7 +1,6 @@
 import pytest
 
-from rig.machine_control.struct_file import (read_struct_file,
-                                             read_conf_file, num,
+from rig.machine_control.struct_file import (read_struct_file, num,
                                              Struct, StructField)
 
 
@@ -166,39 +165,6 @@ def test_valid_data(data):
     assert arthur.pack_chars == b"16s"
     assert arthur.offset == 0
     assert arthur.length == 16
-
-
-conf_file = b"""
-spam    0xab
-eggs    44
-"""
-
-bad_conf_file_a = b"""
-field_with_no_value
-"""
-
-bad_conf_file_b = b"""
-field_with_badly_formatted_value   oops
-"""
-
-
-@pytest.mark.parametrize("data", [conf_file])
-def test_read_conf_file(data):
-    # Read the conf file, should return a dictionary mapping key to default
-    # value.
-    conf = read_conf_file(data)
-    assert len(conf) == 2
-    assert conf[b"spam"] == 0xab
-    assert conf[b"eggs"] == 44
-
-
-@pytest.mark.parametrize("data", [bad_conf_file_a, bad_conf_file_b])
-def test_read_conf_file_fails(data):
-    # Read the conf file, should return a dictionary mapping key to default
-    # value.
-    with pytest.raises(ValueError) as excinfo:
-        read_conf_file(data)
-    assert "syntax error" in str(excinfo.value)
 
 
 class TestStruct(object):

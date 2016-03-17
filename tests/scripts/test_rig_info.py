@@ -39,7 +39,7 @@ def test_unknown_arch(monkeypatch):
     mc = mock.Mock()
     info = mock.Mock()
     info.version_string = "Mock/Tester"
-    info.version = 1.337
+    info.version = (1, 33, 7)
     mc.get_software_version.return_value = info
 
     MC = mock.Mock()
@@ -57,7 +57,7 @@ def test_spinnaker(monkeypatch, capsys, torus):
     mc = mock.Mock()
     info = mock.Mock()
     info.version_string = "Mock/SpiNNaker"
-    info.version = 1.337
+    info.version = (1, 33, 7)
     info.build_date = 0
     mc.get_software_version.return_value = info
 
@@ -107,7 +107,7 @@ def test_spinnaker(monkeypatch, capsys, torus):
 
     assert "SpiNNaker" in stdout  # Hardware type
     assert "Mock" in stdout  # Software name
-    assert "v1.337" in stdout  # Software version
+    assert "v1.33.7" in stdout  # Software version
     assert "1970" in stdout  # Software builid date
     assert "4x8" in stdout  # System dimensions
     assert "Working chips: 31" in stdout  # Live chip count
@@ -131,7 +131,7 @@ def test_bmp(monkeypatch, capsys, tmp_ext_0, tmp_ext_1, fan_0, fan_1):
     # basic sanity check.
     info = mock.Mock()
     info.version_string = "Mock/BMP"
-    info.version = 1.337
+    info.version = (1, 33, 7)
     info.build_date = 0
     info.code_block = 7331
     info.board_id = 1234
@@ -163,7 +163,7 @@ def test_bmp(monkeypatch, capsys, tmp_ext_0, tmp_ext_1, fan_0, fan_1):
 
     assert "BMP" in stdout  # Hardware type
     assert "Mock" in stdout  # Software name
-    assert "v1.337" in stdout  # Software version
+    assert "v1.33.7" in stdout  # Software version
     assert "1970" in stdout  # Software builid date
     assert "7331" in stdout  # Code block used
     assert "1234" in stdout  # Slot number

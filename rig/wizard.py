@@ -1,8 +1,7 @@
 """
 Many applications require end-users to supply the details of a SpiNNaker system
 they wish to connect to. This module hopes to provide a more-friendly user
-interaction than just asking for an IP address and system dimensions in the
-general case.
+interaction than just asking for an IP address in the general case.
 
 This module contains a number of wizards which extract various pieces of
 information from a user by asking simple questions. A wizard is a generator
@@ -11,18 +10,8 @@ back into the generator. For command-line applications, a wrapper script
 :py:func:`~rig.wizard.cli_wrapper` will do all the heavy-lifting::
 
     >> from rig.wizard import (
-    ..     dimensions_wizard, ip_address_wizard, cat, cli_wrapper)
-    >> resp = cli_wrapper(cat(dimensions_wizard(), ip_address_wizard()))
-    What type of SpiNNaker system to you have?
-        0: A single four-chip 'SpiNN-3' board
-        1: A single forty-eight-chip 'SpiNN-5' board
-        2: Multiple forty-eight-chip 'SpiNN-5' boards
-        3: Other
-    Select an option 0-3: 2
-
-    How many 'SpiNN-5' boards are in the system?
-    > 24
-
+    ..     ip_address_wizard, cli_wrapper)
+    >> resp = cli_wrapper(ip_address_wizard())
     Would you like to auto-detect the SpiNNaker system's IP address?
         0: Auto-detect
         1: Manually Enter IP address or hostname
@@ -34,7 +23,7 @@ back into the generator. For command-line applications, a wrapper script
     Discovering attached SpiNNaker systems...
 
     >> resp
-    {'ip_address': '192.168.240.253', 'dimensions': (48, 24)}
+    {'ip_address': '192.168.240.253'}
 
 Third-parties whose needs are not met by the supplied CLI wizard interface are
 encouraged to build their own front-ends which support the wizard protocol. The
@@ -101,6 +90,12 @@ class Success(Exception):
 def dimensions_wizard():
     """A wizard which attempts to determine the dimensions of a SpiNNaker
     system.
+
+    .. warning::
+
+        Since SC&MP v2.0.0, it is not necessary to know the dimensions of a
+        SpiNNaker machine in order to boot it. As a result, most applications
+        will no longer require this wizard step.
 
     Returns ``{"dimensions": (x, y)}`` via the :py:exc:`~rig.wizard.Success`
     exception.
