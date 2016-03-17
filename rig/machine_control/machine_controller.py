@@ -301,7 +301,7 @@ class MachineController(ContextMixin):
             fully booted before returning. If False, this check is skipped and
             the function returns as soon as the machine's Ethernet interface is
             likely to be up (but not necessarily before booting has completed).
-        **sv_defaults : {name: value, ...}
+        **sv_overrides : {name: value, ...}
             Any additional keyword arguments may be used to override the
             default values in the 'sv' struct defined in the struct file.
 
@@ -1956,7 +1956,7 @@ class MachineController(ContextMixin):
 
 
 class CoreInfo(collections.namedtuple(
-    'CoreInfo', "position physical_cpu virt_cpu version buffer_size "
+    'CoreInfo', "position physical_cpu virt_cpu software_version buffer_size "
                 "build_date version_string")):
     """Information returned about a core by sver.
 
@@ -1969,7 +1969,7 @@ class CoreInfo(collections.namedtuple(
     virt_cpu : int
         The virtual ID of the core. This is the number used by all high-level
         software APIs.
-    version : (major, minor, patch)
+    software_version : (major, minor, patch)
         Software version number.
     buffer_size : int
         Maximum supported size (in bytes) of the data portion of an SCP packet.

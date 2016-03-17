@@ -81,7 +81,7 @@ def test_boot(controller):
     # booted, messy!
     sver = controller.get_software_version(255, 255, 0)
     assert "SpiNNaker" in sver.version_string
-    assert sver.version >= (2, 0, 0)
+    assert sver.software_version >= (2, 0, 0)
 
     # Make sure if we try and boot again, it is not re-booted
     assert not controller.boot()
@@ -101,7 +101,7 @@ class TestMachineControllerLive(object):
                 sver = controller.get_software_version(x=x, y=y, processor=0)
                 assert sver.virt_cpu == 0
                 assert "SpiNNaker" in sver.version_string
-                assert sver.version >= (2, 0, 0)
+                assert sver.software_version >= (2, 0, 0)
                 assert sver.position == (x, y)
 
     def test_get_ip_address(self, controller):
@@ -775,7 +775,7 @@ class TestMachineController(object):
         assert sver.position == (1, 2)
         assert sver.physical_cpu == 3
         assert sver.virt_cpu == 4
-        assert sver.version == (2, 56, 0)
+        assert sver.software_version == (2, 56, 0)
         assert sver.buffer_size == 256
         assert sver.build_date == 888999
         assert sver.version_string == "Hello, World!"

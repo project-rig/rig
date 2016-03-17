@@ -93,7 +93,7 @@ def dimensions_wizard():
 
     .. warning::
 
-        Since SC&MP v2.0.0, it is not necessary to know the dimensions of a
+        Since SC&MP v2.0.0 it is not necessary to know the dimensions of a
         SpiNNaker machine in order to boot it. As a result, most applications
         will no longer require this wizard step.
 
