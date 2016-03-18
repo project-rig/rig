@@ -72,8 +72,6 @@ setup(
     long_description = replace_local_hyperlinks(read_file("README.rst")),
     license="GPLv2",
     classifiers=[
-        "Development Status :: 3 - Alpha",
-
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
 
