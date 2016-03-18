@@ -265,6 +265,7 @@ class RuntimeException(enum.IntEnum):
     pkt_startup_failure = 17  # Pkt startup failure
     timer_startup_failure = 18  # Timer startup failure
     api_startup_failure = 19  # API startup failure
+    incompatible_version = 20  # SC&MP and API version mismatch
 
 
 @add_int_enums_to_docstring
