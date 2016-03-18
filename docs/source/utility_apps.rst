@@ -9,19 +9,16 @@ emphasis on common system and debug tasks.
 ------------
 
 The ``rig-boot`` command lets you quickly and easily boot SpiNNaker systems
-from the command line.
+from the command line::
 
-For example, to boot a SpiNN-3 board::
+    $ rig-boot HOSTNAME
+
+If you have one of the smaller SpiNN-1, SpiNN-2 or SpiNN-3 boards, the command
+above will result in only the green LED (LED0) being available. The ``--spinN``
+arguments may be used when booting such machines to correctly configure the
+LEDs, e.g.::
 
     $ rig-boot HOSTNAME --spin3
-
-Or to boot a standard configuration of multiple SpiNN-5 boards::
-
-    $ rig-boot HOSTNAME NUM_BOARDS
-
-Or to boot a SpiNNaker machine with a particular dimensionality::
-
-    $ rig-boot HOSTNAME WIDTH HEIGHT
 
 To get a complete listing of available options and supported SpiNNaker boards,
 type::
@@ -61,7 +58,7 @@ prints output such as the following::
     $ rig-info SPINNAKER_BOARD_HOSTNAME
     Device Type: SpiNNaker
     
-    Software: SC&MP v1.33 (Built 2014-09-24 11:32:23)
+    Software: SC&MP v2.0.0 (Built 2016-03-17 08:13:18)
     
     Machine dimensions: 8x8
     Working chips: 48 (18 cores: 40, 17 cores: 8)
@@ -77,7 +74,7 @@ And for BMPs::
     $ rig-info BMP_HOSTNAME
     Device Type: BMP
     
-    Software: BC&MP v1.36 (Built 2014-09-15 10:24:15)
+    Software: BC&MP v2.0.0 (Built 2016-03-16 14:42:38)
     Code block in use: 1
     Board ID (slot number): 0
     
@@ -105,7 +102,7 @@ without printing anything.
 
 
 ``rig-iobuf``
-----------------
+-------------
 
 The ``rig-iobuf`` command prints the messages printed by an application's calls
 to ``io_printf(IOBUF, ...)``. For example, printing the IOBUF for core 1 on
@@ -116,7 +113,7 @@ chip 0, 0::
 
 
 ``rig-ps``
-----------------
+----------
 
 The ``rig-ps`` command enumerates every application running on a machine. For
 example::

@@ -22,12 +22,17 @@ def live_controller(bmp_ip):
 @pytest.fixture(scope="module")
 def sver_response():
     return BMPInfo(code_block=1, frame_id=2, can_id=3, board_id=4,
-                   version=123/100., buffer_size=512, build_date=1234,
+                   version=(1, 2, 0), buffer_size=512, build_date=1234,
                    version_string="Hello, World!")
 
 
-@pytest.fixture(scope="module", params=["127.0.0.1", {(0, 0, 0): "127.0.0.1"}])
+@pytest.fixture(scope="module",
+                params=[("127.0.0.1", True),
+                        ({(0, 0, 0): "127.0.0.1"}, True),
+                        ("127.0.0.1", False)])
 def bc_mock_sver(request, sver_response):
+    hostnames, new_style_version = request.param
+
     # A BMPController with a pre-programmed fake sver response to all SCP
     # commands.
     arg1 = (
@@ -37,19 +42,25 @@ def bc_mock_sver(request, sver_response):
         sver_response.board_id
     )
 
-    version = int(sver_response.version * 100)
-    arg2 = (version << 16) | sver_response.buffer_size
+    if new_style_version:
+        arg2 = (0xFFFF << 16) | sver_response.buffer_size
+    else:
+        arg2 = ((sver_response.version[0]*100 +
+                 (sver_response.version[1])) << 16) | sver_response.buffer_size
 
     arg3 = sver_response.build_date
 
-    bc = BMPController(request.param)
+    version_string = sver_response.version_string + "\0"
+    if new_style_version:
+        version_string += ".".join(map(str, sver_response.version)) + "\0"
+
+    bc = BMPController(hostnames)
     bc._send_scp = Mock()
     bc._send_scp.return_value = Mock(spec_set=SCPPacket)
     bc._send_scp.return_value.arg1 = arg1
     bc._send_scp.return_value.arg2 = arg2
     bc._send_scp.return_value.arg3 = arg3
-    bc._send_scp.return_value.data = \
-        sver_response.version_string.encode("utf-8")
+    bc._send_scp.return_value.data = version_string.encode("utf-8")
 
     return bc
 
@@ -65,7 +76,7 @@ class TestBMPControllerLive(object):
     def test_get_software_version(self, live_controller):
         # Check "SVER" works
         sver = live_controller.get_software_version(0, 0, 0)
-        assert sver.version >= 1.3
+        assert sver.version >= (1, 0, 0)
         assert "BMP" in sver.version_string
 
     @pytest.mark.order_id("bmp_power_cycle")

@@ -26,10 +26,10 @@ def get_spinnaker_info(mc):
 
     yield ""
 
-    info = mc.get_software_version(0, 0)
+    info = mc.get_software_version(255, 255)
     yield "Software: {} v{} (Built {})".format(
         info.version_string.split("/")[0],
-        info.version,
+        ".".join(map(str, info.version)),
         datetime.fromtimestamp(info.build_date, tz=utc).strftime(
             '%Y-%m-%d %H:%M:%S'),
     )
@@ -106,7 +106,7 @@ def get_bmp_info(bc):
     info = bc.get_software_version()
     yield "Software: {} v{} (Built {})".format(
         info.version_string.split("/")[0],
-        info.version,
+        ".".join(map(str, info.version)),
         datetime.fromtimestamp(info.build_date, tz=utc).strftime(
             '%Y-%m-%d %H:%M:%S'),
     )
@@ -151,7 +151,7 @@ def main(args=None):
     # Determine what type of machine this is and print information accordingly
     try:
         mc = MachineController(args.hostname)
-        info = mc.get_software_version(0, 0)
+        info = mc.get_software_version(255, 255)
         if "SpiNNaker" in info.version_string:
             for line in get_spinnaker_info(mc):
                 print(line)
@@ -161,7 +161,7 @@ def main(args=None):
                 print(line)
         else:
             sys.stderr.write("{}: error: unknown architecture '{}'\n".format(
-                parser.prog, info.version_string.strip("\x00")))
+                parser.prog, info.version_string))
             return 2
     except TimeoutError:
         sys.stderr.write("{}: error: command timed out\n".format(

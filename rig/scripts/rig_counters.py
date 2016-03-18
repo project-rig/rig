@@ -170,7 +170,7 @@ def main(args=None):
 
     try:
         mc = MachineController(args.hostname)
-        info = mc.get_software_version(0, 0)
+        info = mc.get_software_version(255, 255)
         if "SpiNNaker" in info.version_string:
             counters = args.counters or ["dropped_multicast"]
             if args.output == "-":

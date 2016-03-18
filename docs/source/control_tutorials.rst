@@ -65,7 +65,7 @@ Booting
 
 You can :py:meth:`~.MachineController.boot` the system like so::
 
-    >>> mc.boot(12, 12)  # For a 12x12 machine
+    >>> mc.boot()
     True
 
 If the machine could not be booted for any reason a
@@ -76,10 +76,10 @@ machine was actually booted (``True``), or if it was already booted and thus
 nothing was done (``False``), most applications may consider the boot to be a
 success either way.
 
-If you're using a SpiNN-2 or SpiNN-3 board booted with no further arguments,
-only LED 0 will be usable. To enable the other LEDs, instead boot the machine
-using one of the pre-defined boot option dictionaries in
-:py:mod:`rig.machine_control.boot`, for example::
+If you're using a SpiNN-2 or SpiNN-3 board booted without arguments, only LED 0
+will be usable. To enable the other LEDs, instead boot the machine using one of
+the pre-defined boot option dictionaries in :py:mod:`rig.machine_control.boot`,
+for example::
 
     >>> from rig.machine_control.boot import spin3_boot_options
     >>> mc.boot(**spin3_boot_options)
@@ -448,8 +448,9 @@ through which SDP packets may be sent back to the host which informs SpiNNaker
 of the IP address these packets should be sent to.
 
 A list of the Ethernet-connected chips in a typical SpiNNaker machine can be
-produced using :py:class:`rig.machine_control.MachineController.get_machine`
-and :py:class:`rig.geometry.spinn5_eth_coords` and an IP tag configured on each
+produced using
+:py:class:`rig.machine_control.MachineController.get_system_info` and
+:py:class:`rig.geometry.spinn5_eth_coords` and an IP tag configured on each
 using :py:class:`rig.machine_control.MachineController.iptag_set` like so::
 
     >>> from rig.machine_control import MachineController
@@ -461,8 +462,8 @@ using :py:class:`rig.machine_control.MachineController.iptag_set` like so::
     >>> # Set-up IP Tag 1 on each ethernet-connected chip to forward all SDP
     >>> # packets to this socket.
     >>> mc = MachineController("spinnaker-machine-hostname")
-    >>> machine = mc.get_machine()
-    >>> for x, y in spinn5_eth_coords(machine.width, machine.height):
+    >>> si = mc.get_system_info()
+    >>> for x, y in spinn5_eth_coords(si.width, si.height, *mc.root_chip):
     ...     mc.iptag_set(1, addr, port, x, y)
 
 You can now listen for incoming packets and unpack them using

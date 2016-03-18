@@ -91,39 +91,6 @@ def read_struct_file(struct_data):
     return structs
 
 
-def read_conf_file(conf_data):
-    """Interpret a configuration file that provides default values for elements
-    in structs.
-
-    Parameters
-    ----------
-    conf_data : :py:class:`bytes`
-        A bytestring of the conf-file to read.  This conf file is NOT expected
-        to include comments, the structure should be pairs of field and value.
-
-    Returns
-    -------
-    {field_name: default_value}
-        Dictionary mapping field name to default value.
-    """
-    fields = {}
-
-    # The conf file should be dead simple to parse!
-    for i, l in enumerate(conf_data.splitlines()):
-        # Skip empty lines
-        l = l.strip()
-        if len(l) == 0:
-            continue
-
-        try:
-            # Tokenize and parse
-            (field, value) = l.split()
-            fields[field] = num(value)
-        except:
-            raise ValueError("line {}: syntax error in config file".format(i))
-
-    return fields
-
 # Regex definitions
 re_comment = re.compile(b"#.*$")
 re_array_field = re.compile(b"(?P<field>\w+)\[(?P<length>\d+)\]")

@@ -13,10 +13,9 @@ Making the test APLX
 --------------------
 
 This should be unnecessary unless you change the source.  With the
-[spinnaker_tools](https://github.com/SpiNNakerManchester/spinnaker_tools) set
-up and initialised simply run:
+`spinnaker_tools` set up and initialised, run:
 
-    make
+    make && mv test.aplx ../../rig/binaries/test.aplx
 
 **If you change the source code please ensure that you also commit an update to
 the binary to allow testing by those who do not or cannot compile the binary.**
