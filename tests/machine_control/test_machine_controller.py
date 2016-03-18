@@ -380,6 +380,7 @@ class TestMachineControllerLive(object):
 
     def test_get_chip_info_spinn_5(self, controller, is_spinn_5_board):
         # We should be able to detect chip (0, 0) has only three working links
+        # and that only (0, 0) has an Ethernet connection
         chip_info = controller.get_chip_info(0, 0)
         assert 16 <= chip_info.num_cores <= 18
         assert chip_info.core_states[0] == consts.AppState.run
@@ -390,6 +391,11 @@ class TestMachineControllerLive(object):
             Links.north_east,
             Links.east,
         ])
+        assert chip_info.ethernet_up
+
+        assert not controller.get_chip_info(1, 0).ethernet_up
+        assert not controller.get_chip_info(0, 1).ethernet_up
+        assert not controller.get_chip_info(1, 1).ethernet_up
 
     def test_get_system_info_spinn_5(self, live_system_info,
                                      is_spinn_5_board):
@@ -2309,26 +2315,34 @@ class TestMachineController(object):
         cn.read_struct_field.assert_called_once_with("sv", "num_cpus", 0, 0)
 
     @pytest.mark.parametrize("arg1,num_cores,working_links,"
-                             "largest_free_rtr_mc_block",
+                             "largest_free_rtr_mc_block,ethernet_up",
                              [((18 | (0b111110 << 8) | (1024 << 14)),
                                18,
                                set(l for l in Links if l != Links.east),
-                               1024),
+                               1024,
+                               False),
                               ((18 | (0b011111 << 8) | (0 << 14)),
                                18,
                                set(l for l in Links if l != Links.south),
-                               0),
+                               0,
+                               False),
                               ((17 | (0b111111 << 8) | (123 << 14)),
                                17,
                                set(Links),
-                               123),
+                               123,
+                               False),
+                              ((17 | (0b111111 << 8) | (0 << 14) | (1 << 25)),
+                               17,
+                               set(Links),
+                               0,
+                               True),
                               ])
     @pytest.mark.parametrize("arg2,largest_free_sdram_block",
                              [(1024, 1024), (0xFFFFFFFF, 0xFFFFFFFF)])
     @pytest.mark.parametrize("arg3,largest_free_sram_block",
                              [(1024, 1024), (0xFFFFFFFF, 0xFFFFFFFF)])
     def test_get_chip_info(self, arg1, num_cores, working_links,
-                           largest_free_rtr_mc_block,
+                           largest_free_rtr_mc_block, ethernet_up,
                            arg2, largest_free_sdram_block,
                            arg3, largest_free_sram_block):
 
@@ -2354,6 +2368,7 @@ class TestMachineController(object):
         assert chip_info.largest_free_sdram_block == largest_free_sdram_block
         assert chip_info.largest_free_sram_block == largest_free_sram_block
         assert chip_info.largest_free_rtr_mc_block == largest_free_rtr_mc_block
+        assert chip_info.ethernet_up == ethernet_up
 
     def test_get_system_info(self):
         cn = MachineController("localhost")
@@ -2384,6 +2399,7 @@ class TestMachineController(object):
                     working_links=set(Links),
                     largest_free_sdram_block=0xFF0000 | (x << 8) | y,
                     largest_free_sram_block=(x << 8) | y,
+                    ethernet_up=(x, y) == (0, 0),
                 )
         cn.get_chip_info = mock.Mock(side_effect=get_chip_info)
 

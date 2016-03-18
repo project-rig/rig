@@ -1792,13 +1792,15 @@ class MachineController(ContextMixin):
         working_links = set(link for link in Links
                             if (info.arg1 >> (8 + link)) & 1)
         largest_free_rtr_mc_block = (info.arg1 >> 14) & 0x7FF
+        ethernet_up = bool(info.arg1 & (1 << 25))
         return ChipInfo(
             num_cores=num_cores,
             core_states=core_states[:num_cores],
             working_links=working_links,
             largest_free_sdram_block=info.arg2,
             largest_free_sram_block=info.arg3,
-            largest_free_rtr_mc_block=largest_free_rtr_mc_block
+            largest_free_rtr_mc_block=largest_free_rtr_mc_block,
+            ethernet_up=ethernet_up
         )
 
     @ContextMixin.use_contextual_arguments()
@@ -1986,7 +1988,7 @@ class CoreInfo(collections.namedtuple(
 class ChipInfo(collections.namedtuple(
     'ChipInfo', "num_cores core_states working_links "
                 "largest_free_sdram_block largest_free_sram_block "
-                "largest_free_rtr_mc_block")):
+                "largest_free_rtr_mc_block ethernet_up")):
     """Information returned about a chip.
 
     If some parameter is omitted from the constructor, realistic defaults are
@@ -2012,6 +2014,8 @@ class ChipInfo(collections.namedtuple(
     largest_free_rtr_mc_block : int
         Number of entries in the largest free block of multicast router
         entries.
+    ethernet_up : bool
+        True if the chip's Ethernet connection is connected, False otherwise.
     """
 
     def __new__(cls,
@@ -2020,7 +2024,8 @@ class ChipInfo(collections.namedtuple(
                 working_links=set(Links),
                 largest_free_sdram_block=119275492,
                 largest_free_sram_block=22240,
-                largest_free_rtr_mc_block=1023):
+                largest_free_rtr_mc_block=1023,
+                ethernet_up=False):
         # If core_states is omitted, generate a list of core-states the right
         # length for the number of cores suggested)
         if core_states is None:
@@ -2030,7 +2035,7 @@ class ChipInfo(collections.namedtuple(
         return super(ChipInfo, cls).__new__(
             cls, num_cores, core_states, working_links,
             largest_free_sdram_block, largest_free_sram_block,
-            largest_free_rtr_mc_block)
+            largest_free_rtr_mc_block, ethernet_up)
 
 
 class SystemInfo(dict):
