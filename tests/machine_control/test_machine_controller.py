@@ -15,7 +15,7 @@ from rig.machine_control.consts import (
 from rig.machine_control.machine_controller import (
     MachineController, SpiNNakerBootError, SpiNNakerMemoryError, MemoryIO,
     SpiNNakerRouterError, SpiNNakerLoadingError, SystemInfo, CoreInfo,
-    ChipInfo, ProcessorStatus, unpack_routing_table_entry,
+    ChipInfo, ProcessorStatus, unpack_routing_table_entry, TruncationWarning
 )
 from rig.machine_control.packets import SCPPacket
 from rig.machine_control.scp_connection import \
@@ -2428,7 +2428,7 @@ class TestMachineController(object):
 
             m = cn.get_machine(1, 2)
 
-            # Should be flagged as deprecated
+            # Should be flagged as truncated
             assert len(w) == 1
             assert issubclass(w[0].category, DeprecationWarning)
 
@@ -2695,11 +2695,27 @@ class TestMemoryIO(object):
     def test_read_beyond(self, mock_controller):
         sdram_file = MemoryIO(mock_controller, 0, 0,
                               start_address=0, end_address=10)
-        sdram_file.read(100)
-        mock_controller.read.assert_called_with(0, 10, 0, 0, 0)
+        # Should be clamped (and a warning produced)
+        sdram_file.seek(1)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            sdram_file.read(10)
+
+            # Should be flagged as truncated
+            assert len(w) == 1
+            assert issubclass(w[0].category, TruncationWarning)
+        mock_controller.read.assert_called_with(1, 9, 0, 0, 0)
+        mock_controller.read.reset_mock()
 
         assert sdram_file.read(1) == b''
-        assert mock_controller.read.call_count == 1
+        assert mock_controller.read.call_count == 0
+
+    def test_empty_read(self, mock_controller):
+        sdram_file = MemoryIO(mock_controller, 0, 0,
+                              start_address=0, end_address=10)
+        assert sdram_file.read(0) == b""
+        assert mock_controller.read.call_count == 0
 
     @pytest.mark.parametrize("x, y", [(4, 2), (255, 1)])
     @pytest.mark.parametrize("start_address", [0x60000004, 0x61000003])
@@ -2732,12 +2748,26 @@ class TestMemoryIO(object):
         sdram_file = MemoryIO(mock_controller, 0, 0,
                               start_address=0, end_address=10)
 
-        assert sdram_file.write(b"\x00\x00" * 12) == 10
+        sdram_file.seek(1)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            assert sdram_file.write(b"\x00\x00" * 12) == 9
+
+            # Should be flagged as deprecated
+            assert len(w) == 1
+            assert issubclass(w[0].category, TruncationWarning)
 
         assert sdram_file.write(b"\x00") == 0
         sdram_file.flush()
 
         assert mock_controller.write.call_count == 1
+
+    def test_empty_write(self, mock_controller):
+        sdram_file = MemoryIO(mock_controller, 0, 0,
+                              start_address=0, end_address=10)
+        assert sdram_file.write(b"") == 0
+        assert mock_controller.write.call_count == 0
 
     @pytest.mark.parametrize("use_with", (False, True))
     def test_close(self, mock_controller, use_with):
