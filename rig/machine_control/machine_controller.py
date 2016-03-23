@@ -2584,10 +2584,9 @@ class SlicedMemoryIO(object):
         if self.address + len(bytes) > self._end_address:
             n_bytes = self._end_address - self.address
 
-            if len(bytes) > n_bytes:
-                warnings.warn("write truncated from {} to {} bytes".format(
-                    len(bytes), n_bytes), TruncationWarning)
-                bytes = bytes[:n_bytes]
+            warnings.warn("write truncated from {} to {} bytes".format(
+                len(bytes), n_bytes), TruncationWarning)
+            bytes = bytes[:n_bytes]
 
         if len(bytes) == 0:
             return 0
