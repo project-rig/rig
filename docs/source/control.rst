@@ -21,7 +21,7 @@ introductory tutorials:
     :inherited-members:
 
 .. automodule:: rig.machine_control.machine_controller
-    :members: SystemInfo, ChipInfo, CoreInfo, ProcessorStatus, IPTag, RouterDiagnostics, SpiNNakerBootError, SpiNNakerMemoryError, SpiNNakerRouterError, SpiNNakerLoadingError
+    :members: SystemInfo, ChipInfo, CoreInfo, ProcessorStatus, IPTag, RouterDiagnostics, SpiNNakerBootError, SpiNNakerMemoryError, SpiNNakerRouterError, SpiNNakerLoadingError, TruncationWarning
     :special-members:
 
 .. automodule:: rig.machine_control.utils

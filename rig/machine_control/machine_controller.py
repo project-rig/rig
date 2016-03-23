@@ -2517,6 +2517,16 @@ class SlicedMemoryIO(object):
         .. note::
             Reads beyond the specified memory range will be truncated.
 
+        .. note::
+            Produces a :py:exc:`.TruncationWarning` if fewer bytes are read
+            than requested. These warnings can be converted into exceptions
+            using :py:func:`warnings.simplefilter`::
+
+                >>> import warnings
+                >>> from rig.machine_control.machine_controller \\
+                ...     import TruncationWarning
+                >>> warnings.simplefilter('error', TruncationWarning)
+
         Parameters
         ----------
         n_bytes : int
@@ -2534,7 +2544,10 @@ class SlicedMemoryIO(object):
 
         # Determine how far to read, then read nothing beyond that point.
         if self.address + n_bytes > self._end_address:
-            n_bytes = min(n_bytes, self._end_address - self.address)
+            new_n_bytes = self._end_address - self.address
+            warnings.warn("read truncated from {} to {} bytes".format(
+                n_bytes, new_n_bytes), TruncationWarning)
+            n_bytes = new_n_bytes
 
         if n_bytes <= 0:
             return b''
@@ -2548,14 +2561,15 @@ class SlicedMemoryIO(object):
     def write(self, bytes):
         """Write data to the memory.
 
-        .. warning::
-            If the buffer size is not zero then writes may be buffered (and
-            even overwritten) before being written to the machine.
-            :py:meth:`~.flush` must be called to ensure that all writes are
-            completed when required.
-
         .. note::
-            Writes beyond the specified memory range will be truncated.
+            Writes beyond the specified memory range will be truncated and a
+            :py:exc:`.TruncationWarning` is produced. These warnings can be
+            converted into exceptions using :py:func:`warnings.simplefilter`::
+
+                >>> import warnings
+                >>> from rig.machine_control.machine_controller \\
+                ...     import TruncationWarning
+                >>> warnings.simplefilter('error', TruncationWarning)
 
         Parameters
         ----------
@@ -2568,12 +2582,15 @@ class SlicedMemoryIO(object):
             Number of bytes written.
         """
         if self.address + len(bytes) > self._end_address:
-            n_bytes = min(len(bytes), self._end_address - self.address)
+            n_bytes = self._end_address - self.address
 
             if n_bytes <= 0:
                 return 0
 
-            bytes = bytes[:n_bytes]
+            if len(bytes) > n_bytes:
+                warnings.warn("write truncated from {} to {} bytes".format(
+                    len(bytes), n_bytes), TruncationWarning)
+                bytes = bytes[:n_bytes]
 
         # Perform the write and increment the offset
         self._parent._perform_write(self.address, bytes)
@@ -2586,6 +2603,11 @@ class SlicedMemoryIO(object):
 
         This must be called to ensure that all writes to SpiNNaker made using
         this file-like object (and its siblings, if any) are completed.
+
+        .. note::
+
+            This method is included only for compatibility reasons and does
+            nothing. Writes are not currently buffered.
         """
         pass
 
@@ -2732,6 +2754,12 @@ class MemoryIO(SlicedMemoryIO):
     def _perform_write(self, addr, data):
         """Perform a write using the machine controller."""
         return self._machine_controller.write(addr, data, self._x, self._y, 0)
+
+
+class TruncationWarning(RuntimeWarning):
+    """Warning produced when a reading/writing past the end of a
+    :py:class:`MemoryIO` results in a truncated read/write.
+    """
 
 
 def unpack_routing_table_entry(packed):
