@@ -2711,6 +2711,12 @@ class TestMemoryIO(object):
         assert sdram_file.read(1) == b''
         assert mock_controller.read.call_count == 0
 
+    def test_empty_read(self, mock_controller):
+        sdram_file = MemoryIO(mock_controller, 0, 0,
+                              start_address=0, end_address=10)
+        assert sdram_file.read(0) == b""
+        assert mock_controller.read.call_count == 0
+
     @pytest.mark.parametrize("x, y", [(4, 2), (255, 1)])
     @pytest.mark.parametrize("start_address", [0x60000004, 0x61000003])
     @pytest.mark.parametrize("lengths", [[1, 2], [1], [3, 2, 4]])
@@ -2756,6 +2762,12 @@ class TestMemoryIO(object):
         sdram_file.flush()
 
         assert mock_controller.write.call_count == 1
+
+    def test_empty_write(self, mock_controller):
+        sdram_file = MemoryIO(mock_controller, 0, 0,
+                              start_address=0, end_address=10)
+        assert sdram_file.write(b"") == 0
+        assert mock_controller.write.call_count == 0
 
     @pytest.mark.parametrize("use_with", (False, True))
     def test_close(self, mock_controller, use_with):
