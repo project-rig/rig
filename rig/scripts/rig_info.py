@@ -29,7 +29,7 @@ def get_spinnaker_info(mc):
     info = mc.get_software_version(255, 255)
     yield "Software: {} v{} (Built {})".format(
         info.version_string.split("/")[0],
-        ".".join(map(str, info.version)),
+        ".".join(map(str, info.software_version)),
         datetime.fromtimestamp(info.build_date, tz=utc).strftime(
             '%Y-%m-%d %H:%M:%S'),
     )
