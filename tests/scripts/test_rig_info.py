@@ -14,6 +14,7 @@ from rig.links import Links
 from rig.machine_control.bmp_controller import ADCInfo
 
 from rig.machine_control.machine_controller import SystemInfo, ChipInfo
+from rig.machine_control.machine_controller import CoreInfo
 
 
 def test_bad_args():
@@ -37,9 +38,9 @@ def test_unknown_arch(monkeypatch):
     # Should fail if system responds to initial sver with non-SpiNNaker/BMP
     # machine type.
     mc = mock.Mock()
-    info = mock.Mock()
+    info = mock.Mock(spec_set=CoreInfo)
     info.version_string = "Mock/Tester"
-    info.version = (1, 33, 7)
+    info.software_version = (1, 33, 7)
     mc.get_software_version.return_value = info
 
     MC = mock.Mock()
@@ -55,9 +56,9 @@ def test_spinnaker(monkeypatch, capsys, torus):
     # ensuring certain strings are present. This is not foolproof but just a
     # basic sanity check.
     mc = mock.Mock()
-    info = mock.Mock()
+    info = mock.Mock(spec_set=CoreInfo)
     info.version_string = "Mock/SpiNNaker"
-    info.version = (1, 33, 7)
+    info.software_version = (1, 33, 7)
     info.build_date = 0
     mc.get_software_version.return_value = info
 
