@@ -885,7 +885,35 @@ class MachineController(ContextMixin):
     @ContextMixin.use_contextual_arguments()
     def get_iobuf(self, p, x, y):
         """Read the messages ``io_printf``'d into the ``IOBUF`` buffer on a
-        specified core."""
+        specified core.
+
+        See also: :py:meth:`.get_iobuf_bytes` which returns the undecoded raw
+        bytes in the ``IOBUF``. Useful if the IOBUF contains non-text or
+        non-UTF-8 encoded text.
+
+        Returns
+        -------
+        str
+            The string in the ``IOBUF``, decoded from UTF-8.
+        """
+        return self.get_iobuf_bytes(p, x, y).decode("utf-8")
+
+    @ContextMixin.use_contextual_arguments()
+    def get_iobuf_bytes(self, p, x, y):
+        """Read raw bytes ``io_printf``'d into the ``IOBUF`` buffer on a
+        specified core.
+
+        This may be useful when the data contained in the ``IOBUF`` is not
+        UTF-8 encoded text.
+
+        See also: :py:meth:`.get_iobuf` which returns a decoded string rather
+        than raw bytes.
+
+        Returns
+        -------
+        bytes
+            The raw, undecoded string data in the buffer.
+        """
         # The IOBUF data is stored in a linked-list of blocks of memory in
         # SDRAM. The size of each block is given in SV
         iobuf_size = self.read_struct_field("sv", "iobuf_size", x, y)
@@ -893,14 +921,14 @@ class MachineController(ContextMixin):
         # The first block in the list is given in the core's VCPU field
         address = self.read_vcpu_struct_field("iobuf", x, y, p)
 
-        iobuf = ""
+        iobuf = b""
 
         while address:
             # The IOBUF data is proceeded by a header which gives the next
             # address and also the length of the string in the current buffer.
             iobuf_data = self.read(address, iobuf_size + 16, x, y)
             address, time, ms, length = struct.unpack("<4I", iobuf_data[:16])
-            iobuf += iobuf_data[16:16 + length].decode("utf-8")
+            iobuf += iobuf_data[16:16 + length]
 
         return iobuf
 
