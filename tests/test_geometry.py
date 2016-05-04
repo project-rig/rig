@@ -165,6 +165,7 @@ def test_shortest_mesh_path():
 # A series of hexagonal vectors along with their possibly multiple (torus)
 # minimal counterparts in the specified torus size for testing hexagonal
 # coordinate minimisation-related functions.
+# [((dx, dy, dz), set([(dx, dy, dz), ...]), (width, height)), ...]
 test_torus_vectors = [
     # Non-wrapping, already-minimal examples
     ((0, 0, 0), set([(0, 0, 0)]), (10, 10)),
@@ -249,6 +250,10 @@ test_torus_vectors = [
     # Ambiguous: Direct, wrap X, wrap Y (via "diagonal") or wrap X & Y (via
     # "diagonal")
     ((1, 0, 0), set([(1, 0, 0), (-1, 0, 0), (0, 0, -1), (0, 0, 1)]), (2, 1)),
+
+    # Ambiguous: Many possible wraps
+    ((5, 0, 0), set([(5, 0, 0), (3, 0, -2), (1, 0, -4)]), (20, 2)),
+    ((0, 5, 0), set([(0, 5, 0), (0, 3, -2), (0, 1, -4)]), (2, 20)),
 ]
 
 
@@ -298,8 +303,6 @@ def test_shortest_torus_path():
                     unseen_minimiseds.remove(path)
                 except KeyError:
                     pass
-                if not unseen_minimiseds:
-                    break
             assert unseen_minimiseds == set(), \
                 (start, end, width, height, minimiseds)
 
@@ -311,8 +314,6 @@ def test_shortest_torus_path():
                     unseen_neg_minimiseds.remove(path)
                 except KeyError:
                     pass
-                if not unseen_neg_minimiseds:
-                    break
             assert unseen_neg_minimiseds == set(), \
                 (start, end, width, height, neg_minimiseds)
 

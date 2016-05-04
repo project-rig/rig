@@ -141,12 +141,12 @@ def shortest_torus_path(source, destination, width, height):
     # Transform to include a random number of 'spirals' on Z axis where
     # possible.
     if abs(x) >= height:
-        max_spirals = x // height
+        max_spirals = (x + height - 1 if x < 0 else x) // height
         d = random.randint(min(0, max_spirals), max(0, max_spirals)) * height
         x -= d
         z -= d
     elif abs(y) >= width:
-        max_spirals = y // width
+        max_spirals = (y + width - 1 if y < 0 else y) // width
         d = random.randint(min(0, max_spirals), max(0, max_spirals)) * width
         y -= d
         z -= d
