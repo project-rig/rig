@@ -1,0 +1,6 @@
+codecov:
+  ignore:
+  - rig/place_and_route/place/sa/kernel.py
+  status:
+    patch: false
+  comment: false
