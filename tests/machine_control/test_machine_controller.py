@@ -1541,7 +1541,7 @@ class TestMachineController(object):
                              [[0x0],
                               [0xDEADBEEF, 0x0],
                               [0xDEADBEEF, 0x12345678, 0x0]])
-    def test_get_iobuf(self, _x, _y, iobuf_addresses):
+    def test_get_iobuf_bytes(self, _x, _y, iobuf_addresses):
         # Check that a read is made from the right region of memory and that
         # the resulting data is unpacked correctly
         cn = MachineController("localhost")
@@ -1569,7 +1569,13 @@ class TestMachineController(object):
 
         # Get (and check) the IOBUF value
         with cn(x=_x, y=_y):
-            assert cn.get_iobuf(1) == "hello, world!\n" * num_iobufs
+            assert cn.get_iobuf_bytes(1) == b"hello, world!\n" * num_iobufs
+
+    def test_get_iobuf(self):
+        cn = MachineController("localhost")
+        cn.get_iobuf_bytes = mock.Mock(return_value=b"Hello")
+        assert cn.get_iobuf(p=1, x=2, y=3) == "Hello"
+        cn.get_iobuf_bytes.assert_called_once_with(1, 2, 3)
 
     @pytest.mark.parametrize("_x, _y", [(0, 5), (7, 10)])
     def test_get_router_diagnostics(self, _x, _y):
