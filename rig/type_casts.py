@@ -1,11 +1,118 @@
 """Fixed point conversion utilities.
 """
 import numpy as np
+import warnings
+
+
+def float_to_fp(signed, n_bits, n_frac):
+    """Return a function to convert a floating point value to a fixed point
+    value.
+
+    For example, a function to convert a float to a signed fractional
+    representation with 8 bits overall and 4 fractional bits (S3.4) can be
+    constructed and used with::
+
+        >>> s34 = float_to_fp(signed=True, n_bits=8, n_frac=4)
+        >>> hex(int(s34(0.5)))
+        '0x8'
+
+    The fixed point conversion is saturating::
+
+        >>> q34 = float_to_fp(False, 8, 4)  # Unsigned 4.4
+        >>> hex(int(q34(-0.5)))
+        '0x0'
+
+        >>> hex(int(q34(15.0)))
+        '0xf0'
+
+        >>> hex(int(q34(16.0)))
+        '0xff'
+
+    Parameters
+    ----------
+    signed : bool
+        Whether the values that are to be converted should be signed, or
+        clipped at zero.
+
+            >>> hex(int(float_to_fp(True, 8, 4)(-0.5)))  # Signed
+            '-0x8'
+            >>> hex(int(float_to_fp(False, 8, 4)(-0.5)))  # Unsigned
+            '0x0'
+
+    n_bits : int
+        Total number of bits in the fixed-point representation (including sign
+        bit and fractional bits).
+    n_frac : int
+        Number of fractional bits in the fixed-point representation.
+    """
+    # Calculate the maximum and minimum values
+    if signed:
+        max_v = (1 << (n_bits - 1)) - 1
+        min_v = -max_v - 1
+    else:
+        min_v = 0
+        max_v = (1 << n_bits) - 1
+
+    # Compute the scale
+    scale = 2.0**n_frac
+
+    def bitsk(value):
+        """Convert a floating point value to a fixed point value.
+
+        Parameters
+        ----------
+        value : float
+            The value to convert.
+        """
+        int_val = int(scale * value)
+        return np.clip(int_val, min_v, max_v)
+
+    return bitsk
+
+
+def fp_to_float(n_frac):
+    """Return a function to convert a fixed point value to a floating point
+    value.
+
+    For example, a function to convert from signed fractional representations
+    with 4 fractional bits constructed and used with::
+
+        >>> f = fp_to_float(4)
+        >>> f(0x08)
+        0.5
+
+        >>> f(-0x8)
+        -0.5
+
+        >>> f(-0x78)
+        -7.5
+
+    Parameters
+    ----------
+    n_frac : int
+        Number of fractional bits in the fixed-point representation.
+    """
+    scale = 2.0**(-n_frac)
+
+    def kbits(value):
+        """Convert a fixed point value to a float.
+
+        Parameters
+        ----------
+        value : int
+            The fix point value as an integer.
+        """
+        return value * scale
+
+    return kbits
 
 
 def float_to_fix(signed, n_bits, n_frac):
-    """Return a function to convert a floating point value to a fixed point
-    value.
+    """**DEPRECATED** Return a function to convert a floating point value to a
+    fixed point value.
+
+    .. warning::
+        This function is deprecated in favour of :py:meth:`~.float_to_fp`.
 
     For example, a function to convert a float to a signed fractional
     representation with 8 bits overall and 4 fractional bits (S3.4) can be
@@ -60,6 +167,9 @@ def float_to_fix(signed, n_bits, n_frac):
             Traceback (most recent call last):
             ValueError: n_frac: 9: Must be less than 8 (and positive).
     """
+    warnings.warn("float_to_fix() is deprecated, see float_to_fp",
+                  DeprecationWarning)
+
     mask = int(2**n_bits - 1)
     min_v, max_v = validate_fp_params(signed, n_bits, n_frac)
 
@@ -86,8 +196,11 @@ def float_to_fix(signed, n_bits, n_frac):
 
 
 def fix_to_float(signed, n_bits, n_frac):
-    """Return a function to convert a fixed point value to a floating point
-    value.
+    """**DEPRECATED** Return a function to convert a fixed point value to a
+    floating point value.
+
+    .. warning::
+        This function is deprecated in favour of :py:meth:`~.fp_to_float`.
 
     For example, a function to convert from signed fractional representations
     with 8 bits overall and 4 fractional representations (S3.4) can be
@@ -134,6 +247,9 @@ def fix_to_float(signed, n_bits, n_frac):
             Traceback (most recent call last):
             ValueError: n_frac: 9: Must be less than 8 (and positive).
     """
+    warnings.warn("fix_to_float() is deprecated, see fp_to_float",
+                  DeprecationWarning)
+
     validate_fp_params(signed, n_bits, n_frac)
 
     def kbits(value):
@@ -218,13 +334,18 @@ class NumpyFloatToFixConverter(object):
         n_frac : int
             The number of fractional bits.
         """
-        self.min_value, self.max_value = validate_fp_params(
-            signed, n_bits, n_frac)
-
         # Check the number of bits is sane
         if n_bits not in [8, 16, 32, 64]:
             raise ValueError(
                 "n_bits: {}: Must be 8, 16, 32 or 64.".format(n_bits))
+
+        # Determine the maximum and minimum values after conversion
+        if signed:
+            self.max_value = 2**(n_bits - 1) - 1
+            self.min_value = -self.max_value - 1
+        else:
+            self.max_value = 2**n_bits - 1
+            self.min_value = 0
 
         # Store the settings
         self.bytes_per_element = n_bits / 8
@@ -233,12 +354,11 @@ class NumpyFloatToFixConverter(object):
 
     def __call__(self, values):
         """Convert the given NumPy array of values into fixed point format."""
-        # Saturate the values
-        vals = np.clip(values, self.min_value, self.max_value)
-
         # Scale and cast to appropriate int types
-        vals *= 2.0 ** self.n_frac
-        vals = np.round(vals)
+        vals = values * 2.0 ** self.n_frac
+
+        # Saturate the values
+        vals = np.clip(vals, self.min_value, self.max_value)
 
         # **NOTE** for some reason just casting resulted in shape
         # being zeroed on some indeterminate selection of OSes,
