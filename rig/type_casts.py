@@ -65,7 +65,7 @@ def float_to_fp(signed, n_bits, n_frac):
             The value to convert.
         """
         int_val = int(scale * value)
-        return np.clip(int_val, min_v, max_v)
+        return max((min(max_v, int_val), min_v))
 
     return bitsk
 
