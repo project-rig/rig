@@ -2,9 +2,17 @@ import numpy as np
 import pytest
 from rig.type_casts import (
     float_to_fix, fix_to_float,
+    float_to_fp, fp_to_float,
     NumpyFloatToFixConverter, NumpyFixToFloatConverter
 )
 import struct
+
+sz = {
+    8: 'b',
+    16: 'h',
+    32: 'i',
+}
+SZ = {k: v.upper() for k, v in sz.items()}
 
 
 class TestFloatToFix(object):
@@ -35,9 +43,10 @@ class TestFloatToFix(object):
          ])
     def test_no_saturate_unsigned(self, value, n_bits, n_frac, output):
         assert float_to_fix(False, n_bits, n_frac)(value) == output
+        assert float_to_fp(False, n_bits, n_frac)(value) == output
 
     @pytest.mark.parametrize(
-        "value, n_bits, n_frac, output",
+        "v, n_bits, n_frac, output",
         [(0.50, 8, 4, 0x08),
          (0.50, 8, 5, 0x10),
          (0.50, 8, 6, 0x20),
@@ -64,8 +73,12 @@ class TestFloatToFix(object):
          (-1.0, 16, 1, 0xfffe),
          (-1.0, 16, 2, 0xfffc),
          ])
-    def test_no_saturate_signed(self, value, n_bits, n_frac, output):
-        assert float_to_fix(True, n_bits, n_frac)(value) == output
+    def test_no_saturate_signed(self, v, n_bits, n_frac, output):
+        assert float_to_fix(True, n_bits, n_frac)(v) == output
+        assert (
+            struct.pack(sz[n_bits], float_to_fp(True, n_bits, n_frac)(v)) ==
+            struct.pack(SZ[n_bits], output)
+        )
 
     @pytest.mark.parametrize(
         "value, n_bits, n_frac, output",
@@ -74,6 +87,31 @@ class TestFloatToFix(object):
          ])
     def test_saturate_unsigned(self, value, n_bits, n_frac, output):
         assert float_to_fix(False, n_bits, n_frac)(value) == output
+        assert float_to_fp(False, n_bits, n_frac)(value) == output
+
+
+class TestFloatToFp(object):
+    @pytest.mark.parametrize(
+        "signed, n_bits, n_frac, value, output",
+        ((True, 8, -2, 0.25, 0x0),
+         (True, 8, -2, 4, 0x1),
+         (True, 8, -2, -4, -0x1),
+         (False, 8, -2, -4, 0x0),
+         )
+    )
+    def test_negative_nfrac(self, signed, n_bits, n_frac, value, output):
+        assert float_to_fp(signed, n_bits, n_frac)(value) == output
+
+    @pytest.mark.parametrize(
+        "signed, n_bits, n_frac, value, output",
+        ((True, 8, 8, -0.5, -0x80),
+         (False, 8, 8, 0.5, 0x80),
+         (False, 8, 9, 0.5, 0xff),
+         (False, 8, 9, 0.25, 0x80),
+         )
+    )
+    def test_large_nfrac(self, signed, n_bits, n_frac, value, output):
+        assert float_to_fp(signed, n_bits, n_frac)(value) == output
 
 
 class TestFixToFloat(object):
@@ -99,18 +137,21 @@ class TestFixToFloat(object):
         assert value == fix_to_float(signed, n_bits, n_frac)(bits)
 
 
+@pytest.mark.parametrize(
+    "bits, n_frac, value",
+    [(0xff, 0, 255.0),
+     (-0x7f, 0, -127.0),
+     (0xff, 1, 127.5),
+     (-0x08, 4, -0.5)
+     ])
+def test_fp_to_float(bits, n_frac, value):
+    assert value == fp_to_float(n_frac)(bits)
+
+
 class TestNumpyFloatToFixConverter(object):
-    @pytest.mark.parametrize(
-        "signed, n_bits, n_frac",
-        [(True, 32, 32),  # Too many frac bits
-         (False, 32, 33),
-         (False, 32, -1),
-         (False, -1, 1),
-         (False, 31, 30),  # Weird number of bits
-         ])
-    def test_init_fails(self, signed, n_bits, n_frac):
+    def test_init_fails(self):
         with pytest.raises(ValueError):
-            NumpyFloatToFixConverter(signed, n_bits, n_frac)
+            NumpyFloatToFixConverter(False, 31, 0)
 
     @pytest.mark.parametrize(
         "signed, n_bits, dtype, n_bytes",
@@ -137,6 +178,7 @@ class TestNumpyFloatToFixConverter(object):
          (8, 1, [0.5, 0.25, 0.125, 0.0625], np.uint8),
          (8, 0, [0.5, 0.25, 0.125, 0.0625], np.uint8),
          (8, 8, [0.5, 0.25, 0.125, 0.0625], np.uint8),
+         (8, 9, [0.5, 0.25, 0.125, 0.0625], np.uint8),
          (16, 12, [0.5, 0.25, 0.125, 0.0625], np.uint16),
          (32, 15, [0.5, 0.25, 0.125, 0.0625], np.uint32),
          ])
@@ -146,7 +188,7 @@ class TestNumpyFloatToFixConverter(object):
         vals = fpf(np.array(values))
 
         # Check the values are correct
-        ftf = float_to_fix(False, n_bits, n_frac)
+        ftf = float_to_fp(False, n_bits, n_frac)
         assert np.all(vals == np.array([ftf(v) for v in values]))
         assert vals.dtype == dtype
 
@@ -157,6 +199,7 @@ class TestNumpyFloatToFixConverter(object):
          (8, 2, [0.5, 0.25, 0.125, 0.0625, -0.33], np.int8),
          (8, 1, [0.5, 0.25, 0.125, 0.0625, -0.25], np.int8),
          (8, 0, [0.5, 0.25, 0.125, 0.0625, -0.23], np.int8),
+         (8, 9, [0.5, 0.25, 0.125, 0.0625, -0.23], np.int8),
          (16, 12, [0.5, 0.25, 0.125, 0.0625, -0.45], np.int16),
          (32, 15, [0.5, 0.25, 0.125, 0.0625, -0.77], np.int32),
          ])
@@ -165,16 +208,10 @@ class TestNumpyFloatToFixConverter(object):
         fpf = NumpyFloatToFixConverter(True, n_bits, n_frac)
         vals = fpf(np.array(values))
 
-        c = {8: 'B', 16: 'H', 32: 'I'}[n_bits]
-
         # Check the values are correct
-        ftf = float_to_fix(True, n_bits, n_frac)
+        ftf = float_to_fp(True, n_bits, n_frac)
+        assert np.all(vals == np.array([ftf(v) for v in values]))
         assert vals.dtype == dtype
-        assert (  # pragma: no branch
-            bytes(vals.data) ==
-            struct.pack("{}{}".format(len(values), c),
-                        *[ftf(v) for v in values])
-        )
 
     @pytest.mark.parametrize("signed", [True, False])
     @pytest.mark.parametrize(
