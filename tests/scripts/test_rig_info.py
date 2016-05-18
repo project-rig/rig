@@ -59,6 +59,7 @@ def test_spinnaker(monkeypatch, capsys, torus):
     info = mock.Mock(spec_set=CoreInfo)
     info.version_string = "Mock/SpiNNaker"
     info.software_version = (1, 33, 7)
+    info.software_version_labels = "-dev"
     info.build_date = 0
     mc.get_software_version.return_value = info
 
@@ -108,7 +109,7 @@ def test_spinnaker(monkeypatch, capsys, torus):
 
     assert "SpiNNaker" in stdout  # Hardware type
     assert "Mock" in stdout  # Software name
-    assert "v1.33.7" in stdout  # Software version
+    assert "v1.33.7-dev" in stdout  # Software version
     assert "1970" in stdout  # Software builid date
     assert "4x8" in stdout  # System dimensions
     assert "Working chips: 31" in stdout  # Live chip count
@@ -133,6 +134,7 @@ def test_bmp(monkeypatch, capsys, tmp_ext_0, tmp_ext_1, fan_0, fan_1):
     info = mock.Mock()
     info.version_string = "Mock/BMP"
     info.version = (1, 33, 7)
+    info.version_labels = "-dev"
     info.build_date = 0
     info.code_block = 7331
     info.board_id = 1234
@@ -164,7 +166,7 @@ def test_bmp(monkeypatch, capsys, tmp_ext_0, tmp_ext_1, fan_0, fan_1):
 
     assert "BMP" in stdout  # Hardware type
     assert "Mock" in stdout  # Software name
-    assert "v1.33.7" in stdout  # Software version
+    assert "v1.33.7-dev" in stdout  # Software version
     assert "1970" in stdout  # Software builid date
     assert "7331" in stdout  # Code block used
     assert "1234" in stdout  # Slot number

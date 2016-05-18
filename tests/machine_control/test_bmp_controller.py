@@ -23,7 +23,7 @@ def live_controller(bmp_ip):
 def sver_response():
     return BMPInfo(code_block=1, frame_id=2, can_id=3, board_id=4,
                    version=(1, 2, 0), buffer_size=512, build_date=1234,
-                   version_string="Hello, World!")
+                   version_string="Hello, World!", version_labels="")
 
 
 @pytest.fixture(scope="module",
