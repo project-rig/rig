@@ -1816,7 +1816,7 @@ class MachineController(ContextMixin):
         info = self._send_scp(x, y, 0, SCPCommands.info, expected_args=3)
         num_cores = info.arg1 & 0x1F
         core_states = [consts.AppState(c)
-                       for c in struct.unpack("<18B", info.data)]
+                       for c in struct.unpack("<18B", info.data[:18])]
         working_links = set(link for link in Links
                             if (info.arg1 >> (8 + link)) & 1)
         largest_free_rtr_mc_block = (info.arg1 >> 14) & 0x7FF

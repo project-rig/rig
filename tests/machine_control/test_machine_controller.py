@@ -2357,6 +2357,10 @@ class TestMachineController(object):
 
         data = struct.pack("<18B", *(core_states + ([0] * (18 - num_cores))))
 
+        # Add extra data to the block to simulate possible future additions to
+        # these fields.
+        data += b"FOOBARBAZ"
+
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
         cn._send_scp.return_value = mock.Mock(arg1=arg1, arg2=arg2, arg3=arg3,
