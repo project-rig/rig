@@ -475,7 +475,7 @@ class MachineController(ContextMixin):
         pcpu = (sver.arg1 >> 8) & 0xff
         vcpu = sver.arg1 & 0xff
 
-        # arg2 => version number (parsed seperately) and buffer size
+        # arg2 => version number (parsed separately) and buffer size
         buffer_size = (sver.arg2 & 0xffff)
 
         software_name, version, version_labels = \

@@ -190,7 +190,7 @@ class BMPController(ContextMixin):
         can_id = (sver.arg1 >> 8) & 0xff
         board_id = sver.arg1 & 0xff
 
-        # arg2 (version field unpacked seperately)
+        # arg2 (version field unpacked separately)
         buffer_size = (sver.arg2 & 0xffff)
 
         software_name, version, version_labels = \
@@ -408,7 +408,7 @@ class BMPInfo(collections.namedtuple(
         The position of the board in a frame. (This should correspond exactly
         with a board's board-coordinate.
     version : (major, minor, patch)
-        Software version number. See also: ``software_version_labels``.
+        Software version number. See also: ``version_labels``.
     buffer_size : int
         Maximum supported size (in bytes) of the data portion of an SCP packet.
     build_date : int
