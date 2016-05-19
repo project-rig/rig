@@ -635,9 +635,9 @@ class TestMachineController(object):
             return
 
         working_core_info = CoreInfo(
-            (0, 0), 0, 0, (2, 0, 0), 256, 0, "SpiNNaker Test")
+            (0, 0), 0, 0, (2, 0, 0), 256, 0, "SpiNNaker Test", "-dev")
         unbooted_core_info = CoreInfo(
-            (255, 255), 0, 0, (2, 0, 0), 256, 0, "SpiNNaker Test")
+            (255, 255), 0, 0, (2, 0, 0), 256, 0, "SpiNNaker Test", "-dev")
 
         # Make a mock version of get_software_version which responds according
         # to the parameters of this test.
@@ -729,7 +729,7 @@ class TestMachineController(object):
         """Make sure the boot command fails if you try to boot a BMP."""
         # Respond as if a BMP
         core_info = CoreInfo(
-            (0, 0), 0, 0, (1, 3, 0), 256, 0, "BC&MP/Spin5-BMP\x00")
+            (0, 0), 0, 0, (1, 3, 0), 256, 0, "BC&MP/Spin5-BMP\x00", "-dev")
 
         mock_get_software_version = mock.Mock(return_value=core_info)
         monkeypatch.setattr(MachineController, "get_software_version",
@@ -742,7 +742,8 @@ class TestMachineController(object):
             mc.boot()
 
     @pytest.mark.parametrize("new_style_version", [False, True])
-    def test_get_software_version(self, new_style_version):
+    @pytest.mark.parametrize("version_labels", ["", "-dev"])
+    def test_get_software_version(self, new_style_version, version_labels):
         """Check that the reporting of the software version is correct.
 
         SCP Layout
@@ -772,7 +773,8 @@ class TestMachineController(object):
         cn._send_scp.return_value.arg3 = 888999
         cn._send_scp.return_value.data = b"Hello, World!\0"
         if new_style_version:
-            cn._send_scp.return_value.data += b"2.56.0\0"
+            cn._send_scp.return_value.data += \
+                "2.56.0{}\0".format(version_labels).encode("ASCII")
 
         # Run the software version command
         sver = cn.get_software_version(1, 2, 3)
@@ -782,6 +784,10 @@ class TestMachineController(object):
         assert sver.physical_cpu == 3
         assert sver.virt_cpu == 4
         assert sver.software_version == (2, 56, 0)
+        if new_style_version:
+            assert sver.software_version_labels == version_labels
+        else:
+            assert sver.software_version_labels == ""
         assert sver.buffer_size == 256
         assert sver.build_date == 888999
         assert sver.version_string == "Hello, World!"
@@ -893,7 +899,7 @@ class TestMachineController(object):
         cn._scp_data_length = None
         cn.get_software_version = mock.Mock()
         cn.get_software_version.return_value = CoreInfo(
-            None, None, None, None, size, None, None)
+            None, None, None, None, size, None, None, None)
 
         assert cn.scp_data_length == size
         cn.get_software_version.assert_called_once_with(255, 255, 0)
@@ -903,7 +909,7 @@ class TestMachineController(object):
         cn._root_chip = None
         cn.get_software_version = mock.Mock()
         cn.get_software_version.return_value = CoreInfo(
-            (4, 0), None, None, None, None, None, None)
+            (4, 0), None, None, None, None, None, None, None)
 
         assert cn.root_chip == (4, 0)
         assert cn.root_chip == (4, 0)

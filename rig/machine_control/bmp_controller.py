@@ -4,13 +4,14 @@ import time
 import struct
 import collections
 
-from .scp_connection import SCPConnection
+from rig.machine_control.scp_connection import SCPConnection
 
-from . import consts
+from rig.machine_control import consts
 
-from .consts import SCPCommands, LEDAction, BMPInfoType, BMP_V_SCALE_2_5, \
-    BMP_V_SCALE_3_3, BMP_V_SCALE_12, BMP_TEMP_SCALE, BMP_MISSING_TEMP, \
-    BMP_MISSING_FAN
+from rig.machine_control.consts import SCPCommands, LEDAction, BMPInfoType, \
+    BMP_V_SCALE_2_5, BMP_V_SCALE_3_3, BMP_V_SCALE_12, BMP_TEMP_SCALE, \
+    BMP_MISSING_TEMP, BMP_MISSING_FAN
+from rig.machine_control.common import unpack_sver_response_version
 
 from rig.utils.contexts import ContextMixin, Required
 
@@ -189,23 +190,14 @@ class BMPController(ContextMixin):
         can_id = (sver.arg1 >> 8) & 0xff
         board_id = sver.arg1 & 0xff
 
-        # arg2
-        version = (sver.arg2 >> 16)
+        # arg2 (version field unpacked separately)
         buffer_size = (sver.arg2 & 0xffff)
 
-        # Version string tacked on the end
-        version_string = sver.data.decode("utf-8")
-
-        if version < 0xFFFF:
-            # Old-style version
-            version = (version // 100, version % 100, 0)
-        else:
-            # New-style version number is appended to the version string.
-            version_string, _, version = version_string.partition("\0")
-            version = tuple(map(int, version.strip("\0").split(".")))
+        software_name, version, version_labels = \
+            unpack_sver_response_version(sver)
 
         return BMPInfo(code_block, frame_id, can_id, board_id, version,
-                       buffer_size, sver.arg3, version_string.rstrip("\0"))
+                       buffer_size, sver.arg3, software_name, version_labels)
 
     @ContextMixin.use_contextual_arguments()
     def set_power(self, state, cabinet, frame, board,
@@ -398,7 +390,7 @@ class BMPController(ContextMixin):
 
 class BMPInfo(collections.namedtuple(
     'BMPInfo', "code_block frame_id can_id board_id version buffer_size "
-               "build_date version_string")):
+               "build_date version_string version_labels")):
     """Information returned about a BMP by sver.
 
     Parameters
@@ -416,7 +408,7 @@ class BMPInfo(collections.namedtuple(
         The position of the board in a frame. (This should correspond exactly
         with a board's board-coordinate.
     version : (major, minor, patch)
-        Software version number.
+        Software version number. See also: ``version_labels``.
     buffer_size : int
         Maximum supported size (in bytes) of the data portion of an SCP packet.
     build_date : int
@@ -426,6 +418,10 @@ class BMPInfo(collections.namedtuple(
         Human readable, textual version information split in to two fields by a
         "/". In the first field is the kernel (e.g. BC&MP) and the second the
         hardware platform (e.g. Spin5-BMP).
+    version_labels : string
+        Any additional labels or build information associated with the software
+        version. (See also: ``version`` and the `Semantic Versioning
+        <http://semver.org/>`_ specification).
     """
 
 

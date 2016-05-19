@@ -15,6 +15,7 @@ from rig.machine_control.consts import \
     SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
 from rig.machine_control import boot, consts, regions, struct_file
 from rig.machine_control.scp_connection import SCPConnection, SCPError
+from rig.machine_control.common import unpack_sver_response_version
 
 from rig import routing_table
 
@@ -474,23 +475,14 @@ class MachineController(ContextMixin):
         pcpu = (sver.arg1 >> 8) & 0xff
         vcpu = sver.arg1 & 0xff
 
-        # arg2 => version number and buffer size
-        version = (sver.arg2 >> 16)
+        # arg2 => version number (parsed separately) and buffer size
         buffer_size = (sver.arg2 & 0xffff)
 
-        # Version string tacked on the end
-        version_string = sver.data.decode("utf-8")
-
-        if version < 0xFFFF:
-            # Old-style version
-            version = (version // 100, version % 100, 0)
-        else:
-            # New-style version number is appended to the version string.
-            version_string, _, version = version_string.partition("\0")
-            version = tuple(map(int, version.strip("\0").split(".")))
+        software_name, version, version_labels = \
+            unpack_sver_response_version(sver)
 
         return CoreInfo(p2p_address, pcpu, vcpu, version, buffer_size,
-                        sver.arg3, version_string.rstrip("\0"))
+                        sver.arg3, software_name, version_labels)
 
     @ContextMixin.use_contextual_arguments()
     def get_ip_address(self, x, y):
@@ -1987,7 +1979,7 @@ class MachineController(ContextMixin):
 
 class CoreInfo(collections.namedtuple(
     'CoreInfo', "position physical_cpu virt_cpu software_version buffer_size "
-                "build_date version_string")):
+                "build_date version_string software_version_labels")):
     """Information returned about a core by sver.
 
     Parameters
@@ -2000,7 +1992,8 @@ class CoreInfo(collections.namedtuple(
         The virtual ID of the core. This is the number used by all high-level
         software APIs.
     software_version : (major, minor, patch)
-        Software version number.
+        The numerical components of the software version number. See also:
+        ``software_version_labels``.
     buffer_size : int
         Maximum supported size (in bytes) of the data portion of an SCP packet.
     build_date : int
@@ -2010,6 +2003,10 @@ class CoreInfo(collections.namedtuple(
         Human readable, textual version information split in to two fields by a
         "/". In the first field is the kernal (e.g. SC&MP or SARK) and the
         second the hardware platform (e.g. SpiNNaker).
+    software_version_labels : string
+        Any additional labels or build information associated with the software
+        version. (See also: ``software_version`` and the `Semantic Versioning
+        <http://semver.org/>`_ specification).
     """
 
 

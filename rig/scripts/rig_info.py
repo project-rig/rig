@@ -27,9 +27,10 @@ def get_spinnaker_info(mc):
     yield ""
 
     info = mc.get_software_version(255, 255)
-    yield "Software: {} v{} (Built {})".format(
+    yield "Software: {} v{}{} (Built {})".format(
         info.version_string.split("/")[0],
         ".".join(map(str, info.software_version)),
+        info.software_version_labels,
         datetime.fromtimestamp(info.build_date, tz=utc).strftime(
             '%Y-%m-%d %H:%M:%S'),
     )
@@ -104,9 +105,10 @@ def get_bmp_info(bc):
     yield ""
 
     info = bc.get_software_version()
-    yield "Software: {} v{} (Built {})".format(
+    yield "Software: {} v{}{} (Built {})".format(
         info.version_string.split("/")[0],
         ".".join(map(str, info.version)),
+        info.version_labels,
         datetime.fromtimestamp(info.build_date, tz=utc).strftime(
             '%Y-%m-%d %H:%M:%S'),
     )
