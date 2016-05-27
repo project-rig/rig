@@ -60,7 +60,7 @@ Hierarchical routing keys with BitField
     >>> print(hex(type_1(science=0xCD).get_value()))
     0x80000cd0
     
-    >>> # Can't access fields from other parts of the heirarchy
+    >>> # Can't access fields from other parts of the hierarchy
     >>> type_0(science=123)
     Traceback (most recent call last):
       ...

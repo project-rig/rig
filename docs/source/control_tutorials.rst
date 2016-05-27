@@ -51,7 +51,7 @@ A tutorial for each of these interfaces is presented below.
 :py:class:`.MachineController`
 ------------------------------
 
-To get started, lets instantiate a :py:class:`.MachineController` which is as
+To get started, let's instantiate a :py:class:`.MachineController`. This is as
 simple as giving the hostname or IP address of the machine::
 
     >>> from rig.machine_control import MachineController
