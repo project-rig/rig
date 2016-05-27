@@ -61,7 +61,7 @@ Hierarchical routing keys with BitField
     0x80000cd0
     
     >>> # Can't access fields from other parts of the hierarchy
-    >>> type_0(science=123)
+    >>> type_0(science=123)  # doctest: +IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
       ...
     rig.bitfield.UnavailableFieldError: Field 'science' is not available when 'type':1.
