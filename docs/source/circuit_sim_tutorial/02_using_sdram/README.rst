@@ -4,7 +4,7 @@
 =============================
 
 Most interesting SpiNNaker application kernels require some sort of
-configuration data and produce result data which must be loaded and read back
+configuration data, and produce result data, which must be loaded and read back
 from the machine before and after executing respectively. As a result, a
 typical host program will:
 
@@ -12,7 +12,7 @@ typical host program will:
   be loaded
 * Write configuration data into this memory
 * Load and run the application kernel
-* Read and process result data written to memory by the kernel
+* Read and process the result data written into memory by the kernel
 
 To illustrate this process we'll make a SpiNNaker application kernel which
 reads pair of 32-bit integers from memory, adds them together, stores the
@@ -101,14 +101,13 @@ value into the first 8 bytes of the SDRAM block we allocated.
 .. warning::
     
     The :py:meth:`~rig.machine_control.MachineController.write` method will
-    attempt to perform any write you specify and should be used with care to
-    avoid data corruption or illigal memory accesses by accidentally writing
-    too much data.
+    attempt to perform any write you specify. Due caution should be used to
+    avoid data corruption or illegal memory accesses.
 
 Running the application kernel
 ------------------------------
 
-With the SDRAM allocated, tagged and populated with data, we can now load our
+With the SDRAM allocated, tagged and populated with data, we can load our
 application kernel as in the previous example using
 :py:meth:`~rig.machine_control.MachineController.load_application`.
 
@@ -121,8 +120,8 @@ discovered by ``sark_tag_ptr()``, writes the result into memory and exits:
 
 .. note::
 
-    In a SpiNNaker application kernel, though SDRAM *can* be accessed directly
-    like this, 'real' application kernels often use DMA to improve performance.
+    Although SDRAM *can* be accessed directly like this, 'real' application
+    kernels often use DMA requests to avoid blocking on slow memory access.
 
 
 Reading and writing SDRAM from the host

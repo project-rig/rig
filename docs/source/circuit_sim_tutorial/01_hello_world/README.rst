@@ -14,15 +14,15 @@ The source files used in this tutorial can be downloaded below:
     * :download:`hello.c`
     * :download:`Makefile`
 
-As is tradition our first application will simply print 'Hello, world!' and
-exit. In this application our SpiNNaker application kernel will simply write
+As is traditional, our first application will simply print 'Hello, world!' and
+exit. In this example our SpiNNaker application kernel will simply write
 its greeting into memory on a SpiNNaker chip and then terminate. Our host
 program will:
 
 * Load the application kernel
 * Instruct SpiNNaker to run it
 * Wait for the kernel to terminate
-* Retrieve and print the message from SpiNNaker's memory
+* Retrieve the message from SpiNNaker's memory and print it
 * Clean up and quit
 
 SpiNNaker Application Kernel
@@ -60,9 +60,9 @@ Host-side application
 ---------------------
 
 Now that we have our compiled binary we must boot our SpiNNaker machine, load
-our application onto a core and then read back the IO buffer. We *could* do
-this using the `ybug` command included with 'spinnaker_tools' but since we're
-building up towards a real application we'll write a Python program which will
+the application onto a core and then read back the IO buffer. We *could* do
+this using the `ybug` tool included with 'spinnaker_tools' but since we're
+building toward a real application we'll write a Python program which will
 automate all these steps.
 
 .. note::
@@ -85,7 +85,7 @@ our SpiNNaker board:
 Note that we take the hostname/IP of the board as a command-line argument to
 avoid hard-coding it into our script.
 
-Next to boot the machine we use the
+To boot the machine we use the
 :py:meth:`~rig.machine_control.MachineController.boot` method. If the machine
 is already booted, this command does nothing.
 
@@ -118,9 +118,9 @@ we can wait for our hello world application to finish executing.
     :lines: 20
 
 After our application has exited we can fetch and print out the contents of the
-IO buffer to retrieve the message printed by the application kernel using
-:py:meth:`~rig.machine_control.MachineController.get_iobuf`. By convention Rig
-uses the name ``p`` -- for processor -- when identifying cores.
+IO buffer to see the message printed by the application kernel. The buffer can
+be read using :py:meth:`~rig.machine_control.MachineController.get_iobuf`. By
+convention Rig uses the name ``p`` -- for processor -- when identifying cores.
 
 .. literalinclude:: hello.py
     :language: python
@@ -149,6 +149,6 @@ Our script is now finished and can then be executed like so::
     a few seconds to complete if the machine is not already booted. If the
     machine is already booted, the script should run almost instantaneously.
 
-Once the excitement of being greeted by a super computer has worn off, its time
-to set SpiNNaker to work on some 'real' computation. Lets head onward to
+Once the excitement of being greeted by a super computer has worn off, it's time
+to set SpiNNaker to work on some 'real' computation. Let's head onward to
 :ref:`part 02 <tutorial-02>`.

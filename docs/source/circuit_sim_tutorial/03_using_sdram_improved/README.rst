@@ -3,7 +3,7 @@
 03: Reading and Writing SDRAM - Improved
 ========================================
 
-We're now going to re-write the host-program for our previous example program
+We're now going to re-write the host-program from our previous example program,
 which used SpiNNaker to add two numbers together. In particular, some
 higher-level facilities of the
 :py:class:`~rig.machine_control.MachineController` will be used to make the
@@ -52,22 +52,27 @@ to SDRAM the
 :py:meth:`~rig.machine_control.MachineController.sdram_alloc_as_filelike`
 method produces a file-like
 :py:class:`~rig.machine_control.machine_controller.MemoryIO` object for the
-memory it allocates. This object can be used just like a conventional file, for
+allocated memory. This object can be used just like a conventional file, for
 example using :py:meth:`~rig.machine_control.machine_controller.MemoryIO.read`,
 :py:meth:`~rig.machine_control.machine_controller.MemoryIO.write` and
 :py:meth:`~rig.machine_control.machine_controller.MemoryIO.seek` methods. All
 writes and reads to the file are automatically constrained to the allocated
 block of SDRAM preventing accidental corruption of memory. Additionally, users
-of an allocation need not know anything about the chip or address of the
-allocation and in fact may be oblivious to the fact that they're using anything
+of an allocated block of memory need not know anything about the chip or address of the
+memory and may even be oblivious to the fact that they're using anything
 other than a normal file. This can simplify application code by avoiding the
 need to pass around additional information.
+
+We replace the previous calls to 
+:py:meth:`~rig.machine_control.MachineController.sdram_alloc`,
+:py:meth:`~rig.machine_control.MachineController.write` and
+:py:meth:`~rig.machine_control.MachineController.read` with:
 
 .. literalinclude:: adder_improved.py
     :language: python
     :lines: 23,29,38
 
-Like files, reads and writes occur immediately after the data the previous read
+Just like files, reads and writes occur immediately after the data the previous read
 and write encountered.
 :py:meth:`~rig.machine_control.machine_controller.MemoryIO.seek` must be used
 move the 'read head' to other locations in memory. Note that in this case since

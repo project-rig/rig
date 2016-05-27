@@ -25,16 +25,16 @@ In this tutorial we'll build a digital circuit simulator which (rather
 inefficiently) simulates the behaviour of a circuit made up of simple logic
 gates all wired together.
 
-In our simulator, a logic gate is a device one or two binary inputs and one
+In our simulator, a logic gate is a device with one or two binary inputs and one
 binary output. In the picture below, four example logic gates are given along
 with truth-tables defining their behaviour.
 
 .. figure:: diagrams/logic_gates.png
     :alt: The symbols for a NOT, AND, OR and XOR.
     
-    Four simple 'logic gates' which each compute a simple boolean function. The
-    'truth tables' below enumerate the output values of each gate for every
-    possible input.
+Four simple 'logic gates' which each compute a simple boolean function. The
+'truth tables' below enumerate the output values of each gate for every
+possible input.
     
     **NOT**
         ==  ===
@@ -44,10 +44,11 @@ with truth-tables defining their behaviour.
         1   0
         ==  ===
 
+
     **AND, OR and XOR**
         +------+------+-----+----+-----+
         |      |      |       out      |
-        | in a | in a +-----+----+-----+
+        | in a | in b +-----+----+-----+
         |      |      | AND | OR | XOR |
         +======+======+=====+====+=====+
         | 0    | 0    | 0   | 0  | 0   |
@@ -59,7 +60,7 @@ with truth-tables defining their behaviour.
         | 1    | 1    | 1   | 1  | 0   |
         +------+------+-----+----+-----+
 
-Though on their own these logic gates don't do anything especially interesting,
+Though on their own these logic gates don't do anything especially interesting
 by combining them into circuits more interesting behaviour can be achieved.
 Indeed, computer processors are little more than a carefully chosen collection
 of logic gates!
@@ -160,8 +161,8 @@ into the network:
     :language: c
     :lines: 36-52
 
-The probe kernel takes on the reverse role: every millisecond it records the
-most recent input value it recieved into memory. The host can later read this
+The probe kernel takes on the reverse role: every millisecond it records into
+memory the most recent input value it received. The host can later read this
 data back. Once more, a configuration struct is defined which the host will
 populate and to which the probe will add recorded data:
 
@@ -177,14 +178,14 @@ having to write the zeroes over the network:
     :lines: 74-75
 
 The array is then written to once per millisecond with the most recently
-recieved value:
+received value:
 
 .. literalinclude:: probe.c
     :language: c
     :lines: 39-56
 
 As in the gate kernel, a callback on multicast packet arrival keeps track of
-the most recently recieved input value:
+the most recently received input value:
 
 .. literalinclude:: probe.c
     :language: c
@@ -238,8 +239,8 @@ This assignment is illustrated in the figure below:
     system. It cannot be used to run SpiNNaker application kernels.
 
 We'll run our simulation for 64 ms and configure each stimulus kernel such that
-each of the 8 combinations of stimulus value are produced 8 ms each to allow
-time for the signals to propogate through the circuit.
+each of the 8 combinations of stimulus value are held for 8 ms each to allow
+time for the signals to propagate through the circuit.
 
 The proof-of-concept host program is provided in full in
 ``circuit_simulator_proof.py`` and we'll walk through the key steps below. After
@@ -317,8 +318,8 @@ to wait for all six application kernels to reach the 'sync0' barrier:
 
 
 Next we send the 'sync0' signal using
-:py:meth:`~rig.machine_control.MachineController.send_signal` which causes all
-application kernels to start running. After 64 ms all of the applications
+:py:meth:`~rig.machine_control.MachineController.send_signal`. This starts our
+application kernels running. After 64 ms all of the applications
 should terminate and we wait for them to exit using
 :py:meth:`~rig.machine_control.MachineController.wait_for_cores_to_reach_state`.
 
@@ -345,8 +346,8 @@ The stimulus and recorded data are plotted using
 
 .. note::
     
-    The recording shows a 'glitch' at time=32 which is caused by propogation
-    delays in our circuit rather than a bug in our simulator. On the contrary:
+    The recording shows a 'glitch' at time=32 which is caused by propagation
+    delays in our circuit rather than a bug in our simulator. In fact,
     our simulator has accurately modelled an unintended feature of our circuit!
 
 And there we have it: a real digital circuit simulation running on SpiNNaker!
@@ -354,4 +355,4 @@ Unfortunately, our simulator is not especially flexible. Changing the circuit
 requires re-writing swathes of code and hand-generating yet more routing
 tables. In the next part of the tutorial we'll make use of the automatic
 place-and-route features included in the Rig library to take care of this for
-us. So without further delay, lets proceeed to :ref:`part 05 <tutorial-05>`!
+us. So without further delay, let's proceed to :ref:`part 05 <tutorial-05>`!

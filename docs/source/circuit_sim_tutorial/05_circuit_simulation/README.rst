@@ -4,12 +4,12 @@
 ======================
 
 In the :ref:`previous part of this tutorial <tutorial-04>` we built a simple
-digital circuit simulator which used several application kernels running on
-multiple SpiNNaker chips communicating via multicast packets. In our
-proof-of-concept host program implementation, the chip and core to use for each
-kernel was chosen by hand and all routing tables were written manually. Though
-this works, it made our simulator incredibly inflexible and the host program
-hard to modify and extend.
+digital circuit simulator using several application kernels running on
+multiple SpiNNaker chips which communicated with multicast packets. In our
+proof-of-concept host program, the chip and core to use for each kernel was
+chosen by hand and all routing tables were written manually. Though this works,
+it made our simulator incredibly inflexible and the host program hard to modify
+and extend.
 
 In this part of the tutorial we'll leave the application kernels unchanged but
 re-write our host program to make use of the automatic place-and-route tools
@@ -61,11 +61,11 @@ Rig provides a suite of placement and routing algorithms in its
 abstract descriptions of graphs of communicating SpiNNaker application kernels
 as input. Based on this information the place and route algorithms select which
 core each kernel will be loaded onto, keeping communicating cores close
-together to reduce network load. Routing tables are also generated
-automatically which make efficient use of SpiNNaker's network.
+together to reduce network load. In addition, routing tables which make
+efficient use of SpiNNaker's network are generated.
 
 In Rig terminology, the abstract (hyper-)graph of application kernels are known
-as *vertices* which are together by *nets*:
+as *vertices* which are connected together by *nets*:
 
 vertices
     Approximately speaking, a vertex represents a group of cores and SDRAM
@@ -76,7 +76,7 @@ vertices
 nets
     A net typically represents a 1-to-many flow of multicast packets between
     vertices. A net has a single *source* vertex and many *sink* vertices. In
-    our circuit simulator, a net coresonds to a wire in our circuit where the
+    our circuit simulator, a net corresponds to a wire in our circuit, where the
     source is the gate or stimulus output driving the wire and the sinks are
     the connected gate and probe inputs.
 
@@ -93,17 +93,17 @@ What follows is a (non-linear) walk-through of the most important parts of the
 circuit simulator host program provided in ``circuit_simulator.py``.
 
 In most host applications built with Rig, the graph of vertices and nets fed to
-the place and route tools are generated just before place-and-route from
-application-specific data structures. This allows the majority of the
-application to use data structures which best fit the application. In this
-circuit simulator example we'll follow this approach too so lets start by
-defining the some Python classes which make up the API.
+the place and route tools are generated from application-specific data
+structures shortly before performing the place-and-route. This allows the
+majority of the application to use data structures which best fit the
+application. In this circuit simulator example we'll follow this approach too,
+so let's start by defining the Python classes which make up the API.
 
 Defining a wire
 ```````````````
 
-A wire represents a connection from one component's output to many components'
-inputs and is defined as follows:
+A wire represents a connection from one the output of one component to the
+inputs of many other components and is defined as follows:
 
 .. literalinclude:: circuit_simulator.py
     :language: python
@@ -118,7 +118,7 @@ Defining components (gates, stimuli and probes)
 ```````````````````````````````````````````````
 
 At the heart of our circuit simulator is our two-input, one-output,
-lookup-table-based logic gate so lets define our ``Gate`` component first like
+lookup-table-based logic gate so let's define our ``Gate`` component first like
 so:
 
 .. literalinclude:: circuit_simulator.py
@@ -136,9 +136,9 @@ The ``Gate.connect_input`` method connects a ``_Wire`` to an input by storing a
 reference to the ``_Wire`` object and adding the component to the ``_Wire``\ 's
 list of sinks.
 
-We also define various subclasses of ``Gate`` are defined which, for the sake
-of convenience, simply define the lookup table to be used. For example an
-AND-gate component is defined like so:
+We also define various subclasses of ``Gate`` which, for the sake of
+convenience, simply define the lookup table to be used. For example an AND-gate
+component is defined like so:
 
 .. literalinclude:: circuit_simulator.py
     :language: python
@@ -163,7 +163,7 @@ Defining the simulator
 
 All that remains to be defined of our API is the ``Simulator`` object. The
 ``Simulator`` simply stores the hostname and simulation length provided and
-internally maintains lists of components and wires which have been added to the
+maintains lists of components and wires which have been added to the
 simulation:
 
 .. literalinclude:: circuit_simulator.py
@@ -214,8 +214,8 @@ convention these resources are identified to by the corresponding
 
 Each vertex requires exactly one core but the amount of SDRAM required depends
 on the type of component and length of the simulation. A ``_get_config_size()``
-method is added to each of our component types to compute the their SDRAM
-requirements like so:
+method is added to each of our component types to compute their SDRAM
+requirements:
 
 .. literalinclude:: circuit_simulator.py
     :language: python
@@ -252,8 +252,8 @@ component type:
     :language: python
     :lines: 213,237-239
 
-Next we enumerate the nets representing the streams of multicast packets
-flowing between vertices as well as the routing keys and masks used for each
+Next, we enumerate the nets representing the streams of multicast packets
+flowing between vertices, as well as the routing keys and masks used for each
 net. Rig expects nets to be defined by :py:class:`~rig.netlist.Net` objects.
 Like the ``_Wire`` objects in our simulator, :py:class:`~rig.netlist.Net`\ s
 simply contain a source vertex and a list of sink vertices. In the code below
@@ -266,15 +266,15 @@ mask)`` tuples for each wire in the simulation:
     :dedent: 8
 
 The final piece of information required is a description of the SpiNNaker
-machine into which our application will be placed and routed. Using a
+machine onto which our application will be placed and routed. Using a
 :py:class:`~rig.machine_control.MachineController` we first
 :py:meth:`~rig.machine_control.MachineController.boot` the machine and then
 interrogate it using
 :py:meth:`~rig.machine_control.MachineController.get_system_info` which returns
 a :py:class:`~rig.machine_control.machine_control.SystemInfo` object. This
-object contains a detailed description of the interrogated machine, for
-example, enumerating working cores and links. This description will be used
-shortly to perform place and route.
+object contains a detailed description of the machine, for example, enumerating
+working cores and links. This description will be used shortly to perform place
+and route.
 
 .. literalinclude:: circuit_simulator.py
     :language: python
@@ -286,10 +286,10 @@ Place and route
 
 The place and route process can be broken up into many steps such as placement,
 allocation, routing and routing table generation. Though some advanced
-applications may find it useful to break these steps appart, our circuit
+applications may find it useful to break these steps apart, our circuit
 simulator, like many other applications, does not. Rig provides a
 :py:func:`~rig.place_and_route.place_and_route_wrapper` function which saves us
-from the 'boilerplate' of doing each step seperately. This function takes the
+from the 'boilerplate' of doing each step separately. This function takes the
 graph description we constructed above and performs the place and route process
 in its entirety.
 
@@ -321,17 +321,18 @@ The :py:func:`~rig.machine_control.utils.sdram_alloc_for_vertices` utility
 function takes a :py:class:`~rig.machine_control.MachineController` and the
 ``placements`` and ``allocations`` :py:class:`dict`\ s produced during place
 and route and allocates a block of SDRAM for each vertex. Each allocation is
-given a tag matching the core number of the vertex and the size determined by
-the quantity of :py:data:`~rig.place_and_route.SDRAM` consumed by the vertex,
-as orriginally indicated in ``vertices_resources``.
+given a tag matching the core number of the vertex, and the size of the
+allocation is determined by the quantity of
+:py:data:`~rig.place_and_route.SDRAM` consumed by the vertex, as originally
+indicated in ``vertices_resources``.
 
 .. literalinclude:: circuit_simulator.py
     :language: python
     :lines: 341-342
     :dedent: 12
 
-The :py:class:`dict` returned is a mapping from vertex (i.e. instances of our
-component classes) to a
+The :py:class:`dict` returned is a mapping from each vertex (i.e. instances of
+our component classes) to a
 :py:class:`~rig.machine_control.machine_controller.MemoryIO` file-like
 interface to SpiNNaker's memory.
 
@@ -367,7 +368,7 @@ Next, the routing tables and SpiNNaker applications are loaded using
     :lines: 348-352
     :dedent: 12
 
-We now wait for the applications to reach thier initial barrier, send the
+We now wait for the applications to reach their initial barrier, send the
 'sync0' signal to start simulation and, finally, wait for the cores to exit.
 
 .. literalinclude:: circuit_simulator.py

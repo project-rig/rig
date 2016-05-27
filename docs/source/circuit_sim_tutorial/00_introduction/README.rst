@@ -24,15 +24,15 @@ Rig's automatic place and route facilities to automatically map our circuit
 simulations onto the SpiNNaker machine.
 
 The digital circuit simulator we'll be building in this tutorial closely
-follows the program structure used on real-world SpiNNaker applications. Though
+follows the program structure used in real-world SpiNNaker applications. Though
 only a very small program (under 400 lines of heavily annotated Python) our
 simulator goes through almost all of the steps real neural simulation
 applications do, including implementing a high-level domain-specific 'language'
-for describing simulations. With luck after completing these tutorials you will
+for describing simulations. With luck, after completing these tutorials you will
 have an understanding of how to go about building your own SpiNNaker
 applications.
 
-Before getting stuck in, we'll first take a look at how a typical SpiNNaker
+Before getting stuck in, we'll take a look at how a typical SpiNNaker
 application is structured and highlight how Rig fits into this picture.
 
 
@@ -41,14 +41,14 @@ SpiNNaker applications and Rig
 
 Though SpiNNaker is usually described as a 'computer', in practice most
 applications would be more accurately described as using SpiNNaker as a
-co-processor or an accellerator. As a result, most applications are written in
+co-processor or an accelerator. As a result, most applications are written in
 two parts:
 
 SpiNNaker application kernels
     A collection of small C (or C++) programs which run on SpiNNaker's
     application cores. These programs do the 'real' work in most applications,
-    for example simulating neural behaviour, recording results, playing back
-    artificial stimulus.
+    for example simulating neural behaviour, recording results, or playing back
+    artificial stimuli.
 
 Host application
     A program which runs on a host computer connected to your SpiNNaker
@@ -57,14 +57,14 @@ Host application
     process, loads software and data onto the SpiNNaker machine and retrieves
     and processes results.
 
-Though it is indeed the SpiNNaker application kernel which is responsible for
-most of the actual computation, it is often the host program which is the most
-complex. Rig is a library designed to help with the process of writing host
-applications by providing tools and functions which simplify the task of
-interacting with and programming a SpiNNaker machine.
+Though the SpiNNaker application kernel is responsible for most of the actual
+computation, the host program is often more complex.  Rig is a library which
+helps with the process of writing host applications by providing tools and
+functions which simplify the task of interacting with and programming a
+SpiNNaker machine.
 
 In this tutorial we'll be building an application which follows the program
-structure used by the host programs of many existing nerual simulation tools
+structure used by the host programs of many existing neural simulation tools
 (e.g. `Nengo SpiNNaker <https://github.com/project-rig/nengo_spinnaker>`_ and
 `PyNN SpiNNaker <https://github.com/project-rig/pynn_spinnaker>`_). This
 program structure is illustrated in the figure below:
@@ -74,11 +74,11 @@ program structure is illustrated in the figure below:
 
 Most SpiNNaker applications provide a domain-specific API for describing
 whatever is to be simulated. This description is then *partitioned* into a
-graph of SpiNNaker-core-sized (*vertices*) which communicate with eachother
+graph of SpiNNaker-core-sized (*vertices*) which communicate with each other
 (via *nets*). This first step is usually very application specific and so Rig
-does not provide any functions at this stage.
+does not provide any functions to help.
 
-In the place and route phase of application execution, this graph of vertices
+In the place and route phase of application execution, the graph of vertices
 and nets is mapped onto specific cores and routes in SpiNNaker's network. Rig
 provides a number of utilities and algorithms for performing place and route
 tasks for SpiNNaker applications in the :py:mod:`rig.place_and_route` module.
@@ -94,9 +94,9 @@ In the next phase of execution a typical application generates configuration
 data and routing tables which will be used by SpiNNaker application kernels
 (illustrated below). Though generating configuration data is highly application
 specific, Rig provides a limited set of libraries such as
-:py:mod:`rig.type_casts` for dealing with fixed point number handling and
-:py:mod:`rig.geometry` for dealing with machine geometry. Rig also provides
-libraries to assist in selecting routing keys (:py:class:`rig.bitfield
+:py:mod:`rig.type_casts` for converting between floating and fixed point
+numbers, and :py:mod:`rig.geometry` for dealing with machine geometry. Rig also
+provides libraries to assist in selecting routing keys (:py:class:`rig.bitfield
 <rig.bitfield.BitField>`) and generating and compressing SpiNNaker routing
 tables (:py:mod:`rig.routing_table`).
 
@@ -105,7 +105,7 @@ tables (:py:mod:`rig.routing_table`).
 
 In the final stage of execution (illustrated below), the SpiNNaker application
 kernels are loaded onto the SpiNNaker machine along with the generated
-configuration data and routing tables and results are retrieved when
+configuration data and routing tables. Results are retrieved when
 computation completes. Rig provides a
 :py:class:`~rig.machine_control.MachineController` class which provides an
 efficient and high-level interface for controlling and interacting with a
@@ -119,7 +119,7 @@ application specific task.
 .. note::
 
     It is important to note that the Rig library does not assume or rely on
-    this particular program structure. Rig can be (and has been) used in
+    this particular program structure. Rig can be (and is) used in
     numerous applications with widly different structures. Examples include
     interactive use in the Python interpreter, `cabling validation software
     <https://github.com/SpiNNakerManchester/SpiNNer>`_ and `site-wide SpiNNaker
