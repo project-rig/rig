@@ -15,8 +15,8 @@ typical host program will:
 * Read and process result data written to memory by the kernel
 
 To illustrate this process we'll make a SpiNNaker application kernel which
-reads a single pair of 32-bit integers from memory, adds them together and then
-stores the result back into memory and then exits.
+reads pair of 32-bit integers from memory, adds them together, stores the
+result back into memory and exits.
 
 Much of the code in this example is unchanged from the previous example so we
 will only discuss the changes.
@@ -38,9 +38,9 @@ SDRAM (shared between all cores on a chip) to load our two integers and store
 the result. By convention, the host program is responsible for allocating space
 in SDRAM.
 
-The Rig :py:class:`~rig.machine_control.MachineController` class provides
-an:py:meth :`~rig.machine_control.MachineController.sdram_alloc` method which
-allows us to allocate 12 bytes of SDRAM on a SpiNNaker chip. In this example
+The Rig :py:class:`~rig.machine_control.MachineController` class provides an
+:py:meth:`~rig.machine_control.MachineController.sdram_alloc` method which
+we'll use to allocate 12 bytes of SDRAM on a SpiNNaker chip. In this example
 we'll allocate some SDRAM on chip (0, 0). The first 8 bytes will contain the
 two numbers to be summed and will be written by our host program. The last four
 bytes will be written by the SpiNNaker application kernel and will contain the
@@ -54,14 +54,14 @@ The :py:meth:`~rig.machine_control.MachineController.sdram_alloc` method
 returns the address of a block of SDRAM on chip (0, 0) which was allocated.
 
 We also need to somehow inform the SpiNNaker application kernel of this
-address. To do this we can use the 'tag' using the argument to identify the
-allocated memory block. Later, once the application has been loaded, the
-addresses of SDRAM blocks which have been tagged can be looked up using the
-``sark_tag_ptr()`` function. In most applications, memory of interest to an
-application running on core 1 is given tag number 1, memory for core 2 with tag
-2 and so on. Since an application kernel can discover the core number it is
-running on using ``spin1_get_core_id()``, the following line gets a pointer to
-the SDRAM block allocated for a particular core's application.
+address. To do this we can use the 'tag' argument to identify the allocated
+memory block. Later, once the application kernel has been loaded it can use
+``sark_tag_ptr()`` to discover the address of tagged SDRAM blocks. In most
+applications, memory used by an application running on core 1 is given tag 1,
+memory for core 2 is given tag 2 and so on. Since an application kernel can
+discover the core number it is running on using ``spin1_get_core_id()``, the
+following line gets a pointer to the SDRAM block allocated for a particular
+core's application.
 
 .. literalinclude:: adder.c
     :language: c
@@ -69,8 +69,8 @@ the SDRAM block allocated for a particular core's application.
 
 .. note::
     
-    Tags are assigned for a single SpiNNaker chip. That is, you can re-use the
-    same tag number on several chips.
+    Tags are assigned for a single SpiNNaker chip: tag numbers can be re-used
+    on other chips.
 
 
 Writing SDRAM from the host
@@ -122,25 +122,25 @@ discovered by ``sark_tag_ptr()``, writes the result into memory and exits:
 .. note::
 
     In a SpiNNaker application kernel, though SDRAM *can* be accessed directly
-    like this, it is much more efficient to use DMA.
+    like this, 'real' application kernels often use DMA to improve performance.
 
 
 Reading and writing SDRAM from the host
 ---------------------------------------
 
 After waiting for the application kernel to exit, the host can read the answer
-back using :py:meth:`~rig.machine_control.MachineController.read` and unpacked
+back using :py:meth:`~rig.machine_control.MachineController.read` and unpack it
 using Python's :py:mod:`struct` module.
 
 .. literalinclude:: adder.py
     :language: python
     :lines: 35-37
 
-As before, the last step is to send to "stop" signal to SpiNNaker using
+As before, the last step is to send a "stop" signal to SpiNNaker using
 :py:meth:`~rig.machine_control.MachineController.send_signal`. This signal will
 automatically free all allocated blocks of SDRAM.
 
 In this tutorial we used some fairly low-level APIs for accessing SpiNNaker's
 memory. In the next tutorial we'll use some of Rig's higher-level APIs to make
 the process of accessing SpiNNaker's memory and cleaning up after an
-application easier and more robust. Continue to :ref:`part 03 <tutorial-03>`.
+application easier and safer. Continue to :ref:`part 03 <tutorial-03>`.

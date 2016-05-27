@@ -5,9 +5,8 @@
 
 In this part of the tutorial we'll finally begin work on a real program: a
 digital circuit simulator. In this stage of the tutorial we'll build the
-SpiNNaker application kernels and build a proof-of-concept host program to
-hook these kernels together in a fixed fashion to demonstrate everything
-working.
+SpiNNaker application kernels and a proof-of-concept host program to hook these
+kernels together in a fixed circuit to demonstrate everything working.
 
 The source files used in this tutorial can be downloaded below:
 
@@ -33,7 +32,7 @@ with truth-tables defining their behaviour.
 .. figure:: diagrams/logic_gates.png
     :alt: The symbols for a NOT, AND, OR and XOR.
     
-    Four simple 'logic gates' which compute a simple boolean function. The
+    Four simple 'logic gates' which each compute a simple boolean function. The
     'truth tables' below enumerate the output values of each gate for every
     possible input.
     
@@ -84,8 +83,8 @@ to understand *why* the adder circuit works but you should be able to
 understand how input values flow through the circuit eventually resulting in
 outputs. Working out how to build a functioning CPU out of these gates is left
 as `an exercise for the easily distracted reader
-<http://jhnet.co.uk/misc/STUMP_colour.pdf>`_ and is outside the scope of this
-tutorial...
+<http://jhnet.co.uk/misc/STUMP_colour.pdf>`_ and is well outside the scope of
+this tutorial...
 
 
 Modelling a logic gate
@@ -93,28 +92,27 @@ Modelling a logic gate
 
 Our circuit simulator will use a whole SpiNNaker core for each logic gate it
 simulates. Every millisecond each application core will recompute its output
-and send a multicast packet which is sent to all inputs connected to the gate's
-output. When a gate receives a multicast packet indicating the value of one of
-its inputs it stores the value indicated by the packet to use next time the
-gate's output value is computed.
+and send a multicast packet to any connected gates. When a gate receives a
+multicast packet indicating the value of one of its inputs it stores it to use
+next time the gate's output value is computed.
 
 Rather than writing an individual SpiNNaker application kernel for each type of
 gate we want to simulate, we'll instead write a single application kernel which
-is configured with a look-up table (i.e. a 'truth table') by the host.
+is configured with a look-up table (i.e. a 'truth table') by the host to
+whatever any functions we require.
 
-``gate.c`` contains the full source listing for our gate simulation. We'll
-walk through the key parts below.
-
-The timer is configured to call the ``on_tick()`` function every millisecond.
+``gate.c`` contains the full source listing for our gate kernel. We'll walk
+through the key parts below.
 
 .. literalinclude:: gate.c
     :language: c
     :lines: 53-68
 
-The ``on_tick()`` function looks-up the simulated gate's value in a lookup
-table based on the most recently received input values. The output value is
-then sent via a SpiNNaker multicast packet. The function is also responsible
-for terminating the simulation after a predetermined amount of time.
+The timer is configured to call the ``on_tick()`` function every millisecond.
+This function looks-up the desired output value in a lookup table based on the
+most recently received input values. The output value is then sent via a
+SpiNNaker multicast packet. The function is also responsible for terminating
+the simulation after a predetermined amount of time.
 
 The ``last_input_a`` and ``last_input_b`` variables are set by the
 ``on_mc_packet()`` function which is called whenever a multicast packet arrives
@@ -138,26 +136,18 @@ behaviour of the gate being simulated.
 
 The pointer to the ``config`` struct is set using the ``sark_tag_ptr()`` as
 described in the previous tutorials and the callbacks setup in the ``c_main()``
-function. The details of the 'Spin1 API' used by the application kernel is out
-of the scope of this tutorial.
+function.
 
-Compiling the kernels
----------------------
-
-A ``Makefile`` is provided which builds all three kernels when you type::
-
-    $ make
-
-Stimulus and recording kernels
-------------------------------
+Stimulus and probing kernels
+----------------------------
 
 To make our simulator useful we need to be able to provide input stimulus and
 record the output produced. To do this we'll create two additional SpiNNaker
 application kernels: ``stimulus.c`` and ``probe.c``.
 
-The stimulus kernel will simply output a sequence, one each millisecond, of
-values which is loaded into its memory by the host. As in the gate kernel, a
-configuration struct is defined which the host is expected to populate:
+The stimulus kernel will simply output a sequence of values stored in memory,
+one each millisecond. As in the gate kernel, a configuration struct is defined
+which the host is expected to populate:
 
 .. literalinclude:: stimulus.c
     :language: c
@@ -172,8 +162,8 @@ into the network:
 
 The probe kernel takes on the reverse role: every millisecond it records the
 most recent input value it recieved into memory. The host can later read this
-data back from memory. Once more, a configuration struct is defined which the
-host will populate and which the probe will add recorded data:
+data back. Once more, a configuration struct is defined which the host will
+populate and to which the probe will add recorded data:
 
 .. literalinclude:: probe.c
     :language: c
@@ -201,12 +191,19 @@ the most recently recieved input value:
     :lines: 63-66
 
 
+Compiling the kernels
+---------------------
+
+A ``Makefile`` is provided which builds all three kernels when you type::
+
+    $ make
+
 A proof-of-concept host program
 -------------------------------
 
 To try out our new application kernels we'll now put together a
-proof-of-concept host application which hand-builds a single circuit and
-hard-codes all configuration data for each application kernel. Our
+proof-of-concept host application which uses our kernels to simulate a single
+circuit and hard-codes all configuration data for each application kernel. Our
 proof-of-concept system will simulate the following circuit:
 
 .. figure:: diagrams/example_circuit.png
@@ -227,7 +224,7 @@ Component       Chip    Core  Kernel
 ==============  ======  ====  ============
 
 The five wires numbered 1 to 5 in the circuit diagram will be carried by
-multicast routes wose key is the wire number.
+multicast routes whose key is the wire number.
 
 This assignment is illustrated in the figure below:
 
@@ -253,7 +250,7 @@ configuration structs of each of the six applications using
 
 .. literalinclude:: circuit_simulator_proof.py
     :language: python
-    :lines: 25-38
+    :lines: 25-41
 
 .. tip::
     
@@ -268,7 +265,7 @@ pack the desired data:
 
 .. literalinclude:: circuit_simulator_proof.py
     :language: python
-    :lines: 42-75
+    :lines: 43-76
 
 In order to route the multicast packets to their appropriate destinations we
 must define some routing table entries on the chips we're using. We build up a
@@ -304,9 +301,9 @@ and cores using :py:meth:`~rig.machine_control.MachineController.load_applicatio
 
 .. note::
     
-    :py:meth:`~rig.machine_control.MachineController.load_application` is able
-    to load several applications onto several chips and cores simultaneously
-    using an efficient flood-fill mechanism.
+    :py:meth:`~rig.machine_control.MachineController.load_application` uses an
+    efficient flood-fill mechanism to applications onto several chips and cores
+    simultaneously.
 
 The 'Spin1 API' used to write the application kernels causes our kernels to
 wait at the 'sync0' barrier once the ``spin1_start()`` function is called at
@@ -321,8 +318,8 @@ to wait for all six application kernels to reach the 'sync0' barrier:
 
 Next we send the 'sync0' signal using
 :py:meth:`~rig.machine_control.MachineController.send_signal` which causes all
-application kernels to start running. After 64 ms all of the applications should
-terminate have terminated and we wait for them to exit using
+application kernels to start running. After 64 ms all of the applications
+should terminate and we wait for them to exit using
 :py:meth:`~rig.machine_control.MachineController.wait_for_cores_to_reach_state`.
 
 .. literalinclude:: circuit_simulator_proof.py

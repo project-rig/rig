@@ -14,9 +14,6 @@ The source files used in this tutorial can be downloaded below:
     * :download:`hello.c`
     * :download:`Makefile`
 
-SpiNNaker application
----------------------
-
 As is tradition our first application will simply print 'Hello, world!' and
 exit. In this application our SpiNNaker application kernel will simply write
 its greeting into memory on a SpiNNaker chip and then terminate. Our host
@@ -65,8 +62,8 @@ Host-side application
 Now that we have our compiled binary we must boot our SpiNNaker machine, load
 our application onto a core and then read back the IO buffer. We *could* do
 this using the `ybug` command included with 'spinnaker_tools' but since we're
-building up towards a real application we'll write a Python which will automate
-all these steps.
+building up towards a real application we'll write a Python program which will
+automate all these steps.
 
 .. note::
 
@@ -90,7 +87,7 @@ avoid hard-coding it into our script.
 
 Next to boot the machine we use the
 :py:meth:`~rig.machine_control.MachineController.boot` method. If the machine
-is already booted, this command is a 'no-op'.
+is already booted, this command does nothing.
 
 .. literalinclude:: hello.py
     :language: python
@@ -99,7 +96,7 @@ is already booted, this command is a 'no-op'.
 Next we'll load our application using the
 :py:meth:`~rig.machine_control.MachineController.load_application` method.
 This method loads our application onto core 1 of chip (0, 0), checks it was
-loaded successfully and then starts the program executing before returning.
+loaded successfully and then starts the program executing.
 
 .. literalinclude:: hello.py
     :language: python
@@ -153,5 +150,5 @@ Our script is now finished and can then be executed like so::
     machine is already booted, the script should run almost instantaneously.
 
 Once the excitement of being greeted by a super computer has worn off, its time
-to move on to the next tutorial where we'll set SpiNNaker to work on some
-'real' computation in :ref:`part 02 <tutorial-02>`.
+to set SpiNNaker to work on some 'real' computation. Lets head onward to
+:ref:`part 02 <tutorial-02>`.

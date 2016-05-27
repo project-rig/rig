@@ -1,3 +1,5 @@
+.. _ten-lines:
+
 Quick-start examples in under 10 lines of code
 ==============================================
 
@@ -8,8 +10,8 @@ statements) of Python.
 .. toctree::
     :maxdepth: 1
     
+    machine_controller.rst
+    place_and_route.rst
+    scripts.rst
     type_casts_doctest.rst
     bitfield_doctest.rst
-    place_and_route.rst
-    machine_controller.rst
-    scripts.rst

@@ -25,17 +25,15 @@ simulations onto the SpiNNaker machine.
 
 The digital circuit simulator we'll be building in this tutorial closely
 follows the program structure used on real-world SpiNNaker applications. Though
-only a very small program, under 400 lines of heavily annotated Python, our
+only a very small program (under 400 lines of heavily annotated Python) our
 simulator goes through almost all of the steps real neural simulation
 applications do, including implementing a high-level domain-specific 'language'
-for describing simulations. With luck upon completing these tutorials you will
+for describing simulations. With luck after completing these tutorials you will
 have an understanding of how to go about building your own SpiNNaker
 applications.
 
 Before getting stuck in, we'll first take a look at how a typical SpiNNaker
-application works and highlight how Rig fits into this picture. This is
-followed by some brief instructions on setting up the required software and
-libraries and then we'll be ready to start programming a super computer!
+application is structured and highlight how Rig fits into this picture.
 
 
 SpiNNaker applications and Rig
@@ -60,11 +58,10 @@ Host application
     and processes results.
 
 Though it is indeed the SpiNNaker application kernel which is responsible for
-most of the actual computation achieved by an application it is the host
-program which is often the most complex. Rig is a library designed to help with
-the process of writing host applications by providing tools and functions which
-simplify the task of interacting with and organising application kernels on a
-SpiNNaker machine.
+most of the actual computation, it is often the host program which is the most
+complex. Rig is a library designed to help with the process of writing host
+applications by providing tools and functions which simplify the task of
+interacting with and programming a SpiNNaker machine.
 
 In this tutorial we'll be building an application which follows the program
 structure used by the host programs of many existing nerual simulation tools
@@ -81,14 +78,14 @@ graph of SpiNNaker-core-sized (*vertices*) which communicate with eachother
 (via *nets*). This first step is usually very application specific and so Rig
 does not provide any functions at this stage.
 
-In the next phase of application execution (place and route) the graph of
-vertices and nets is mapped onto specific cores and routes in SpiNNaker's
-network. Rig provides a number of utilities and algorithms for performing place
-and route tasks on SpiNNaker applications in the :py:mod:`rig.place_and_route`
-module. The figure below illustrates how the Rig library breaks place and route
-into three stages: placement, allocation and routing. In most applications this
-process can be handled automatically by a simple wrapper function but more
-advanced applications can customise the process.
+In the place and route phase of application execution, this graph of vertices
+and nets is mapped onto specific cores and routes in SpiNNaker's network. Rig
+provides a number of utilities and algorithms for performing place and route
+tasks for SpiNNaker applications in the :py:mod:`rig.place_and_route` module.
+The figure below illustrates how Rig breaks place and route into three stages:
+placement, allocation and routing. In most applications this process can be
+handled automatically by a simple wrapper function but more advanced
+applications can customise the process.
 
 .. figure:: diagrams/place_and_route.png
     :alt: The standard place-and-route process used in most neural simulators.
@@ -125,7 +122,7 @@ application specific task.
     this particular program structure. Rig can be (and has been) used in
     numerous applications with widly different structures. Examples include
     interactive use in the Python interpreter, `cabling validation software
-    <https://github.com/SpiNNakerManchester/SpiNNer>`_ and `side-wide SpiNNaker
+    <https://github.com/SpiNNakerManchester/SpiNNer>`_ and `site-wide SpiNNaker
     job management and machine sharing
     <https://github.com/project-rig/spalloc_server>`_.
 

@@ -13,6 +13,13 @@ documented interface for SpiNNaker application developers.
 Getting started
 ---------------
 
+If you're new to Rig, here are two options for getting started: If you're
+feeling impatient and want to start playing, take a look at :ref:`some of the
+ten-line quick-start example programs <ten-lines>`. Alternatively the
+:ref:`'hello world' to circuit simulator tutorial<circuit-sim-tutorial>` gives
+a detailed introduction to building real-world SpiNNaker applications using Rig
+(still in under 400 lines of heavily commented Python).
+
 .. toctree::
     :maxdepth: 2
     

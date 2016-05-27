@@ -5,9 +5,9 @@
 
 In the :ref:`previous part of this tutorial <tutorial-04>` we built a simple
 digital circuit simulator which used several application kernels running on
-multiple SpiNNaker chips which communicate via multicast packets. In our
+multiple SpiNNaker chips communicating via multicast packets. In our
 proof-of-concept host program implementation, the chip and core to use for each
-kernel was chosen by hand and all routing tables were written 'by hand'. Though
+kernel was chosen by hand and all routing tables were written manually. Though
 this works, it made our simulator incredibly inflexible and the host program
 hard to modify and extend.
 
@@ -15,7 +15,9 @@ In this part of the tutorial we'll leave the application kernels unchanged but
 re-write our host program to make use of the automatic place-and-route tools
 provided by Rig. These tools automate the process of assigning application
 kernels to specific cores and generating routing tables while attempting to
-make efficient use of the machine.
+make efficient use of the machine. We'll also restructure our host program to
+be more like a real-world application complete with a simple user-facing
+interface.
 
 The source files used in this tutorial can be downloaded below:
 
@@ -55,16 +57,15 @@ Before diving into the code it is first important to understand what the Rig
 place-and-route tools do.
 
 Rig provides a suite of placement and routing algorithms in its
-:py:mod:`rig.place_and_route` module. These algorithms take abstract
-descriptions of SpiNNaker application kernels which consume SDRAM and
-communicating with each other. Based on this information the place and route
-algorithms select which core each kernel will be loaded onto, keeping
-communicating cores close together to reduce network load. Routing tables are
-also generated which allow the kernels to communicate, wheverever they happen
-to end up.
+:py:mod:`rig.place_and_route` module. In essence, these algorithms accept
+abstract descriptions of graphs of communicating SpiNNaker application kernels
+as input. Based on this information the place and route algorithms select which
+core each kernel will be loaded onto, keeping communicating cores close
+together to reduce network load. Routing tables are also generated
+automatically which make efficient use of SpiNNaker's network.
 
-In Rig terminology, we must describe our application as an abstract
-(hyper-)graph of *vertices* connected together by *nets*:
+In Rig terminology, the abstract (hyper-)graph of application kernels are known
+as *vertices* which are together by *nets*:
 
 vertices
     Approximately speaking, a vertex represents a group of cores and SDRAM
@@ -82,7 +83,7 @@ nets
 In addition to graph of vertices and nets, the place and route tools require a
 description of the SpiNNaker machine our simulation will be running on. As we
 will see later, the :py:class:`~rig.machine_control.MachineController` provides
-a method for requesting this information.
+a method for gathering this information.
 
 
 Building the circuit simulator API
@@ -92,22 +93,24 @@ What follows is a (non-linear) walk-through of the most important parts of the
 circuit simulator host program provided in ``circuit_simulator.py``.
 
 In most host applications built with Rig, the graph of vertices and nets fed to
-the place and route tools are generated from application-specific data
-structures. In this circuit simulator example we'll follow this approach too so
-lets start by defining the some Python classes which make up the API.
+the place and route tools are generated just before place-and-route from
+application-specific data structures. This allows the majority of the
+application to use data structures which best fit the application. In this
+circuit simulator example we'll follow this approach too so lets start by
+defining the some Python classes which make up the API.
 
 Defining a wire
 ```````````````
 
-A wire is defined by the circuit simulator represents a connection from one
-component's output to many components' inputs and is defined as follows:
+A wire represents a connection from one component's output to many components'
+inputs and is defined as follows:
 
 .. literalinclude:: circuit_simulator.py
     :language: python
     :lines: 21-41
 
 A ``_Wire`` instance contains a source component, a :py:class:`list` of sink
-components and a unique routing key to use un the simulation. The ``Simulator``
+components and a unique routing key to use in the simulation. The ``Simulator``
 object (to be defined later) will be responsible for creating new ``_Wire``
 objects.
 
@@ -204,11 +207,10 @@ resources consumed by each vertex in our application:
 
 Each entry in the ``vertices_resources`` dictionary contains another dictionary
 mapping 'resources' to the required quantities of each resource. As in most
-applications, the only resources we care about are
-:py:data:`~rig.place_and_route.Cores` and
-:py:data:`~rig.place_and_route.SDRAM`. By convention these resources are
-identified to by the corresponding `sentinels
-<https://pypi.python.org/pypi/sentinel>`_ defined by Rig.
+applications, the only resources we care about are Cores and SDRAM. By
+convention these resources are identified to by the corresponding
+:py:data:`~rig.place_and_route.Cores` and :py:data:`~rig.place_and_route.SDRAM`
+`sentinels <https://pypi.python.org/pypi/sentinel>`_ defined by Rig.
 
 Each vertex requires exactly one core but the amount of SDRAM required depends
 on the type of component and length of the simulation. A ``_get_config_size()``
@@ -227,8 +229,8 @@ requirements like so:
     :language: python
     :lines: 213,241-245
 
-Next we must define the filename of the spinnaker application kernel (i.e. the
-APLX file) used for each vertex.
+Next we must also define the filename of the spinnaker application kernel (i.e.
+the APLX file) used for each vertex.
 
 .. literalinclude:: circuit_simulator.py
     :language: python
@@ -253,7 +255,7 @@ component type:
 Next we enumerate the nets representing the streams of multicast packets
 flowing between vertices as well as the routing keys and masks used for each
 net. Rig expects nets to be defined by :py:class:`~rig.netlist.Net` objects.
-Like the ``_Wire`` objects in our simulator, :py:class:`~rig.netlist.Net`
+Like the ``_Wire`` objects in our simulator, :py:class:`~rig.netlist.Net`\ s
 simply contain a source vertex and a list of sink vertices. In the code below
 we build a :py:class:`dict` mapping :py:class:`~rig.netlist.Net`\ s to ``(key,
 mask)`` tuples for each wire in the simulation:
@@ -276,7 +278,7 @@ shortly to perform place and route.
 
 .. literalinclude:: circuit_simulator.py
     :language: python
-    :lines: 326-328
+    :lines: 327-329
     :dedent: 8
 
 Place and route
@@ -285,7 +287,7 @@ Place and route
 The place and route process can be broken up into many steps such as placement,
 allocation, routing and routing table generation. Though some advanced
 applications may find it useful to break these steps appart, our circuit
-simulator, like many other applications, does not. As a result Rig provides the
+simulator, like many other applications, does not. Rig provides a
 :py:func:`~rig.place_and_route.place_and_route_wrapper` function which saves us
 from the 'boilerplate' of doing each step seperately. This function takes the
 graph description we constructed above and performs the place and route process
@@ -300,7 +302,7 @@ The ``placements`` and ``allocations`` :py:class:`dict` returned by
 :py:func:`~rig.place_and_route.place_and_route_wrapper` together define the
 specific chip and core each vertex has been assigned to (see
 :py:func:`~rig.place_and_route.place` and
-:py:func:`~rig.place_and_route.allocate`) for details.
+:py:func:`~rig.place_and_route.allocate` for details).
 
 ``application_map`` is a  :py:class:`dict` describing what application kernels
 need to be loaded onto what cores in the machine.
@@ -318,10 +320,10 @@ every chip where our application kernels will run.
 The :py:func:`~rig.machine_control.utils.sdram_alloc_for_vertices` utility
 function takes a :py:class:`~rig.machine_control.MachineController` and the
 ``placements`` and ``allocations`` :py:class:`dict`\ s produced during place
-and route and allocates a block of SDRAM for each vertex with a tag matching
-the core number of the vertex and the size determined by the quantity of
-:py:data:`~rig.place_and_route.SDRAM` consumed by the vertex as indicated in
-``vertices_resources``.
+and route and allocates a block of SDRAM for each vertex. Each allocation is
+given a tag matching the core number of the vertex and the size determined by
+the quantity of :py:data:`~rig.place_and_route.SDRAM` consumed by the vertex,
+as orriginally indicated in ``vertices_resources``.
 
 .. literalinclude:: circuit_simulator.py
     :language: python
@@ -333,7 +335,7 @@ component classes) to a
 :py:class:`~rig.machine_control.machine_controller.MemoryIO` file-like
 interface to SpiNNaker's memory.
 
-We now add a ``_write_config`` method to each of our component classes which is
+We add a ``_write_config`` method to each of our component classes which is
 passed a :py:class:`~rig.machine_control.machine_controller.MemoryIO` object
 into which configuration data is written.
 
@@ -366,15 +368,15 @@ Next, the routing tables and SpiNNaker applications are loaded using
     :dedent: 12
 
 We now wait for the applications to reach thier initial barrier, send the
-'sync0' signal to start simulation and finally wait for the cores to exit.
+'sync0' signal to start simulation and, finally, wait for the cores to exit.
 
 .. literalinclude:: circuit_simulator.py
     :language: python
     :lines: 354-361
     :dedent: 12
 
-The final step is to read back results from the machine. As with loading, we
-add a ``_read_results`` method to each component type which we call with a
+The last step is to read back results from the machine. As with loading, we add
+a ``_read_results`` method to each component type which we call with a
 :py:class:`~rig.machine_control.machine_controller.MemoryIO` object from which
 it should read any results it requires:
 
@@ -394,8 +396,8 @@ Trying it out
 -------------
 
 Congratulations! Our circuit simulator is now complete! We can now run the
-example script we used to define our simulator's API and with a second or so we
-have our results!
+example script we used to define our simulator's API and within a second or so
+we have our results!
 
 ::
 

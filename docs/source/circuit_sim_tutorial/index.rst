@@ -1,3 +1,5 @@
+.. _circuit-sim-tutorial:
+
 Tutorial: From 'hello world' to a full application
 ==================================================
 

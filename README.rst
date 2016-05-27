@@ -31,7 +31,15 @@ Index <https://pypi.python.org/pypi/rig/>`_ using::
 
     pip install rig
 
-The corresponding `documentation is available on
+You could then use Rig to write a Python one-liner to count the number of cores
+in your SpiNNaker super computer::
+
+    >>> from rig.machine_control import MachineController
+    >>> sum(chip.num_cores for chip in
+    ...     MachineController("spinn-4").get_system_info().values())
+    514301
+
+To find out how to do something useful, head over to the `Rig documentation on
 ReadTheDocs <http://rig.readthedocs.org/>`_.
 
 See `DEVELOP.md`__ for information on how to get involved in Rig development
