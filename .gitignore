@@ -55,3 +55,4 @@ target/
 
 # Vi[m] swap files
 *.swp
+*.swo

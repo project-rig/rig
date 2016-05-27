@@ -10,55 +10,55 @@ documented interface for SpiNNaker application developers.
 
 .. _SpiNNaker: http://apt.cs.manchester.ac.uk/projects/SpiNNaker/
 
-The following documentation aims to provide new users with a high-level
-introduction to all of the key parts of Rig and also present a formal API
-reference which is also available via Python's ``help()`` system.
-
-Installation
-------------
+Getting started
+---------------
 
 .. toctree::
-        :maxdepth: 2
+    :maxdepth: 2
+    
+    install
+    circuit_sim_tutorial/index.rst
 
-        install
+Reference manual
+----------------
 
 Data packaging for SpiNNaker
-----------------------------
+````````````````````````````
 
 .. toctree::
-        :maxdepth: 2
-
-        type_casts
-        bitfield_doctest
+    :maxdepth: 2
+    
+    type_casts
+    bitfield_doctest
 
 Graph-to-machine mapping
-------------------------
+````````````````````````
 
 .. toctree::
-        :maxdepth: 3
-        
-        place_and_route
-        routing_table_tools_doctest
-        geometry
+    :maxdepth: 3
+    
+    place_and_route
+    routing_table_tools_doctest
+    geometry
 
 
 Execution control and machine management
-----------------------------------------
+````````````````````````````````````````
 
 .. toctree::
-        :maxdepth: 2
-
-        control
-        wizard
+    :maxdepth: 2
+    
+    control
+    wizard
 
 
 Standalone utility applications
--------------------------------
+```````````````````````````````
 
 .. toctree::
-        :maxdepth: 2
-
-        utility_apps
+    :maxdepth: 2
+    
+    utility_apps
 
 Indicies and Tables
 -------------------
