@@ -21,6 +21,11 @@ Getting started
 .. toctree::
     :maxdepth: 2
     
+    ten_lines/index.rst
+
+.. toctree::
+    :maxdepth: 2
+    
     circuit_sim_tutorial/index.rst
 
 .. toctree::
