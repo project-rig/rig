@@ -3,12 +3,7 @@
 
 Rig provides various high-level APIs for communicating with and controlling
 SpiNNaker machines. New users are encouraged to start by working through the
-introductory tutorials:
-
-.. toctree::
-        :maxdepth: 2
-
-        control_tutorials
+:ref:`introductory tutorials <control-tutorials>`:
 
 :py:mod:`~rig.machine_control.MachineController`: SpiNNaker Control API
 -----------------------------------------------------------------------

@@ -17,10 +17,28 @@ Getting started
     :maxdepth: 2
     
     install
+
+.. toctree::
+    :maxdepth: 2
+    
     circuit_sim_tutorial/index.rst
+
+.. toctree::
+        :maxdepth: 2
+
+        control_tutorials
+
+.. toctree::
+    :maxdepth: 1
+    
+    bitfield_tutorial_doctest
 
 Reference manual
 ----------------
+
+The Rig reference manual describes Rig's public APIs, grouped by function. Most
+of this documentation is also accessible using Python's :py:func:`help`
+facility.
 
 Data packaging for SpiNNaker
 ````````````````````````````

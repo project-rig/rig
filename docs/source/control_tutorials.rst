@@ -1,7 +1,9 @@
 .. py:module::rig.machine_control
 
-Machine Control Tutorials
-=========================
+.. _control-tutorials:
+
+Tutorial: Controlling SpiNNaker machines
+========================================
 
 SpiNNaker machines consist of a network of SpiNNaker chips and, in larger
 systems, a set of Board Management Processors (BMPs) which control and monitor
