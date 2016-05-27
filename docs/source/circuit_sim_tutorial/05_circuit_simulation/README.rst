@@ -260,7 +260,7 @@ mask)`` tuples for each wire in the simulation:
 
 .. literalinclude:: circuit_simulator.py
     :language: python
-    :lines: 320-322
+    :lines: 320-323
     :dedent: 8
 
 The final piece of information required is a description of the SpiNNaker

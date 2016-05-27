@@ -36,5 +36,5 @@ result_data = mc.read(sdram_addr + 9, 4, x=0, y=0)
 result, = struct.unpack("<I", result_data)
 print("{} + {} = {}".format(num_a, num_b, result))
 
-# Free up any SpiNNaker resources 
+# Free up any SpiNNaker resources
 mc.send_signal("stop")

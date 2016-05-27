@@ -22,5 +22,5 @@ mc.wait_for_cores_to_reach_state("exit", 1)
 # Print out the message printed by the application
 print(mc.get_iobuf(x=0, y=0, p=1))
 
-# Free up any SpiNNaker resources 
+# Free up any SpiNNaker resources
 mc.send_signal("stop")
