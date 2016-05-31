@@ -284,10 +284,22 @@ method of the :py:class:`~rig.machine_control.MachineController`.
 
 .. note::
     
-    Though the details of SpiNNaker's multicast router are out of the scope of
-    this tutorial, in brief: we must add a routing entry wherever a packet
-    enters the network, changes direction or leaves the network for a local
-    core.
+    The details of SpiNNaker's multicast router are outside of the scope of
+    this tutorial. In the next part of the tutorial we'll use Rig's
+    place-and-route facilities to generate these tables automatically so
+    understanding how SpiNNaker's router works is not strictly necessary
+    (though often helpful!).
+    
+    In brief: we must add a routing entry wherever a packet enters the network,
+    changes direction or leaves the network for a local core. A packet's
+    routing key is matched by an entry in the table whenever ``(packet_key &
+    table_entry_mask) == table_entry_key``. If no routing entry matches a
+    packet's key, the packet is 'default-routed' in a straight line to the
+    opposite link to the one it arrived on. The Section 10.4 (page 39) of the
+    `SpiNNaker Datasheet
+    <https://solem.cs.man.ac.uk/documentation/datasheet/SpiNN2DataShtV202.pdf>`_
+    provides a good introduction to SpiNNaker's multicast router and routing
+    tables.
 
 .. literalinclude:: circuit_simulator_proof.py
     :language: python
