@@ -1,6 +1,6 @@
-codecov:
+coverage:
   ignore:
-  - rig/place_and_route/place/sa/kernel.py
+    - rig/place_and_route/place/sa/kernel.py
   status:
     patch: false
-  comment: false
+comment: false
