@@ -32,7 +32,7 @@ mc.load_application("adder.aplx", {(0, 0): {1}})
 mc.wait_for_cores_to_reach_state("exit", 1)
 
 # Read back the result and print it out
-result_data = mc.read(sdram_addr + 9, 4, x=0, y=0)
+result_data = mc.read(sdram_addr + 8, 4, x=0, y=0)
 result, = struct.unpack("<I", result_data)
 print("{} + {} = {}".format(num_a, num_b, result))
 

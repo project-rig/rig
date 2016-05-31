@@ -28,22 +28,22 @@ a detailed introduction to building real-world SpiNNaker applications using Rig
 .. toctree::
     :maxdepth: 2
     
-    ten_lines/index.rst
-
-.. toctree::
-    :maxdepth: 2
-    
     circuit_sim_tutorial/index.rst
 
 .. toctree::
-        :maxdepth: 2
+    :maxdepth: 2
 
-        control_tutorials
+    control_tutorials
 
 .. toctree::
     :maxdepth: 1
     
     bitfield_tutorial_doctest
+
+.. toctree::
+    :maxdepth: 2
+    
+    ten_lines/index.rst
 
 Reference manual
 ----------------

@@ -322,9 +322,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1"
-     inkscape:cx="236.80567"
-     inkscape:cy="146.74011"
+     inkscape:zoom="0.83918571"
+     inkscape:cx="211.51456"
+     inkscape:cy="186.74011"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -332,9 +332,9 @@
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0"
-     inkscape:window-width="1148"
+     inkscape:window-width="956"
      inkscape:window-height="1044"
-     inkscape:window-x="768"
+     inkscape:window-x="0"
      inkscape:window-y="16"
      inkscape:window-maximized="0" />
   <metadata
@@ -1239,7 +1239,7 @@
                id="tspan13292"
                x="314.48077"
                y="560.29724"
-               style="font-size:13.5px;text-align:center;text-anchor:middle"> </tspan><tspan
+               style="font-size:13.5px;text-align:center;text-anchor:middle" /><tspan
                id="tspan13296"
                sodipodi:role="line"
                x="313.04376"
@@ -1369,7 +1369,7 @@
          y="388.13577"
          x="60.859158"
          sodipodi:role="line"
-         id="tspan14024">Seperation of the allocation</tspan><tspan
+         id="tspan14024">Separation of the allocation</tspan><tspan
          style="font-size:15px;text-align:center;text-anchor:middle;fill:#ce5c00"
          y="406.88577"
          x="60.859158"
@@ -1418,7 +1418,7 @@
              y="488.1723"
              x="313.7814"
              sodipodi:role="line"
-             id="tspan13816"></tspan><tspan
+             id="tspan13816" /><tspan
              style="font-size:13.5px;text-align:center;text-anchor:middle"
              y="505.0473"
              x="313.7814"
@@ -1449,7 +1449,7 @@
              sodipodi:role="line"
              x="313.7814"
              y="488.1723"
-             style="font-size:13.5px;text-align:center;text-anchor:middle"></tspan><tspan
+             style="font-size:13.5px;text-align:center;text-anchor:middle" /><tspan
              sodipodi:role="line"
              x="313.7814"
              y="505.0473"
@@ -1473,7 +1473,7 @@
          y="406.88577"
          x="301.03061"
          sodipodi:role="line"
-         id="tspan29745">fault-tolearnt multicast</tspan><tspan
+         id="tspan29745">fault-tolerant multicast</tspan><tspan
          style="font-size:15px;text-align:center;text-anchor:middle;fill:#ce5c00"
          y="425.63577"
          x="301.03061"
