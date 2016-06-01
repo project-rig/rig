@@ -1,3 +1,5 @@
+.. _installation:
+
 Installation
 ============
 
@@ -35,13 +37,13 @@ file in the repository for instructions on setting up a suitable development
 environment and running tests etc.
 
 Optional Extras
-===============
+---------------
 
 The following extra packages may also be installed in addition to Rig to enable
 additional functionality.
 
 ``rig_c_sa`` (for faster placement)
------------------------------------
+```````````````````````````````````
 
 ::
 

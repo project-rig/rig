@@ -1,7 +1,9 @@
 .. py:module::rig.machine_control
 
-Machine Control Tutorials
-=========================
+.. _control-tutorials:
+
+Tutorial: Controlling SpiNNaker machines
+========================================
 
 SpiNNaker machines consist of a network of SpiNNaker chips and, in larger
 systems, a set of Board Management Processors (BMPs) which control and monitor
@@ -49,7 +51,7 @@ A tutorial for each of these interfaces is presented below.
 :py:class:`.MachineController`
 ------------------------------
 
-To get started, lets instantiate a :py:class:`.MachineController` which is as
+To get started, let's instantiate a :py:class:`.MachineController`. This is as
 simple as giving the hostname or IP address of the machine::
 
     >>> from rig.machine_control import MachineController

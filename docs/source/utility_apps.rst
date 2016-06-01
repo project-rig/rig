@@ -87,6 +87,8 @@ And for BMPs::
     Temperature bottom: 30.0 *C
 
 
+.. _rig-discover:
+
 ``rig-discover``
 ----------------
 
@@ -152,6 +154,8 @@ command)::
     --- --- --- ----------------- ---------------- ------
       0   0   3 sync0             network_tester       66
 
+
+.. _rig-counters:
 
 ``rig-counters``
 ----------------
