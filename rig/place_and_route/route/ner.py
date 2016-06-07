@@ -311,6 +311,29 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
     return path
 
 
+def route_has_dead_links(root, machine):
+    """Quickly determine if a route uses any dead links.
+
+    Parameters
+    ----------
+    root : :py:class:`~rig.place_and_route.routing_tree.RoutingTree`
+        The root of the RoutingTree which contains nothing but RoutingTrees
+        (i.e. no vertices and links).
+    machine : :py:class:`~rig.place_and_route.Machine`
+        The machine in which the routes exist.
+
+    Returns
+    -------
+    bool
+        True if the route uses any dead/missing links, False otherwise.
+    """
+    for direction, (x, y), routes in root.traverse():
+        for route in routes:
+            if (x, y, route) not in machine:
+                return True
+    return False
+
+
 def avoid_dead_links(root, machine, wrap_around=False):
     """Modify a RoutingTree to route-around dead links in a Machine.
 
@@ -429,7 +452,8 @@ def route(vertices_resources, nets, machine, constraints, placements,
                                wrap_around, radius)
 
         # Fix routes to avoid dead chips/links
-        root, lookup = avoid_dead_links(root, machine, wrap_around)
+        if route_has_dead_links(root, machine):
+            root, lookup = avoid_dead_links(root, machine, wrap_around)
 
         # Add the sinks in the net to the RoutingTree
         for sink in net.sinks:

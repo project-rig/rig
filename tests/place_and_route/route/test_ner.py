@@ -15,7 +15,7 @@ from rig.routing_table import Routes
 from rig.place_and_route.route.utils import links_between
 
 from rig.place_and_route.route.ner import ner_net, \
-    copy_and_disconnect_tree, a_star, avoid_dead_links
+    route_has_dead_links, copy_and_disconnect_tree, a_star, avoid_dead_links
 
 from rig.place_and_route.exceptions import MachineHasDisconnectedSubregion
 
@@ -200,6 +200,29 @@ def test_ner_net(source, destinations, width, height,
     assert source in visited
     for destination in destinations:
         assert destination in visited
+
+
+def test_route_has_dead_links():
+    machine = Machine(10, 10, dead_links=set([(0, 0, Links.north)]))
+
+    # Null tree should be fine
+    t = RoutingTree((0, 0))
+    assert route_has_dead_links(t, machine) is False
+
+    # Tree not going through a dead link should be OK
+    t11 = RoutingTree((1, 1))
+    t00 = RoutingTree((0, 0), {(Routes.north_east, t11)})
+    assert route_has_dead_links(t00, machine) is False
+
+    # Tree not going in opposite direction to dead link should be fine
+    t00 = RoutingTree((0, 0))
+    t01 = RoutingTree((0, 1), {(Routes.south, t00)})
+    assert route_has_dead_links(t01, machine) is False
+
+    # Tree going via dead link should fail
+    t01 = RoutingTree((0, 1))
+    t00 = RoutingTree((0, 0), {(Routes.north, t01)})
+    assert route_has_dead_links(t00, machine) is True
 
 
 def test_copy_and_disconnect_tree():
