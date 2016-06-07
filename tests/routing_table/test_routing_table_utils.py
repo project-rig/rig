@@ -25,8 +25,8 @@ def test_routing_tree_to_tables():
 
     # Single net with a singleton route ending in a number of links.
     net = Net(object(), object())
-    routes = {net: RoutingTree((1, 1), set([(Routes.north, object()),
-                                            (Routes.core_1, object())]))}
+    routes = {net: RoutingTree((1, 1), [(Routes.north, object()),
+                                        (Routes.core_1, object())])}
     net_keys = {net: (0xDEAD, 0xBEEF)}
     assert routing_tree_to_tables(routes, net_keys) == \
         {(1, 1): [
@@ -38,7 +38,7 @@ def test_routing_tree_to_tables():
     # direction specified should result in a terminus being added but nothing
     # else.
     net = Net(object(), object())
-    routes = {net: RoutingTree((1, 1), set([(None, object())]))}
+    routes = {net: RoutingTree((1, 1), [(None, object())])}
     net_keys = {net: (0xDEAD, 0xBEEF)}
     assert routing_tree_to_tables(routes, net_keys) == \
         {(1, 1): [RoutingTableEntry(set([]), 0xDEAD, 0xBEEF, {None})]}
@@ -46,11 +46,11 @@ def test_routing_tree_to_tables():
     # Single net with a multi-element route
     net = Net(object(), object())
     routes = {net: RoutingTree((1, 1),
-                               set([(Routes.core_1, object()),
-                                    (Routes.east,
-                                     RoutingTree((2, 1),
-                                                 set([(Routes.core_2,
-                                                       object())])))]))}
+                               [(Routes.core_1, object()),
+                                (Routes.east,
+                                 RoutingTree((2, 1),
+                                             [(Routes.core_2,
+                                               object())]))])}
     net_keys = {net: (0xDEAD, 0xBEEF)}
     assert routing_tree_to_tables(routes, net_keys) == \
         {(1, 1): [RoutingTableEntry(set([Routes.east, Routes.core_1]),
@@ -61,11 +61,11 @@ def test_routing_tree_to_tables():
     # Single net with a wrapping route
     net = Net(object(), object())
     routes = {net: RoutingTree((7, 1),
-                               set([(Routes.core_1, net.source),
-                                    (Routes.east,
-                                     RoutingTree((0, 1),
-                                                 set([(Routes.core_2,
-                                                       net.sinks[0])])))]))}
+                               [(Routes.core_1, net.source),
+                                (Routes.east,
+                                 RoutingTree((0, 1),
+                                             [(Routes.core_2,
+                                               net.sinks[0])]))])}
     net_keys = {net: (0xDEAD, 0xBEEF)}
     assert routing_tree_to_tables(routes, net_keys) == \
         {(7, 1): [RoutingTableEntry(set([Routes.east, Routes.core_1]),
@@ -77,9 +77,9 @@ def test_routing_tree_to_tables():
     # in nothing
     net = Net(object(), object())
     r3 = RoutingTree((3, 0))
-    r2 = RoutingTree((2, 0), set([(Routes.east, r3)]))
-    r1 = RoutingTree((1, 0), set([(Routes.east, r2)]))
-    r0 = RoutingTree((0, 0), set([(Routes.east, r1)]))
+    r2 = RoutingTree((2, 0), [(Routes.east, r3)])
+    r1 = RoutingTree((1, 0), [(Routes.east, r2)])
+    r0 = RoutingTree((0, 0), [(Routes.east, r1)])
     routes = {net: r0}
     net_keys = {net: (0xDEAD, 0xBEEF)}
     assert routing_tree_to_tables(routes, net_keys) == \
@@ -93,11 +93,11 @@ def test_routing_tree_to_tables():
     # Single net with a multi-hop route with no direction changes, terminating
     # in a number of cores
     net = Net(object(), object())
-    r3 = RoutingTree((3, 0), set([(Routes.core_2, net.sinks[0]),
-                                  (Routes.core_3, net.sinks[0])]))
-    r2 = RoutingTree((2, 0), set([(Routes.east, r3)]))
-    r1 = RoutingTree((1, 0), set([(Routes.east, r2)]))
-    r0 = RoutingTree((0, 0), set([(Routes.east, r1)]))
+    r3 = RoutingTree((3, 0), [(Routes.core_2, net.sinks[0]),
+                              (Routes.core_3, net.sinks[0])])
+    r2 = RoutingTree((2, 0), [(Routes.east, r3)])
+    r1 = RoutingTree((1, 0), [(Routes.east, r2)])
+    r0 = RoutingTree((0, 0), [(Routes.east, r1)])
     routes = {net: r0}
     net_keys = {net: (0xDEAD, 0xBEEF)}
     assert routing_tree_to_tables(routes, net_keys) == \
@@ -113,13 +113,13 @@ def test_routing_tree_to_tables():
 
     # Single net with a multi-hop route with a fork in the middle
     net = Net(object(), object())
-    r6 = RoutingTree((3, 1), set([(Routes.core_6, net.sinks[0])]))
-    r5 = RoutingTree((5, 0), set([(Routes.core_5, net.sinks[0])]))
-    r4 = RoutingTree((4, 0), set([(Routes.east, r5)]))
-    r3 = RoutingTree((3, 0), set([(Routes.east, r4), (Routes.north, r6)]))
-    r2 = RoutingTree((2, 0), set([(Routes.east, r3)]))
-    r1 = RoutingTree((1, 0), set([(Routes.east, r2)]))
-    r0 = RoutingTree((0, 0), set([(Routes.east, r1)]))
+    r6 = RoutingTree((3, 1), [(Routes.core_6, net.sinks[0])])
+    r5 = RoutingTree((5, 0), [(Routes.core_5, net.sinks[0])])
+    r4 = RoutingTree((4, 0), [(Routes.east, r5)])
+    r3 = RoutingTree((3, 0), [(Routes.east, r4), (Routes.north, r6)])
+    r2 = RoutingTree((2, 0), [(Routes.east, r3)])
+    r1 = RoutingTree((1, 0), [(Routes.east, r2)])
+    r0 = RoutingTree((0, 0), [(Routes.east, r1)])
     routes = {net: r0}
     net_keys = {net: (0xDEAD, 0xBEEF)}
     assert routing_tree_to_tables(routes, net_keys) == \
@@ -140,8 +140,8 @@ def test_routing_tree_to_tables():
     # Multiple nets
     net0 = Net(object(), object())
     net1 = Net(object(), object())
-    routes = {net0: RoutingTree((2, 2), set([(Routes.core_1, net0.sinks[0])])),
-              net1: RoutingTree((2, 2), set([(Routes.core_2, net1.sinks[0])]))}
+    routes = {net0: RoutingTree((2, 2), [(Routes.core_1, net0.sinks[0])]),
+              net1: RoutingTree((2, 2), [(Routes.core_2, net1.sinks[0])])}
     net_keys = {net0: (0xDEAD, 0xBEEF), net1: (0x1234, 0xABCD)}
     tables = routing_tree_to_tables(routes, net_keys)
     assert set(tables) == set([(2, 2)])
@@ -187,11 +187,11 @@ def test_routing_tree_to_tables_repeated_key_mask_merge_allowed():
     net1 = Net(object(), sink)
 
     # Create the routing trees
-    r0 = RoutingTree((2, 1), {(Routes.core(1), sink)})
-    r1 = RoutingTree((1, 1), {(Routes.east, r0)})
+    r0 = RoutingTree((2, 1), [(Routes.core(1), sink)])
+    r1 = RoutingTree((1, 1), [(Routes.east, r0)])
     routes = {
-        net0: RoutingTree((0, 1), {(Routes.east, r1)}),
-        net1: RoutingTree((1, 0), {(Routes.north, r1)}),
+        net0: RoutingTree((0, 1), [(Routes.east, r1)]),
+        net1: RoutingTree((1, 0), [(Routes.north, r1)]),
     }
 
     # Create the keys
@@ -244,15 +244,15 @@ def test_routing_tree_to_tables_repeated_key_mask_fork_not_allowed():
     net1 = Net(object(), [sink0, sink1])
 
     # Create the routing trees
-    r_east = RoutingTree((2, 1), {(Routes.core(1), sink0)})
+    r_east = RoutingTree((2, 1), [(Routes.core(1), sink0)])
     routes = {
-        net0: RoutingTree((0, 1), {
-            (Routes.east, RoutingTree((1, 1), {(Routes.east, r_east)})),
-        }),
-        net1: RoutingTree((1, 1), {
+        net0: RoutingTree((0, 1), [
+            (Routes.east, RoutingTree((1, 1), [(Routes.east, r_east)])),
+        ]),
+        net1: RoutingTree((1, 1), [
             (Routes.east, r_east),
-            (Routes.south, RoutingTree((1, 0), {(Routes.core(1), sink1)})),
-        }),
+            (Routes.south, RoutingTree((1, 0), [(Routes.core(1), sink1)])),
+        ]),
     }
 
     # Create the keys

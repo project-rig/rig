@@ -7,7 +7,7 @@ from rig.links import Links
 
 
 def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
-    """Generate the (x, y) steps on a longest-dimension first route.
+    """List the (x, y) steps on a longest-dimension first route.
 
     Note that when multiple dimensions are the same magnitude, one will be
     chosen at random with uniform probability.
@@ -26,9 +26,9 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
         The height of the topology beyond which we wrap around (0 <= y <
         height).  If None, no wrapping on the Y axis will occur.
 
-    Generates
-    ---------
-    (:py:class:`~rig.links.Links`, (x, y))
+    Returns
+    -------
+    [(:py:class:`~rig.links.Links`, (x, y)), ...]
         Produces (in order) a (direction, (x, y)) pair for every hop along the
         longest dimension first route. The direction gives the direction to
         travel in from the previous step to reach the current step. Ties are
@@ -37,6 +37,8 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
         destination position.
     """
     x, y = start
+
+    out = []
 
     for dimension, magnitude in sorted(enumerate(vector),
                                        key=(lambda x:
@@ -66,7 +68,9 @@ def longest_dimension_first(vector, start=(0, 0), width=None, height=None):
 
             direction = Links.from_vector((dx, dy))
 
-            yield (direction, (x, y))
+            out.append((direction, (x, y)))
+
+    return out
 
 
 def links_between(a, b, machine):

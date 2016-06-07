@@ -236,13 +236,13 @@ def test_build_application_map():
 def test_build_routing_tables():
     # Single net with a multi-hop route with a fork in the middle
     net = Net(object(), object())
-    r6 = RoutingTree((3, 1), set([(Routes.core_6, net.sinks[0])]))
-    r5 = RoutingTree((5, 0), set([(Routes.core_5, net.sinks[0])]))
-    r4 = RoutingTree((4, 0), set([(Routes.east, r5)]))
-    r3 = RoutingTree((3, 0), set([(Routes.east, r4), (Routes.north, r6)]))
-    r2 = RoutingTree((2, 0), set([(Routes.east, r3)]))
-    r1 = RoutingTree((1, 0), set([(Routes.east, r2)]))
-    r0 = RoutingTree((0, 0), set([(Routes.east, r1)]))
+    r6 = RoutingTree((3, 1), [(Routes.core_6, net.sinks[0])])
+    r5 = RoutingTree((5, 0), [(Routes.core_5, net.sinks[0])])
+    r4 = RoutingTree((4, 0), [(Routes.east, r5)])
+    r3 = RoutingTree((3, 0), [(Routes.east, r4), (Routes.north, r6)])
+    r2 = RoutingTree((2, 0), [(Routes.east, r3)])
+    r1 = RoutingTree((1, 0), [(Routes.east, r2)])
+    r0 = RoutingTree((0, 0), [(Routes.east, r1)])
     routes = {net: r0}
     net_keys = {net: (0xDEAD, 0xBEEF)}
 

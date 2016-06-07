@@ -29,6 +29,29 @@ from ...routing_table import Routes
 from ..routing_tree import RoutingTree
 
 
+_concentric_hexagons = {}
+"""Memoized concentric_hexagons outputs, as lists.  Access via
+:py:func:`.memoized_concentric_hexagons`.
+"""
+
+
+def memoized_concentric_hexagons(radius):
+    """A memoized wrapper around :py:func:`rig.geometry.concentric_hexagons`
+    which memoizes the coordinates and stores them as a tuple. Note that the
+    caller must manually offset the coordinates as required.
+
+    This wrapper is used to avoid the need to repeatedly call
+    :py:func:`rig.geometry.concentric_hexagons` for every sink in a network.
+    This results in a relatively minor speedup (but at equally minor cost) in
+    large networks.
+    """
+    out = _concentric_hexagons.get(radius)
+    if out is None:
+        out = tuple(concentric_hexagons(radius))
+        _concentric_hexagons[radius] = out
+    return out
+
+
 def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
     """Produce a shortest path tree for a given net using NER.
 
@@ -77,17 +100,93 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
         # We shall attempt to find our nearest neighbouring placed node.
         neighbour = None
 
-        # Try to find nodes nearby by searching an enlarging concentric ring of
-        # nodes.
-        for x, y in concentric_hexagons(radius, destination):
-            if wrap_around:
-                x %= width
-                y %= height
-            if (x, y) in route:
-                neighbour = (x, y)
-                break
+        # Try to find a nearby (within radius hops) node in the routing tree
+        # that we can route to (falling back on just routing to the source).
+        #
+        # In an implementation according to the algorithm's original
+        # specification looks for nodes at each point in a growing set of rings
+        # of concentric hexagons. If it doesn't find any destinations this
+        # means an awful lot of checks: 1261 for the default radius of 20.
+        #
+        # An alternative (but behaviourally identical) implementation scans the
+        # list of all route nodes created so far and finds the closest node
+        # which is < radius hops (falling back on the origin if no node is
+        # closer than radius hops).  This implementation requires one check per
+        # existing route node. In most routes this is probably a lot less than
+        # 1261 since most routes will probably have at most a few hundred route
+        # nodes by the time the last destination is being routed.
+        #
+        # Which implementation is best is a difficult question to answer:
+        # * In principle nets with quite localised connections (e.g.
+        #   nearest-neighbour or centroids traffic) may route slightly more
+        #   quickly with the original algorithm since it may very quickly find
+        #   a neighbour.
+        # * In nets which connect very spaced-out destinations the second
+        #   implementation may be quicker since in such a scenario it is
+        #   unlikely that a neighbour will be found.
+        # * In extremely high-fan-out nets (e.g. broadcasts), the original
+        #   method is very likely to perform *far* better than the alternative
+        #   method since most iterations will complete immediately while the
+        #   alternative method must scan *all* the route vertices.
+        # As such, it should be clear that neither method alone is 'best' and
+        # both have degenerate performance in certain completely reasonable
+        # styles of net. As a result, a simple heuristic is used to decide
+        # which technique to use.
+        #
+        # The following micro-benchmarks are crude estimate of the
+        # runtime-per-iteration of each approach (at least in the case of a
+        # torus topology)::
+        #
+        #     $ # Original approach
+        #     $ python -m timeit --setup 'x, y, w, h, r = 1, 2, 5, 10, \
+        #                                     {x:None for x in range(10)}' \
+        #                        'x += 1; y += 1; x %= w; y %= h; (x, y) in r'
+        #     1000000 loops, best of 3: 0.207 usec per loop
+        #     $ # Alternative approach
+        #     $ python -m timeit --setup 'from rig.geometry import \
+        #                                 shortest_torus_path_length' \
+        #                        'shortest_torus_path_length( \
+        #                             (0, 1, 2), (3, 2, 1), 10, 10)'
+        #     1000000 loops, best of 3: 0.666 usec per loop
+        #
+        # From this we can approximately suggest that the alternative approach
+        # is 3x more expensive per iteration. A very crude heuristic is to use
+        # the original approach when the number of route nodes is more than
+        # 1/3rd of the number of routes checked by the original method.
+        concentric_hexagons = memoized_concentric_hexagons(radius)
+        if len(concentric_hexagons) < len(route) / 3:
+            # Original approach: Start looking for route nodes in a concentric
+            # spiral pattern out from the destination node.
+            for x, y in concentric_hexagons:
+                x += destination[0]
+                y += destination[1]
+                if wrap_around:
+                    x %= width
+                    y %= height
+                if (x, y) in route:
+                    neighbour = (x, y)
+                    break
+        else:
+            # Alternative approach: Scan over every route node and check to see
+            # if any are < radius, picking the closest one if so.
+            neighbour = None
+            neighbour_distance = None
+            for candidate_neighbour in route:
+                if wrap_around:
+                    distance = shortest_torus_path_length(
+                        to_xyz(candidate_neighbour), to_xyz(destination),
+                        width, height)
+                else:
+                    distance = shortest_mesh_path_length(
+                        to_xyz(candidate_neighbour), to_xyz(destination))
 
-        # Fall back on routing directly to the source if nothing was found
+                if distance <= radius and (neighbour is None or
+                                           distance < neighbour_distance):
+                    neighbour = candidate_neighbour
+                    neighbour_distance = distance
+
+        # Fall back on routing directly to the source if no nodes within radius
+        # hops of the destination was found.
         if neighbour is None:
             neighbour = source
 
@@ -104,7 +203,7 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
         # node it would create a cycle in the route which would be VeryBad(TM).
         # As a result, we work backward through the route and truncate it at
         # the first point where the route intersects with a connected node.
-        ldf = list(longest_dimension_first(vector, neighbour, width, height))
+        ldf = longest_dimension_first(vector, neighbour, width, height)
         i = len(ldf)
         for direction, (x, y) in reversed(ldf):
             i -= 1
@@ -123,7 +222,7 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
             this_node = RoutingTree((x, y))
             route[(x, y)] = this_node
 
-            last_node.children.add((Routes(direction), this_node))
+            last_node.children.append((Routes(direction), this_node))
             last_node = this_node
 
     return (route[source], route)
@@ -194,7 +293,7 @@ def copy_and_disconnect_tree(root, machine):
                                           new_node.chip,
                                           machine):
                 # Is connected via working link
-                new_parent.children.add((direction, new_node))
+                new_parent.children.append((direction, new_node))
             else:
                 # Link to parent is dead (or original parent was dead and the
                 # new parent is not adjacent)
@@ -311,6 +410,29 @@ def a_star(sink, heuristic_source, sources, machine, wrap_around):
     return path
 
 
+def route_has_dead_links(root, machine):
+    """Quickly determine if a route uses any dead links.
+
+    Parameters
+    ----------
+    root : :py:class:`~rig.place_and_route.routing_tree.RoutingTree`
+        The root of the RoutingTree which contains nothing but RoutingTrees
+        (i.e. no vertices and links).
+    machine : :py:class:`~rig.place_and_route.Machine`
+        The machine in which the routes exist.
+
+    Returns
+    -------
+    bool
+        True if the route uses any dead/missing links, False otherwise.
+    """
+    for direction, (x, y), routes in root.traverse():
+        for route in routes:
+            if (x, y, route) not in machine:
+                return True
+    return False
+
+
 def avoid_dead_links(root, machine, wrap_around=False):
     """Modify a RoutingTree to route-around dead links in a Machine.
 
@@ -384,10 +506,10 @@ def avoid_dead_links(root, machine, wrap_around=False):
                         node.children.remove(dn[0])
                         # A node can only have one parent so we can stop now.
                         break
-            last_node.children.add((Routes(last_direction), new_node))
+            last_node.children.append((Routes(last_direction), new_node))
             last_node = new_node
             last_direction = direction
-        last_node.children.add((last_direction, lookup[child]))
+        last_node.children.append((last_direction, lookup[child]))
 
     return (root, lookup)
 
@@ -429,7 +551,8 @@ def route(vertices_resources, nets, machine, constraints, placements,
                                wrap_around, radius)
 
         # Fix routes to avoid dead chips/links
-        root, lookup = avoid_dead_links(root, machine, wrap_around)
+        if route_has_dead_links(root, machine):
+            root, lookup = avoid_dead_links(root, machine, wrap_around)
 
         # Add the sinks in the net to the RoutingTree
         for sink in net.sinks:
@@ -437,19 +560,18 @@ def route(vertices_resources, nets, machine, constraints, placements,
             if sink in route_to_endpoint:
                 # Sinks with route-to-endpoint constraints must be routed
                 # in the according directions.
-                tree_node.children.add((route_to_endpoint[sink], sink))
+                tree_node.children.append((route_to_endpoint[sink], sink))
             else:
                 cores = allocations.get(sink, {}).get(core_resource, None)
                 if cores is not None:
                     # Sinks with the core_resource resource specified must be
                     # routed to that set of cores.
                     for core in range(cores.start, cores.stop):
-                        tree_node.children.add((Routes.core(core), sink))
+                        tree_node.children.append((Routes.core(core), sink))
                 else:
                     # Sinks without that resource are simply included without
                     # an associated route
-                    tree_node.children.add((None, sink))
-
+                    tree_node.children.append((None, sink))
         routes[net] = root
 
     return routes
