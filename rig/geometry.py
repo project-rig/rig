@@ -36,13 +36,38 @@ def shortest_mesh_path_length(source, destination):
     -------
     int
     """
-    x, y, z = (d - s for s, d in zip(source, destination))
+    x = destination[0] - source[0]
+    y = destination[1] - source[1]
+    z = destination[2] - source[2]
+
     # When vectors are minimised, (1,1,1) is added or subtracted from them.
     # This process does not change the range of numbers in the vector. When a
     # vector is minimal, it is easy to see that the range of numbers gives the
     # magnitude since there are at most two non-zero numbers (with opposite
     # signs) and the sum of their magnitudes will also be their range.
-    return max(x, y, z) - min(x, y, z)
+    #
+    # Though ideally this code would be written::
+    #
+    #     >>> return max(x, y, z) - min(x, y, z)
+    #
+    # Unfortunately the min/max functions are very slow (as of CPython 3.5) so
+    # this expression is unrolled as IF/else statements.
+
+    # max(x, y, z)
+    maximum = x
+    if y > maximum:
+        maximum = y
+    if z > maximum:
+        maximum = z
+
+    # min(x, y, z)
+    minimum = x
+    if y < minimum:
+        minimum = y
+    if z < minimum:
+        minimum = z
+
+    return maximum - minimum
 
 
 def shortest_mesh_path(source, destination):
@@ -84,15 +109,48 @@ def shortest_torus_path_length(source, destination, width, height):
 
     # Get (non-wrapping) x, y vector from source to destination as if the
     # source was at (0, 0).
-    x, y, z = (d - s for s, d in zip(source, destination))
+    x = destination[0] - source[0]
+    y = destination[1] - source[1]
+    z = destination[2] - source[2]
     x, y = x - z, y - z
     x %= w
     y %= h
 
-    return min(max(x, y),          # No wrap
-               w - x + y,          # Wrap X only
-               x + h - y,          # Wrap Y only
-               max(w - x, h - y))  # Wrap X and Y
+    # Calculate the shortest path length.
+    #
+    # In an ideal world, the following code would be used::
+    #
+    #     >>> return min(max(x, y),      # No wrap
+    #     ...            w - x + y,      # Wrap X
+    #     ...            x + h - y,      # Wrap Y
+    #     ...            max(w-x, h-y))  # Wrap X and Y
+    #
+    # Unfortunately, however, the min/max functions are shockingly slow as of
+    # CPython 3.5. Since this function may appear in some hot code paths (e.g.
+    # the router), the above statement is unwrapped as a series of
+    # faster-executing IF statements for performance.
+
+    # No wrap
+    length = x if x > y else y
+
+    # Wrap X
+    wrap_x = w - x + y
+    if wrap_x < length:
+        length = wrap_x
+
+    # Wrap Y
+    wrap_y = x + h - y
+    if wrap_y < length:
+        length = wrap_y
+
+    # Wrap X and Y
+    dx = w - x
+    dy = h - y
+    wrap_xy = dx if dx > dy else dy
+    if wrap_xy < length:
+        return wrap_xy
+    else:
+        return length
 
 
 def shortest_torus_path(source, destination, width, height):
