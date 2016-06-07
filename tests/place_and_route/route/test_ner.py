@@ -4,6 +4,8 @@ import random
 
 from collections import deque
 
+from rig.geometry import concentric_hexagons
+
 from rig.place_and_route.machine import Machine
 
 from rig.links import Links
@@ -14,10 +16,23 @@ from rig.routing_table import Routes
 
 from rig.place_and_route.route.utils import links_between
 
-from rig.place_and_route.route.ner import ner_net, \
-    route_has_dead_links, copy_and_disconnect_tree, a_star, avoid_dead_links
+from rig.place_and_route.route.ner import \
+    ner_net, memoized_concentric_hexagons, route_has_dead_links, \
+    copy_and_disconnect_tree, a_star, avoid_dead_links
 
 from rig.place_and_route.exceptions import MachineHasDisconnectedSubregion
+
+
+def test_memoized_concentric_hexagons():
+    # Should pass calls through
+    out10 = memoized_concentric_hexagons(10)
+    assert out10 == tuple(concentric_hexagons(10))
+    out20 = memoized_concentric_hexagons(20)
+    assert out20 == tuple(concentric_hexagons(20))
+
+    # Should use memoized value
+    assert memoized_concentric_hexagons(10) is out10
+    assert memoized_concentric_hexagons(20) is out20
 
 
 def test_ner_net_childless():

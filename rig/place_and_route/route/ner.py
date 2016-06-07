@@ -29,6 +29,29 @@ from ...routing_table import Routes
 from ..routing_tree import RoutingTree
 
 
+_concentric_hexagons = {}
+"""Memoized concentric_hexagons outputs, as lists.  Access via
+:py:func:`.memoized_concentric_hexagons`.
+"""
+
+
+def memoized_concentric_hexagons(radius):
+    """A memoized wrapper around :py:func:`rig.geometry.concentric_hexagons`
+    which memoizes the coordinates and stores them as a tuple. Note that the
+    caller must manually offset the coordinates as required.
+
+    This wrapper is used to avoid the need to repeatedly call
+    :py:func:`rig.geometry.concentric_hexagons` for every sink in a network.
+    This results in a relatively minor speedup (but at equally minor cost) in
+    large networks.
+    """
+    out = _concentric_hexagons.get(radius)
+    if out is None:
+        out = tuple(concentric_hexagons(radius))
+        _concentric_hexagons[radius] = out
+    return out
+
+
 def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
     """Produce a shortest path tree for a given net using NER.
 
@@ -79,7 +102,9 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
 
         # Try to find nodes nearby by searching an enlarging concentric ring of
         # nodes.
-        for x, y in concentric_hexagons(radius, destination):
+        for x, y in memoized_concentric_hexagons(radius):
+            x += destination[0]
+            y += destination[1]
             if wrap_around:
                 x %= width
                 y %= height
