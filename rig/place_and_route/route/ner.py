@@ -179,6 +179,7 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
                 else:
                     distance = shortest_mesh_path_length(
                         to_xyz(candidate_neighbour), to_xyz(destination))
+
                 if distance <= radius and (neighbour is None or
                                            distance < neighbour_distance):
                     neighbour = candidate_neighbour
