@@ -148,7 +148,7 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
             this_node = RoutingTree((x, y))
             route[(x, y)] = this_node
 
-            last_node.children.add((Routes(direction), this_node))
+            last_node.children.append((Routes(direction), this_node))
             last_node = this_node
 
     return (route[source], route)
@@ -219,7 +219,7 @@ def copy_and_disconnect_tree(root, machine):
                                           new_node.chip,
                                           machine):
                 # Is connected via working link
-                new_parent.children.add((direction, new_node))
+                new_parent.children.append((direction, new_node))
             else:
                 # Link to parent is dead (or original parent was dead and the
                 # new parent is not adjacent)
@@ -432,10 +432,10 @@ def avoid_dead_links(root, machine, wrap_around=False):
                         node.children.remove(dn[0])
                         # A node can only have one parent so we can stop now.
                         break
-            last_node.children.add((Routes(last_direction), new_node))
+            last_node.children.append((Routes(last_direction), new_node))
             last_node = new_node
             last_direction = direction
-        last_node.children.add((last_direction, lookup[child]))
+        last_node.children.append((last_direction, lookup[child]))
 
     return (root, lookup)
 
@@ -486,19 +486,18 @@ def route(vertices_resources, nets, machine, constraints, placements,
             if sink in route_to_endpoint:
                 # Sinks with route-to-endpoint constraints must be routed
                 # in the according directions.
-                tree_node.children.add((route_to_endpoint[sink], sink))
+                tree_node.children.append((route_to_endpoint[sink], sink))
             else:
                 cores = allocations.get(sink, {}).get(core_resource, None)
                 if cores is not None:
                     # Sinks with the core_resource resource specified must be
                     # routed to that set of cores.
                     for core in range(cores.start, cores.stop):
-                        tree_node.children.add((Routes.core(core), sink))
+                        tree_node.children.append((Routes.core(core), sink))
                 else:
                     # Sinks without that resource are simply included without
                     # an associated route
-                    tree_node.children.add((None, sink))
-
+                    tree_node.children.append((None, sink))
         routes[net] = root
 
     return routes

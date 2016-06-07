@@ -9,7 +9,14 @@ class TestRoutingTree(object):
 
     def test_init_default(self):
         # Make sure the default initialiser creates no children
-        assert RoutingTree((0, 0)).children == set()
+        assert RoutingTree((0, 0)).children == []
+
+    def test_chip(self):
+        # Make sure the chip can be accessed like a tuple
+        t = RoutingTree((1, 2))
+        assert t.chip == (1, 2)
+        t.chip = (3, 4)
+        assert t.chip == (3, 4)
 
     def test_iter(self):
         # Singleton
@@ -19,20 +26,20 @@ class TestRoutingTree(object):
         # Multiple Children
         t2 = RoutingTree((2, 0))
         t1 = RoutingTree((1, 0))
-        t0 = RoutingTree((0, 0), set([(Routes.east, t1),
-                                      (Routes.west, t2)]))
+        t0 = RoutingTree((0, 0), [(Routes.east, t1),
+                                  (Routes.west, t2)])
         assert set(t0) == set([t0, t1, t2])
 
         # Grandchildren
         t2 = RoutingTree((2, 0))
-        t1 = RoutingTree((1, 0), set([(Routes.west, t2)]))
-        t0 = RoutingTree((0, 0), set([(Routes.west, t1)]))
+        t1 = RoutingTree((1, 0), [(Routes.west, t2)])
+        t0 = RoutingTree((0, 0), [(Routes.west, t1)])
         assert set(t0) == set([t0, t1, t2])
 
         # Inclusion of other types
         t2 = object()
-        t1 = RoutingTree((1, 0), set([(Routes.west, t2)]))
-        t0 = RoutingTree((0, 0), set([(Routes.west, t1)]))
+        t1 = RoutingTree((1, 0), [(Routes.west, t2)])
+        t0 = RoutingTree((0, 0), [(Routes.west, t1)])
         assert set(t0) == set([t0, t1, t2])
 
     def test_repr(self):
@@ -50,14 +57,14 @@ class TestRoutingTree(object):
         # (0, 0) - east -> (1, 0) - east -> (2, 0)
         #                       \
         #                        \- south -> (1, -1) - east -> (2, -1) -> 2
-        t0 = RoutingTree((2, -1), {(Routes.core(2), None)})
-        t1 = RoutingTree((1, -1), {(Routes.east, t0)})
-        t2 = RoutingTree((1, 1), {(Routes.core(5), None)})
-        t3 = RoutingTree((2, 0), {(None, None)})
-        t4 = RoutingTree((1, 0), {(Routes.north, t2),
+        t0 = RoutingTree((2, -1), [(Routes.core(2), None)])
+        t1 = RoutingTree((1, -1), [(Routes.east, t0)])
+        t2 = RoutingTree((1, 1), [(Routes.core(5), None)])
+        t3 = RoutingTree((2, 0), [(None, None)])
+        t4 = RoutingTree((1, 0), [(Routes.north, t2),
                                   (Routes.east, t3),
-                                  (Routes.south, t1)})
-        tree = RoutingTree((0, 0), {(Routes.east, t4)})
+                                  (Routes.south, t1)])
+        tree = RoutingTree((0, 0), [(Routes.east, t4)])
 
         # Traverse the tree manually
         tip = tree.traverse()

@@ -41,14 +41,14 @@ def test_ner_net_childless():
     # Childless net: results should just contain the source node
     root, lookup = ner_net((0, 0), [], 1, 1)
     assert root.chip == (0, 0)
-    assert root.children == set()
+    assert root.children == []
     assert lookup[(0, 0)] is root
     assert len(lookup) == 1
 
     # Childless net at non-zero coordinate
     root, lookup = ner_net((0, 1), [], 2, 2)
     assert root.chip == (0, 1)
-    assert root.children == set()
+    assert root.children == []
     assert lookup[(0, 1)] is root
     assert len(lookup) == 1
 
@@ -226,17 +226,17 @@ def test_route_has_dead_links():
 
     # Tree not going through a dead link should be OK
     t11 = RoutingTree((1, 1))
-    t00 = RoutingTree((0, 0), {(Routes.north_east, t11)})
+    t00 = RoutingTree((0, 0), [(Routes.north_east, t11)])
     assert route_has_dead_links(t00, machine) is False
 
     # Tree not going in opposite direction to dead link should be fine
     t00 = RoutingTree((0, 0))
-    t01 = RoutingTree((0, 1), {(Routes.south, t00)})
+    t01 = RoutingTree((0, 1), [(Routes.south, t00)])
     assert route_has_dead_links(t01, machine) is False
 
     # Tree going via dead link should fail
     t01 = RoutingTree((0, 1))
-    t00 = RoutingTree((0, 0), {(Routes.north, t01)})
+    t00 = RoutingTree((0, 0), [(Routes.north, t01)])
     assert route_has_dead_links(t00, machine) is True
 
 
@@ -257,14 +257,14 @@ def test_copy_and_disconnect_tree():
     # Tree with nothing broken
     t11 = RoutingTree((1, 2))
     t10 = RoutingTree((0, 2))
-    t1 = RoutingTree((0, 1), set([(Routes.north, t10),
-                                  (Routes.north_east, t11)]))
+    t1 = RoutingTree((0, 1), [(Routes.north, t10),
+                              (Routes.north_east, t11)])
     t01 = RoutingTree((2, 0))
     t00 = RoutingTree((2, 1))
-    t0 = RoutingTree((1, 0), set([(Routes.north_east, t00),
-                                  (Routes.east, t01)]))
-    t = RoutingTree((0, 0), set([(Routes.east, t0),
-                                 (Routes.north, t1)]))
+    t0 = RoutingTree((1, 0), [(Routes.north_east, t00),
+                              (Routes.east, t01)])
+    t = RoutingTree((0, 0), [(Routes.east, t0),
+                             (Routes.north, t1)])
     test_cases.append((t0, working_machine, set()))
 
     # Tree with broken link
@@ -273,9 +273,9 @@ def test_copy_and_disconnect_tree():
     # Tree with a broken chip
     t3 = RoutingTree((1, 2))
     t2 = RoutingTree((2, 1))
-    t1 = RoutingTree((1, 1), set([(Routes.east, t2),
-                                  (Routes.north, t3)]))
-    t0 = RoutingTree((0, 0), set([(Routes.north_east, t1)]))
+    t1 = RoutingTree((1, 1), [(Routes.east, t2),
+                              (Routes.north, t3)])
+    t0 = RoutingTree((0, 0), [(Routes.north_east, t1)])
     test_cases.append((t0, dead_chip_machine,
                        set([((0, 0), (2, 1)), ((0, 0), (1, 2))])))
 
@@ -457,14 +457,14 @@ def test_avoid_dead_links_no_change():
     test_cases.append(RoutingTree((0, 0)))
 
     # A routing tree which goes near (but avoids) the dead chip and link
-    t002 = RoutingTree((1, 3), set([]))
-    t001 = RoutingTree((0, 3), set([]))
-    t000 = RoutingTree((1, 2), set([]))
-    t00 = RoutingTree((0, 2), set([(Routes.east, t000),
-                                   (Routes.north, t001),
-                                   (Routes.north_east, t002)]))
-    t0 = RoutingTree((0, 1), set([(Routes.north, t00)]))
-    t = RoutingTree((0, 0), set([(Routes.north, t0)]))
+    t002 = RoutingTree((1, 3), [])
+    t001 = RoutingTree((0, 3), [])
+    t000 = RoutingTree((1, 2), [])
+    t00 = RoutingTree((0, 2), [(Routes.east, t000),
+                               (Routes.north, t001),
+                               (Routes.north_east, t002)])
+    t0 = RoutingTree((0, 1), [(Routes.north, t00)])
+    t = RoutingTree((0, 0), [(Routes.north, t0)])
     test_cases.append(t)
 
     for old_root in test_cases:
@@ -507,41 +507,41 @@ def test_avoid_dead_links_change():
 
     # A routing tree which crosses a dead link
     t1 = RoutingTree((4, 5))
-    t0 = RoutingTree((4, 4), set([(Routes.north, t1)]))
+    t0 = RoutingTree((4, 4), [(Routes.north, t1)])
     test_cases.append(t0)
 
     # A routing tree which is blocked by a dead chip
     t2 = RoutingTree((4, 2))
-    t1 = RoutingTree((4, 1), set([(Routes.north, t2)]))
-    t0 = RoutingTree((4, 0), set([(Routes.north, t1)]))
+    t1 = RoutingTree((4, 1), [(Routes.north, t2)])
+    t0 = RoutingTree((4, 0), [(Routes.north, t1)])
     test_cases.append(t0)
 
     # A subtree tree which is blocked by a wall of chips
     t002 = RoutingTree((3, 3))
     t001 = RoutingTree((2, 3))
     t000 = RoutingTree((3, 2))
-    t00 = RoutingTree((2, 2), set([(Routes.east, t000),
-                                   (Routes.north, t001),
-                                   (Routes.north_east, t002)]))
-    t0 = RoutingTree((1, 1), set([(Routes.north_east, t00)]))
-    t = RoutingTree((0, 0), set([(Routes.north_east, t0)]))
+    t00 = RoutingTree((2, 2), [(Routes.east, t000),
+                               (Routes.north, t001),
+                               (Routes.north_east, t002)])
+    t0 = RoutingTree((1, 1), [(Routes.north_east, t00)])
+    t = RoutingTree((0, 0), [(Routes.north_east, t0)])
     test_cases.append(t)
 
     # A subtree which blocks A* from reaching the start without crossing itself
     # but which doesn't directly encircle the top of the blockage.
-    t55 = RoutingTree((2, 5), set([]))
-    t54 = RoutingTree((3, 5), set([(Routes.west, t55)]))
-    t53 = RoutingTree((4, 5), set([(Routes.west, t54)]))
-    t52 = RoutingTree((5, 2), set([]))
-    t51 = RoutingTree((5, 3), set([(Routes.south, t52)]))
-    t50 = RoutingTree((5, 4), set([(Routes.south, t51)]))
-    t4 = RoutingTree((5, 5), set([(Routes.south, t50),
-                                  (Routes.west, t53)]))
-    t3 = RoutingTree((4, 4), set([(Routes.north_east, t4)]))
-    t2 = RoutingTree((3, 3), set([(Routes.north_east, t3)]))
-    t1 = RoutingTree((2, 2), set([(Routes.north_east, t2)]))
-    t0 = RoutingTree((1, 1), set([(Routes.north_east, t1)]))
-    t = RoutingTree((0, 0), set([(Routes.north_east, t0)]))
+    t55 = RoutingTree((2, 5), [])
+    t54 = RoutingTree((3, 5), [(Routes.west, t55)])
+    t53 = RoutingTree((4, 5), [(Routes.west, t54)])
+    t52 = RoutingTree((5, 2), [])
+    t51 = RoutingTree((5, 3), [(Routes.south, t52)])
+    t50 = RoutingTree((5, 4), [(Routes.south, t51)])
+    t4 = RoutingTree((5, 5), [(Routes.south, t50),
+                              (Routes.west, t53)])
+    t3 = RoutingTree((4, 4), [(Routes.north_east, t4)])
+    t2 = RoutingTree((3, 3), [(Routes.north_east, t3)])
+    t1 = RoutingTree((2, 2), [(Routes.north_east, t2)])
+    t0 = RoutingTree((1, 1), [(Routes.north_east, t1)])
+    t = RoutingTree((0, 0), [(Routes.north_east, t0)])
     test_cases.append(t)
 
     # For each test case just ensure the new tree is a tree and visits all

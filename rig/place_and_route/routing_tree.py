@@ -18,9 +18,16 @@ class RoutingTree(object):
     ----------
     chip : (x, y)
         The chip the route is currently passing through.
-    children : set
-        A :py:class:`set` of the next steps in the route represented by a
+    children : list
+        A :py:class:`list` of the next steps in the route represented by a
         (route, object) tuple.
+
+        .. note::
+
+            Up until Rig 1.5.1 this structure used :py:class:`set`\ s to store
+            children. This was changed to :py:class:`list`\ s since sets incur
+            a large memory overhead and in practice the set-like behaviour of
+            the list of children is not useful.
 
         The route must be either :py:class:`~rig.routing_table.Routes` or
         `None`. If :py:class:`~rig.routing_table.Routes` then this indicates
@@ -45,9 +52,26 @@ class RoutingTree(object):
         tables suitable for loading onto a SpiNNaker machine.
     """
 
+    # A *lot* of instances of this data structure are created and so its memory
+    # consumption is a sensitive matter. The following optimisations have been
+    # made:
+    # * Using __slots__ hugely reduces the size of instances of this class
+    #   object
+    # * Storing the chip coordinate as two values (_chip_x and _chip_y) rather
+    #   than a tuple saves 56 bytes per instance.
+    __slots__ = ["_chip_x", "_chip_y", "children"]
+
     def __init__(self, chip, children=None):
         self.chip = chip
-        self.children = children if children is not None else set()
+        self.children = children if children is not None else []
+
+    @property
+    def chip(self):
+        return (self._chip_x, self._chip_y)
+
+    @chip.setter
+    def chip(self, chip):
+        self._chip_x, self._chip_y = chip
 
     def __iter__(self):
         """Iterate over this node and then all its children, recursively and in
@@ -75,7 +99,7 @@ class RoutingTree(object):
 
         Yield
         -----
-        (direction, (x, y), {Routes})
+        (direction, (x, y), {:py:class:`~rig.routing_table.Routes`, ...})
             Direction taken to reach a Node in the tree, the (x, y) co-ordinate
             of that Node and routes leading to children of the Node.
         """
