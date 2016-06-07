@@ -129,7 +129,7 @@ def ner_net(source, destinations, width, height, wrap_around=False, radius=10):
         # node it would create a cycle in the route which would be VeryBad(TM).
         # As a result, we work backward through the route and truncate it at
         # the first point where the route intersects with a connected node.
-        ldf = list(longest_dimension_first(vector, neighbour, width, height))
+        ldf = longest_dimension_first(vector, neighbour, width, height)
         i = len(ldf)
         for direction, (x, y) in reversed(ldf):
             i -= 1
