@@ -292,10 +292,10 @@ class Simulator(object):
         """
         self._components.append(component)
 
-    def _new_wire(self, source, sinks=[]):
+    def _new_wire(self, source, sinks=None):
         """Create a new :py:class:`._Wire` with a unique routing key."""
         # Assign sequential routing key to new nets.
-        wire = _Wire(source, sinks, len(self._wires))
+        wire = _Wire(source, sinks if sinks is not None else [], len(self._wires))
         self._wires.append(wire)
 
         return wire
