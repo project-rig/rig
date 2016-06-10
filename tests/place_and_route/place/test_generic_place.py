@@ -31,6 +31,7 @@ from rig.place_and_route.place.breadth_first \
 from rig.place_and_route.place.hilbert import place as hilbert_place
 from rig.place_and_route.place.sa import place as sa_place
 from rig.place_and_route.place.rand import place as rand_place
+from rig.place_and_route.place.rcm import place as rcm_place
 
 from rig.place_and_route.place.sa.python_kernel import PythonKernel
 
@@ -58,7 +59,8 @@ ALGORITHMS_UNDER_TEST = [(default_place, {}),
                          # Testing with effort = 0 tests the initial (random)
                          # placement solutions of the SA placer.
                          (sa_place, {"effort": 0.0}),
-                         (rand_place, {})]
+                         (rand_place, {}),
+                         (rcm_place, {})]
 
 
 @pytest.mark.parametrize("algorithm,kwargs", ALGORITHMS_UNDER_TEST)
