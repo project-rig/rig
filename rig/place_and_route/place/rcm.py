@@ -133,8 +133,15 @@ def rcm_chip_order(machine):
         for link in Links:
             if (x, y, link) in machine:
                 dx, dy = link.to_vector()
-                neighbours.append(((x + dx) % machine.width,
-                                   (y + dy) % machine.height))
+                neighbour = ((x + dx) % machine.width,
+                             (y + dy) % machine.height)
+
+                # In principle if the link to chip is marked as working, that
+                # chip should be working. In practice this might not be the
+                # case (especially for carelessly hand-defined Machine
+                # objects).
+                if neighbour in machine:
+                    neighbours.append(neighbour)
         nets.append(Net((x, y), neighbours))
 
     return rcm_vertex_order(vertices, nets)

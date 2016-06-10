@@ -211,3 +211,9 @@ def test_rcm_chip_order():
     # Many chips
     m = Machine(4, 2)
     assert sorted(rcm_chip_order(m)) == sorted(m)
+
+    # With dead chips which can be reached by 'working' links. Should not
+    # happen in practice but often appear in hand-written 'fake' Machine
+    # objects...
+    m = Machine(4, 2, dead_chips={(2, 1)})
+    assert sorted(rcm_chip_order(m)) == sorted(m)
