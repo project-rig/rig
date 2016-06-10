@@ -398,3 +398,30 @@ def test_same_chip_constraint(algorithm, kwargs):
 
         # The placement of the two constrained vertices should be conincident
         assert placements[vertices[0]] == placements[vertices[1]]
+
+    # Make sure tricky edge-cases are handled correctly by placers:
+    # * Overlapping constraints
+    # * Singleton constraints
+    # * Constraints with repeated vertices
+    # * Duplicate constraints
+    machine = Machine(2, 2)
+    v0 = object()
+    v1 = object()
+    v2 = object()
+    v3 = object()
+    vertices_resources = {v: {Cores: 1} for v in [v0, v1, v2, v3]}
+    nets = [Net(v0, [v1, v2, v3])]
+    constraints = [SameChipConstraint([v0, v1]),  # Overlapping
+                   SameChipConstraint([v0, v2]),
+                   SameChipConstraint([v2, v3]),
+                   SameChipConstraint([v3]),      # Singleton
+                   SameChipConstraint([v3]),      # Duplicate
+                   SameChipConstraint([v3, v3])]  # Repeated vertex
+    placements = algorithm(vertices_resources, nets, machine, constraints,
+                           **kwargs)
+
+    # No extra vertices should have apppeared
+    assert set(placements) == set([v0, v1, v2, v3])
+
+    # All four vertices should be placed on top each other
+    assert len(set(placements.values())) == 1
