@@ -366,7 +366,7 @@ class SCPConnection(object):
 
         # Run the event loop and then return the retrieved data
         self.send_scp_burst(buffer_size, window_size,
-                            packets(length_bytes, data))
+                            list(packets(length_bytes, data)))
         return bytes(data)
 
     def write(self, buffer_size, window_size, x, y, p, address, data):
@@ -415,7 +415,8 @@ class SCPConnection(object):
                 pos += block_size
 
         # Run the event loop and then return the retrieved data
-        self.send_scp_burst(buffer_size, window_size, packets(address, data))
+        self.send_scp_burst(buffer_size, window_size,
+                            list(packets(address, data)))
 
     def close(self):
         """Close the SCP connection."""
