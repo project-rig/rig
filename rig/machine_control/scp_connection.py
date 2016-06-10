@@ -178,10 +178,11 @@ class SCPConnection(object):
 
         queued_packets = True
         outstanding_packets = {}
+        outstanding_callbacks = collections.deque()
 
         # While there are packets in the queue or packets for which we are
         # still awaiting returns then continue to loop.
-        while queued_packets or outstanding_packets:
+        while queued_packets or outstanding_packets or outstanding_callbacks:
             # If there are fewer outstanding packets than the window can take
             # and we still might have packets left to send then transmit a
             # packet and add it to the list of outstanding packets.
@@ -222,6 +223,11 @@ class SCPConnection(object):
 
                     # Actually send the packet
                     self.sock.send(outstanding_packets[seq].bytestring)
+
+            # Call all outstanding callbacks
+            while outstanding_callbacks:
+                callback, packet = outstanding_callbacks.pop()
+                callback(packet)
 
             # Listen on the socket for an acknowledgement packet, there may not
             # be one.
@@ -274,7 +280,8 @@ class SCPConnection(object):
                     # sufficiently unlikely that there is no problem.
                     outstanding = outstanding_packets.pop(seq, None)
                     if outstanding is not None:
-                        outstanding.callback(ack)
+                        outstanding_callbacks.appendleft((outstanding.callback,
+                                                          ack))
 
             # Look through all the remaining outstanding packets, if any of
             # them have timed out then we retransmit them.
@@ -359,7 +366,7 @@ class SCPConnection(object):
 
         # Run the event loop and then return the retrieved data
         self.send_scp_burst(buffer_size, window_size,
-                            packets(length_bytes, data))
+                            list(packets(length_bytes, data)))
         return bytes(data)
 
     def write(self, buffer_size, window_size, x, y, p, address, data):
@@ -408,7 +415,8 @@ class SCPConnection(object):
                 pos += block_size
 
         # Run the event loop and then return the retrieved data
-        self.send_scp_burst(buffer_size, window_size, packets(address, data))
+        self.send_scp_burst(buffer_size, window_size,
+                            list(packets(address, data)))
 
     def close(self):
         """Close the SCP connection."""
