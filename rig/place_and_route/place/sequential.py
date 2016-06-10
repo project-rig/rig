@@ -101,14 +101,17 @@ def place(vertices_resources, nets, machine, constraints,
         # Must modify the vertex_order to substitute the merged vertices
         # inserted by apply_reserve_resource_constraint.
         vertex_order = list(vertex_order)
-        for merged_vertex in reversed(substitutions):
+        for merged_vertex in substitutions:
             # Swap the first merged vertex for its MergedVertex object and
             # remove all other vertices from the merged set
             vertex_order[vertex_order.index(merged_vertex.vertices[0])] \
                 = merged_vertex
             # Remove all other vertices in the MergedVertex
+            already_removed = set([merged_vertex.vertices[0]])
             for vertex in merged_vertex.vertices[1:]:
-                vertex_order.remove(vertex)
+                if vertex not in already_removed:
+                    vertex_order.remove(vertex)
+                    already_removed.add(vertex)
 
     # The set of vertices which have not been constrained, in iteration order
     movable_vertices = (v for v in (vertices_resources
