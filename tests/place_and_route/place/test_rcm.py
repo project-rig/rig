@@ -190,12 +190,12 @@ def test_rcm_vertex_order():
     vertices_resources = {v0: {}, v1: {}, v2: {}, v3: {}}
     nets = [Net(v0, v1), Net(v2, v3)]
     assert list(rcm_vertex_order(vertices_resources, nets)) in (
-        # v1 & v2 first, all possible orders of each pair
+        # v0 & v1 first, all possible orders of each pair
         [v0, v1, v2, v3],
         [v0, v1, v3, v2],
         [v1, v0, v2, v3],
         [v1, v0, v3, v2],
-        # v3 & v4 first, all possible orders of each pair
+        # v2 & v3 first, all possible orders of each pair
         [v2, v3, v0, v1],
         [v3, v2, v0, v1],
         [v2, v3, v1, v0],

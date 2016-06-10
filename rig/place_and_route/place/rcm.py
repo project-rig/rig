@@ -121,11 +121,15 @@ def rcm_vertex_order(vertices_resources, nets):
 
 def rcm_chip_order(machine):
     """A generator which iterates over a set of chips in a machine in
-    Reverse-Cuthil-McKee order.
+    Reverse-Cuthill-McKee order.
 
     For use as a chip ordering for the sequential placer.
     """
     # Convert the Machine description into a placement-problem-style-graph
+    # where the vertices are chip coordinate tuples (x, y) and each net
+    # represents the links leaving each chip. This allows us to re-use the
+    # rcm_vertex_order function above to generate an RCM ordering of chips in
+    # the machine.
     vertices = list(machine)
     nets = []
     for (x, y) in vertices:
