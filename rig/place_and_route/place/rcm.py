@@ -1,7 +1,7 @@
 """Reverse Cuthill-McKee based placement.
 """
 
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from six import itervalues
 
@@ -28,20 +28,18 @@ def _get_vertices_neighbours(nets):
     return vertices_neighbours
 
 
-def _dfs(vertex, vertices_neighbours, _visited=None):
+def _dfs(vertex, vertices_neighbours):
     """Generate all the vertices connected to the supplied vertex in
     depth-first-search order.
     """
-    if _visited is None:
-        _visited = set()
-
-    yield vertex
-    _visited.add(vertex)
-
-    for neighbour in vertices_neighbours[vertex]:
-        if neighbour not in _visited:
-            for vertex in _dfs(neighbour, vertices_neighbours, _visited):
-                yield vertex
+    visited = set()
+    to_visit = deque([vertex])
+    while to_visit:
+        vertex = to_visit.pop()
+        if vertex not in visited:
+            yield vertex
+            visited.add(vertex)
+            to_visit.extend(vertices_neighbours[vertex])
 
 
 def _get_connected_subgraphs(vertices, vertices_neighbours):
