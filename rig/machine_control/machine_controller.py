@@ -1806,13 +1806,22 @@ class MachineController(ContextMixin):
             largest free block in SDRAM and SRAM.
         """
         info = self._send_scp(x, y, 0, SCPCommands.info, expected_args=3)
+
+        # Unpack values encoded in the argument fields
         num_cores = info.arg1 & 0x1F
-        core_states = [consts.AppState(c)
-                       for c in struct.unpack_from("<18B", info.data)]
         working_links = set(link for link in Links
                             if (info.arg1 >> (8 + link)) & 1)
         largest_free_rtr_mc_block = (info.arg1 >> 14) & 0x7FF
         ethernet_up = bool(info.arg1 & (1 << 25))
+
+        # Unpack the values in the data payload
+        data = struct.unpack_from("<18BHI", info.data)
+        core_states = [consts.AppState(c) for c in data[:18]]
+        local_ethernet_chip = ((data[18] >> 8) & 0xFF,
+                               (data[18] >> 0) & 0xFF)
+        ip_address = ".".join(str((data[19] >> i) & 0xFF)
+                              for i in range(0, 32, 8))
+
         return ChipInfo(
             num_cores=num_cores,
             core_states=core_states[:num_cores],
@@ -1820,7 +1829,9 @@ class MachineController(ContextMixin):
             largest_free_sdram_block=info.arg2,
             largest_free_sram_block=info.arg3,
             largest_free_rtr_mc_block=largest_free_rtr_mc_block,
-            ethernet_up=ethernet_up
+            ethernet_up=ethernet_up,
+            ip_address=ip_address,
+            local_ethernet_chip=local_ethernet_chip,
         )
 
     @ContextMixin.use_contextual_arguments()
@@ -2013,7 +2024,8 @@ class CoreInfo(collections.namedtuple(
 class ChipInfo(collections.namedtuple(
     'ChipInfo', "num_cores core_states working_links "
                 "largest_free_sdram_block largest_free_sram_block "
-                "largest_free_rtr_mc_block ethernet_up")):
+                "largest_free_rtr_mc_block ethernet_up ip_address "
+                "local_ethernet_chip")):
     """Information returned about a chip.
 
     If some parameter is omitted from the constructor, realistic defaults are
@@ -2041,6 +2053,17 @@ class ChipInfo(collections.namedtuple(
         entries.
     ethernet_up : bool
         True if the chip's Ethernet connection is connected, False otherwise.
+    ip_address : str
+        The IP address of the Chip's Ethernet connection. If ethernet_up is
+        False, the value of this field is unpredictable and should be ignored.
+    local_ethernet_chip : (x, y)
+        The coordinates of the 'nearest' Ethernet connected chip to this chip,
+        corresponding with the value in ``sv->eth_addr``.
+
+        .. note::
+
+            This value may not literally be the *nearest* Ethernet connected
+            chip.
     """
 
     def __new__(cls,
@@ -2050,7 +2073,9 @@ class ChipInfo(collections.namedtuple(
                 largest_free_sdram_block=119275492,
                 largest_free_sram_block=22240,
                 largest_free_rtr_mc_block=1023,
-                ethernet_up=False):
+                ethernet_up=False,
+                ip_address="0.0.0.0",
+                local_ethernet_chip=(255, 255)):
         # If core_states is omitted, generate a list of core-states the right
         # length for the number of cores suggested)
         if core_states is None:
@@ -2060,7 +2085,8 @@ class ChipInfo(collections.namedtuple(
         return super(ChipInfo, cls).__new__(
             cls, num_cores, core_states, working_links,
             largest_free_sdram_block, largest_free_sram_block,
-            largest_free_rtr_mc_block, ethernet_up)
+            largest_free_rtr_mc_block, ethernet_up, ip_address,
+            local_ethernet_chip)
 
 
 class SystemInfo(dict):

@@ -392,10 +392,12 @@ class TestMachineControllerLive(object):
             Links.east,
         ])
         assert chip_info.ethernet_up
+        assert chip_info.ip_address != "0.0.0.0"
 
-        assert not controller.get_chip_info(1, 0).ethernet_up
-        assert not controller.get_chip_info(0, 1).ethernet_up
-        assert not controller.get_chip_info(1, 1).ethernet_up
+        for x, y in [(1, 0), (0, 1), (1, 1)]:
+            chip_info = controller.get_chip_info(x, y)
+            assert not chip_info.ethernet_up
+            assert chip_info.local_ethernet_chip == (0, 0)
 
     def test_get_system_info_spinn_5(self, live_system_info,
                                      is_spinn_5_board):
@@ -2363,6 +2365,12 @@ class TestMachineController(object):
 
         data = struct.pack("<18B", *(core_states + ([0] * (18 - num_cores))))
 
+        # Add nearest eth chip as (1, 2)
+        data += struct.pack("<H", (1 << 8) | 2)
+
+        # Add IP address 68.51.34.17
+        data += struct.pack("<I", 0x11223344)
+
         # Add extra data to the block to simulate possible future additions to
         # these fields.
         data += b"FOOBARBAZ"
@@ -2385,6 +2393,8 @@ class TestMachineController(object):
         assert chip_info.largest_free_sram_block == largest_free_sram_block
         assert chip_info.largest_free_rtr_mc_block == largest_free_rtr_mc_block
         assert chip_info.ethernet_up == ethernet_up
+        assert chip_info.ip_address == "68.51.34.17"
+        assert chip_info.local_ethernet_chip == (1, 2)
 
     def test_get_system_info(self):
         cn = MachineController("localhost")
