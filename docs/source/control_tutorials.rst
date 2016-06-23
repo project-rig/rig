@@ -451,12 +451,11 @@ of the IP address these packets should be sent to.
 
 A list of the Ethernet-connected chips in a typical SpiNNaker machine can be
 produced using
-:py:class:`rig.machine_control.MachineController.get_system_info` and
-:py:class:`rig.geometry.spinn5_eth_coords` and an IP tag configured on each
-using :py:class:`rig.machine_control.MachineController.iptag_set` like so::
+:py:class:`rig.machine_control.MachineController.get_system_info` and an IP tag
+configured on each using
+:py:class:`rig.machine_control.MachineController.iptag_set` like so::
 
     >>> from rig.machine_control import MachineController
-    >>> from rig.geometry import spinn5_eth_coords
     
     >>> # Get the IP and port of the socket we opened
     >>> addr, port = in_sock.getsockname()
@@ -465,7 +464,7 @@ using :py:class:`rig.machine_control.MachineController.iptag_set` like so::
     >>> # packets to this socket.
     >>> mc = MachineController("spinnaker-machine-hostname")
     >>> si = mc.get_system_info()
-    >>> for x, y in spinn5_eth_coords(si.width, si.height, *mc.root_chip):
+    >>> for (x, y), chip_ip in si.ethernet_connected_chips():
     ...     mc.iptag_set(1, addr, port, x, y)
 
 You can now listen for incoming packets and unpack them using

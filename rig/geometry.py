@@ -285,6 +285,20 @@ def spinn5_eth_coords(width, height, root_x=0, root_y=0):
     Specifically, generates the coordinates for the Ethernet connected chips of
     SpiNN-5 boards arranged in a standard torus topology.
 
+    .. warning::
+
+        In general, applications should use
+        :py:class:`rig.machine_control.MachineController.get_system_info` and
+        :py:meth:`~rig.machine_control.machine_controller.SystemInfo.ethernet_connected_chips`
+        to gather the coordinates of Ethernet connected chips which are
+        actually functioning. For example::
+
+            >> from rig.machine_control import MachineController
+            >> mc = MachineController("my-machine")
+            >> si = mc.get_system_info()
+            >> print(list(si.ethernet_connected_chips()))
+            [((0, 0), "1.2.3.4"), ((4, 8), "1.2.3.5"), ((8, 4), "1.2.3.6")]
+
     Parameters
     ----------
     width, height : int
@@ -322,6 +336,25 @@ def spinn5_local_eth_coord(x, y, w, h, root_x=0, root_y=0):
 
     .. note::
         This function assumes the system is constructed from SpiNN-5 boards
+
+    .. warning::
+
+        In general, applications should interrogate the machine to determine
+        which Ethernet connected chip is considered 'local' to a particular
+        SpiNNaker chip, e.g. using
+        :py:class:`rig.machine_control.MachineController.get_system_info`::
+
+            >> from rig.machine_control import MachineController
+            >> mc = MachineController("my-machine")
+            >> si = mc.get_system_info()
+            >> print(si[(3, 2)].local_ethernet_chip)
+            (0, 0)
+
+        :py:func:`.spinn5_local_eth_coord` will always produce the coordinates
+        of the Ethernet-connected SpiNNaker chip on the same SpiNN-5 board as
+        the supplied chip. In future versions of the low-level system software,
+        some other method of chosing local Ethernet connected chips may be
+        used.
 
     Parameters
     ----------

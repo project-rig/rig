@@ -2562,6 +2562,8 @@ class TestSystemInfo(object):
         * Chip (1, 2) is dead
         * Link (1, 1, Links.north) is dead
         * Core (2, 2, 1) is rte'd
+        * Only chip (0, 0) has an Ethernet connection and its IP address is
+          "1.2.3.4".
         """
         return SystemInfo(5, 10, {
             (x, y): ChipInfo(
@@ -2572,7 +2574,9 @@ class TestSystemInfo(object):
                              for p in range(x + 1)],
                 working_links=set([Links.north] if (x, y) != (1, 1) else []),
                 largest_free_sdram_block=100,
-                largest_free_sram_block=10)
+                largest_free_sram_block=10,
+                ethernet_up=(x, y) == (0, 0),
+                ip_address="1.2.3.4")
             for x in range(5)
             for y in range(10)
             if (x, y) != (1, 2)
@@ -2587,6 +2591,11 @@ class TestSystemInfo(object):
         )
         assert set(example_si) == expected
         assert set(example_si.chips()) == expected
+
+    def test_iter_ethernet_connected_chips(self, example_si):
+        assert list(example_si.ethernet_connected_chips()) == [
+            ((0, 0), "1.2.3.4"),
+        ]
 
     def test_iter_dead_chips(self, example_si):
         expected = set([(1, 2)])

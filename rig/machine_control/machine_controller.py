@@ -2132,6 +2132,19 @@ class SystemInfo(dict):
         """
         return iter(self)
 
+    def ethernet_connected_chips(self):
+        """Iterate over the coordinates of Ethernet connected chips.
+
+        Yields
+        ------
+        ((x, y), str)
+            The coordinate and IP address of each Ethernet connected chip in
+            the system.
+        """
+        return ((xy, chip_info.ip_address)
+                for xy, chip_info in six.iteritems(self)
+                if chip_info.ethernet_up)
+
     def dead_chips(self):
         """Generate the coordinates of all dead chips.
 
