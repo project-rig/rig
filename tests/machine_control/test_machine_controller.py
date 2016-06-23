@@ -392,10 +392,12 @@ class TestMachineControllerLive(object):
             Links.east,
         ])
         assert chip_info.ethernet_up
+        assert chip_info.ip_address != "0.0.0.0"
 
-        assert not controller.get_chip_info(1, 0).ethernet_up
-        assert not controller.get_chip_info(0, 1).ethernet_up
-        assert not controller.get_chip_info(1, 1).ethernet_up
+        for x, y in [(1, 0), (0, 1), (1, 1)]:
+            chip_info = controller.get_chip_info(x, y)
+            assert not chip_info.ethernet_up
+            assert chip_info.local_ethernet_chip == (0, 0)
 
     def test_get_system_info_spinn_5(self, live_system_info,
                                      is_spinn_5_board):
@@ -795,20 +797,16 @@ class TestMachineController(object):
     @pytest.mark.parametrize("has_ip", [True, False])
     def test_get_ip_address(self, has_ip):
         cn = MachineController("localhost")
-        cn.read_struct_field = mock.Mock(side_effect=[has_ip, 0x11223344])
+        cn.get_chip_info = mock.Mock(return_value=ChipInfo(
+            ethernet_up=has_ip,
+            ip_address="68.51.34.17",
+        ))
 
         ip = cn.get_ip_address(1, 2)
-
         if has_ip:
             assert ip == "68.51.34.17"
-            cn.read_struct_field.assert_has_calls([
-                mock.call("sv", "eth_up", x=1, y=2),
-                mock.call("sv", "ip_addr", x=1, y=2),
-            ])
         else:
             assert ip is None
-            cn.read_struct_field.assert_called_once_with("sv", "eth_up",
-                                                         x=1, y=2)
 
     def test__get_connection(self):
         cn = MachineController("localhost")
@@ -2363,6 +2361,12 @@ class TestMachineController(object):
 
         data = struct.pack("<18B", *(core_states + ([0] * (18 - num_cores))))
 
+        # Add nearest eth chip as (1, 2)
+        data += struct.pack("<H", (1 << 8) | 2)
+
+        # Add IP address 68.51.34.17
+        data += struct.pack("<I", 0x11223344)
+
         # Add extra data to the block to simulate possible future additions to
         # these fields.
         data += b"FOOBARBAZ"
@@ -2385,6 +2389,8 @@ class TestMachineController(object):
         assert chip_info.largest_free_sram_block == largest_free_sram_block
         assert chip_info.largest_free_rtr_mc_block == largest_free_rtr_mc_block
         assert chip_info.ethernet_up == ethernet_up
+        assert chip_info.ip_address == "68.51.34.17"
+        assert chip_info.local_ethernet_chip == (1, 2)
 
     def test_get_system_info(self):
         cn = MachineController("localhost")
@@ -2556,6 +2562,8 @@ class TestSystemInfo(object):
         * Chip (1, 2) is dead
         * Link (1, 1, Links.north) is dead
         * Core (2, 2, 1) is rte'd
+        * Only chip (0, 0) has an Ethernet connection and its IP address is
+          "1.2.3.4".
         """
         return SystemInfo(5, 10, {
             (x, y): ChipInfo(
@@ -2566,7 +2574,9 @@ class TestSystemInfo(object):
                              for p in range(x + 1)],
                 working_links=set([Links.north] if (x, y) != (1, 1) else []),
                 largest_free_sdram_block=100,
-                largest_free_sram_block=10)
+                largest_free_sram_block=10,
+                ethernet_up=(x, y) == (0, 0),
+                ip_address="1.2.3.4")
             for x in range(5)
             for y in range(10)
             if (x, y) != (1, 2)
@@ -2581,6 +2591,11 @@ class TestSystemInfo(object):
         )
         assert set(example_si) == expected
         assert set(example_si.chips()) == expected
+
+    def test_iter_ethernet_connected_chips(self, example_si):
+        assert list(example_si.ethernet_connected_chips()) == [
+            ((0, 0), "1.2.3.4"),
+        ]
 
     def test_iter_dead_chips(self, example_si):
         expected = set([(1, 2)])
