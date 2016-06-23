@@ -797,20 +797,16 @@ class TestMachineController(object):
     @pytest.mark.parametrize("has_ip", [True, False])
     def test_get_ip_address(self, has_ip):
         cn = MachineController("localhost")
-        cn.read_struct_field = mock.Mock(side_effect=[has_ip, 0x11223344])
+        cn.get_chip_info = mock.Mock(return_value=ChipInfo(
+            ethernet_up=has_ip,
+            ip_address="68.51.34.17",
+        ))
 
         ip = cn.get_ip_address(1, 2)
-
         if has_ip:
             assert ip == "68.51.34.17"
-            cn.read_struct_field.assert_has_calls([
-                mock.call("sv", "eth_up", x=1, y=2),
-                mock.call("sv", "ip_addr", x=1, y=2),
-            ])
         else:
             assert ip is None
-            cn.read_struct_field.assert_called_once_with("sv", "eth_up",
-                                                         x=1, y=2)
 
     def test__get_connection(self):
         cn = MachineController("localhost")

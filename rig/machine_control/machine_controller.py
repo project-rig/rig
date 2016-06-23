@@ -495,12 +495,8 @@ class MachineController(ContextMixin):
             if the chip does not have an Ethernet connection or the link is
             currently down.
         """
-        if self.read_struct_field("sv", "eth_up", x=x, y=y):
-            ip = self.read_struct_field("sv", "ip_addr", x=x, y=y)
-            # Convert the IP address to the standard decimal string format
-            return ".".join(str((ip >> i) & 0xFF) for i in range(0, 32, 8))
-        else:
-            return None
+        chip_info = self.get_chip_info(x=x, y=y)
+        return chip_info.ip_address if chip_info.ethernet_up else None
 
     @ContextMixin.use_contextual_arguments()
     def write(self, address, data, x, y, p=0):
