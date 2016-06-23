@@ -353,7 +353,7 @@ def spinn5_local_eth_coord(x, y, w, h, root_x=0, root_y=0):
         :py:func:`.spinn5_local_eth_coord` will always produce the coordinates
         of the Ethernet-connected SpiNNaker chip on the same SpiNN-5 board as
         the supplied chip. In future versions of the low-level system software,
-        some other method of chosing local Ethernet connected chips may be
+        some other method of choosing local Ethernet connected chips may be
         used.
 
     Parameters

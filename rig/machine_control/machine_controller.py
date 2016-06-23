@@ -2059,7 +2059,9 @@ class ChipInfo(collections.namedtuple(
         .. note::
 
             This value may not literally be the *nearest* Ethernet connected
-            chip.
+            chip. For example, it could be the Ethernet connected chip on the
+            same board as the chip or chosen by the system at boot by some
+            process which evenly balances load.
     """
 
     def __new__(cls,
@@ -2141,9 +2143,9 @@ class SystemInfo(dict):
             The coordinate and IP address of each Ethernet connected chip in
             the system.
         """
-        return ((xy, chip_info.ip_address)
-                for xy, chip_info in six.iteritems(self)
-                if chip_info.ethernet_up)
+        for xy, chip_info in six.iteritems(self):
+            if chip_info.ethernet_up:
+                yield (xy, chip_info.ip_address)
 
     def dead_chips(self):
         """Generate the coordinates of all dead chips.
