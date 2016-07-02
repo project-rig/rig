@@ -963,6 +963,35 @@ class MachineController(ContextMixin):
                        port, struct.unpack('<I', ip_addr)[0])
 
     @ContextMixin.use_contextual_arguments()
+    def iptag_reverse_set(self, iptag, sdp_port, port,
+                          dest_x, dest_y, dest_p,
+                          x, y):
+        """Set the value of a reverse IPTag.
+
+        Forward UDP packets received on a particular port
+        to the specified SpiNNaker core
+
+        Parameters
+        ----------
+        iptag : int
+            Index of the IPTag to set
+        sdp_port : int
+            ?
+        port : int
+            UDP port to listen on
+        dest_x: int
+            X coordinate of chip to forward packets to
+        dest_y: int
+            Y coordinate of chip to forward packets to
+        dest_p: int
+            Processor to forward packets to
+        """
+        self._send_scp(
+            x, y, 0, SCPCommands.iptag,
+            (1 << 29) | (1 << 28) | (int(consts.IPTagCommands.set) << 16) | (sdp_port << 13) | (dest_p << 8) | iptag,
+            (dest_x << 24) | (dest_y << 16) | port)
+
+    @ContextMixin.use_contextual_arguments()
     def iptag_get(self, iptag, x, y):
         """Get the value of an IPTag.
 
