@@ -172,10 +172,11 @@ class LEDAction(enum.IntEnum):
 @add_int_enums_to_docstring
 class IPTagCommands(enum.IntEnum):
     """Indicate the action that should be performed to the given IPTag."""
-    set = 1
-    get = 2
-    clear = 3
-
+    set = (1 << 16)
+    get = (2 << 16)
+    clear = (3 << 16)
+    strip = (1 << 28)
+    reverse = (1 << 29)
 
 @add_int_enums_to_docstring
 class AllocOperations(enum.IntEnum):

@@ -959,7 +959,7 @@ class MachineController(ContextMixin):
         ip_addr = struct.pack('!4B',
                               *map(int, socket.gethostbyname(addr).split('.')))
         self._send_scp(x, y, 0, SCPCommands.iptag,
-                       int(consts.IPTagCommands.set) << 16 | iptag,
+                       int(consts.IPTagCommands.set) | iptag,
                        port, struct.unpack('<I', ip_addr)[0])
 
     @ContextMixin.use_contextual_arguments()
@@ -976,7 +976,7 @@ class MachineController(ContextMixin):
         iptag : int
             Index of the IPTag to set
         sdp_port : int
-            ?
+            Port to include in SDP datagram
         port : int
             UDP port to listen on
         dest_x: int
@@ -988,7 +988,10 @@ class MachineController(ContextMixin):
         """
         self._send_scp(
             x, y, 0, SCPCommands.iptag,
-            (1 << 29) | (1 << 28) | (int(consts.IPTagCommands.set) << 16) | (sdp_port << 13) | (dest_p << 8) | iptag,
+            (int(consts.IPTagCommands.strip) |
+             int(consts.IPTagCommands.reverse) |
+             int(consts.IPTagCommands.set) |
+             (sdp_port << 13) | (dest_p << 8) | iptag),
             (dest_x << 24) | (dest_y << 16) | port)
 
     @ContextMixin.use_contextual_arguments()
@@ -1006,7 +1009,7 @@ class MachineController(ContextMixin):
             The IPTag returned from SpiNNaker.
         """
         ack = self._send_scp(x, y, 0, SCPCommands.iptag,
-                             int(consts.IPTagCommands.get) << 16 | iptag, 1,
+                             int(consts.IPTagCommands.get) | iptag, 1,
                              expected_args=0)
         return IPTag.from_bytestring(ack.data)
 
@@ -1020,7 +1023,7 @@ class MachineController(ContextMixin):
             Index of the IPTag to clear.
         """
         self._send_scp(x, y, 0, SCPCommands.iptag,
-                       int(consts.IPTagCommands.clear) << 16 | iptag)
+                       int(consts.IPTagCommands.clear) | iptag)
 
     @ContextMixin.use_contextual_arguments()
     def set_led(self, led, action=None, x=Required, y=Required):
