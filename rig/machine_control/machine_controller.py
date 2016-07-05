@@ -963,7 +963,7 @@ class MachineController(ContextMixin):
                        port, struct.unpack('<I', ip_addr)[0])
 
     @ContextMixin.use_contextual_arguments()
-    def iptag_reverse_set(self, iptag, sdp_port, port,
+    def reverse_iptag_set(self, iptag, sdp_port, port,
                           dest_x, dest_y, dest_p,
                           x, y):
         """Set the value of a reverse IPTag.
