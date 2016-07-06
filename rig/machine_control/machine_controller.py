@@ -936,7 +936,7 @@ class MachineController(ContextMixin):
         return RouterDiagnostics(*struct.unpack("<16I", data))
 
     @ContextMixin.use_contextual_arguments()
-    def iptag_set(self, iptag, addr, port, x, y):
+    def iptag_set(self, iptag, addr, port, x, y, strip=False):
         """Set the value of an IPTag.
 
         Forward SDP packets with the specified IP tag sent by a SpiNNaker
@@ -954,18 +954,24 @@ class MachineController(ContextMixin):
             IP address or hostname that the IPTag should point at.
         port : int
             UDP port that the IPTag should direct packets to.
+        strip: boolean
+            Should SDP headers be stripped on leaving SpiNNaker
         """
         # Format the IP address
         ip_addr = struct.pack('!4B',
                               *map(int, socket.gethostbyname(addr).split('.')))
+        # Build flags int(consts.IPTagCommands.set)
+        flags = int(consts.IPTagFlags.strip) if strip else 0
+
         self._send_scp(x, y, 0, SCPCommands.iptag,
-                       int(consts.IPTagCommands.set) | iptag,
+                      flags | iptag,
                        port, struct.unpack('<I', ip_addr)[0])
 
     @ContextMixin.use_contextual_arguments()
     def reverse_iptag_set(self, iptag, sdp_port, port,
                           dest_x, dest_y, dest_p,
-                          x, y):
+                          x, y,
+                          strip=False):
         """Set the value of a reverse IPTag.
 
         Forward UDP packets received on a particular port
@@ -985,13 +991,15 @@ class MachineController(ContextMixin):
             Y coordinate of chip to forward packets to
         dest_p: int
             Processor to forward packets to
+        strip: boolean
+            Should SDP headers be stripped on leaving
+            SpiNNaker and re-added when they arrive
         """
+        flags = (int(consts.IPTagFlags.reverse)
+                 | (int(consts.IPTagFlags.strip) if strip else 0))
         self._send_scp(
             x, y, 0, SCPCommands.iptag,
-            (int(consts.IPTagCommands.strip) |
-             int(consts.IPTagCommands.reverse) |
-             int(consts.IPTagCommands.set) |
-             (sdp_port << 13) | (dest_p << 8) | iptag),
+            (sdp_port << 13) | (dest_p << 8) | flags | iptag,
             (dest_x << 24) | (dest_y << 16) | port)
 
     @ContextMixin.use_contextual_arguments()

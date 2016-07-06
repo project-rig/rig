@@ -175,6 +175,10 @@ class IPTagCommands(enum.IntEnum):
     set = (1 << 16)
     get = (2 << 16)
     clear = (3 << 16)
+
+@add_int_enums_to_docstring
+class IPTagFlags(enum.IntEnum):
+    """Indicate the flags that should be set on the given IPTag."""
     strip = (1 << 28)
     reverse = (1 << 29)
 
