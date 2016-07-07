@@ -960,11 +960,11 @@ class MachineController(ContextMixin):
         # Format the IP address
         ip_addr = struct.pack('!4B',
                               *map(int, socket.gethostbyname(addr).split('.')))
-        # Build flags int(consts.IPTagCommands.set)
+        # Build flags
         flags = int(consts.IPTagFlags.strip) if strip else 0
 
         self._send_scp(x, y, 0, SCPCommands.iptag,
-                      flags | iptag,
+                       int(consts.IPTagCommands.set) | flags | iptag,
                        port, struct.unpack('<I', ip_addr)[0])
 
     @ContextMixin.use_contextual_arguments()
