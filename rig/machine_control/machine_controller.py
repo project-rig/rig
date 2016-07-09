@@ -999,7 +999,7 @@ class MachineController(ContextMixin):
                  | (int(consts.IPTagFlags.strip) if strip else 0))
         self._send_scp(
             x, y, 0, SCPCommands.iptag,
-            (sdp_port << 13) | (dest_p << 8) | flags | iptag,
+            int(consts.IPTagCommands.set) | (sdp_port << 13) | (dest_p << 8) | flags | iptag,
             (dest_x << 24) | (dest_y << 16) | port)
 
     @ContextMixin.use_contextual_arguments()
