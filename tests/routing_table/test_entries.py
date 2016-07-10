@@ -2,7 +2,74 @@ import pytest
 
 from rig.links import Links
 
-from rig.routing_table import Routes, RoutingTableEntry
+from rig.routing_table import Routes, RoutingTableEntry, RouteSet
+
+
+class TestRouteSet(object):
+    def test_or_update_and_contains_and_len(self):
+        # Create an empty route set
+        rs = RouteSet()
+        assert len(rs) == 0
+
+        # Include east
+        rs |= {Routes.east}
+        assert len(rs) == 1
+        assert set(rs) == {Routes.east}
+        assert Routes.east in rs
+
+        # Include north east
+        rs |= {Routes.north_east}
+        assert len(rs) == 2
+        assert set(rs) == {Routes.east, Routes.north_east}
+        assert Routes.north_east in rs
+        assert not Routes.north in rs
+
+        # Shouldn't do anything
+        rs |= {Routes.north_east}
+        assert len(rs) == 2
+        assert set(rs) == {Routes.east, Routes.north_east}
+        assert Routes.north_east in rs
+        assert not Routes.south in rs
+        assert not None in rs
+
+        # Check that None works
+        rs |= {Routes.south, None}
+        assert len(rs) == 4
+        assert set(rs) == {Routes.east, Routes.north_east, Routes.south, None}
+        assert None in rs
+
+        rs |= Routes
+        assert len(rs) == 25
+
+    def test_remove(self):
+        rs = RouteSet(Routes)
+
+        rs -= {Routes.north, Routes.south}
+        assert len(rs) == 22
+        assert Routes.north not in rs
+        assert Routes.south not in rs
+
+    def test_equality(self):
+        assert RouteSet({Routes.north}) == RouteSet({Routes.north})
+        assert RouteSet({None}) != RouteSet()
+        assert RouteSet({None}) != RouteSet({Routes.south_west})
+        assert RouteSet({None}) == RouteSet({None})
+        assert RouteSet({Routes.north}) != RouteSet({Routes.south})
+        assert RouteSet(Routes) != RouteSet()
+
+        assert RouteSet({Routes.north}) == {Routes.north}
+        assert RouteSet({None}) != set()
+        assert RouteSet({None}) != {Routes.south_west}
+        assert RouteSet({None}) == {None}
+        assert RouteSet({Routes.north}) != {Routes.south}
+        assert RouteSet(Routes) != set()
+
+    def test_int(self):
+        for r in Routes:
+            rs = RouteSet({r})
+            assert int(rs) == 1 << r
+
+        assert int(RouteSet({None})) == 0x80000000
 
 
 class TestRoutingTableEntry(object):

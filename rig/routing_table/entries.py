@@ -8,6 +8,61 @@ from rig.utils.docstrings import add_int_enums_to_docstring
 from collections import namedtuple
 
 
+class RouteSet(object):
+    __slots__ = ["_entries"]
+
+    def __init__(self, entries=tuple(), _entries=0x0):
+        """Create a new Route Set.
+
+        Parameters
+        ----------
+        entries : Route, ...
+            Elements to include in the set.
+        """
+        # Initialise the set
+        self._entries = _entries
+
+        # Include any items from the set
+        self.update(entries)
+
+    def add(self, elem):
+        self._entries |= (1 << (elem if elem is not None else 31))
+
+    def update(self, elems):
+        for e in elems:
+            self.add(e)
+
+    def __contains__(self, elem):
+        return self._entries & (1 << (elem if elem is not None else 31))
+
+    def __eq__(self, other):
+        if isinstance(other, RouteSet):
+            return self._entries == other._entries
+        else:
+            return set(self) == set(other)
+
+    def __int__(self):
+        return self._entries
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def __iter__(self):
+        for r in Routes:
+            if (1 << r) & self._entries:
+                yield r
+
+        if (1 << 31) & self._entries:
+            yield None
+
+    def __len__(self):
+        return sum(1 for _ in self)
+
+    def __sub__(self, elems):
+        return RouteSet(_entries=self._entries & ~RouteSet(elems)._entries)
+
+
 class RoutingTableEntry(namedtuple("RoutingTableEntry",
                                    "route key mask sources")):
     """Named tuple representing a single routing entry in a SpiNNaker routing
@@ -31,7 +86,7 @@ class RoutingTableEntry(namedtuple("RoutingTableEntry",
     """
     def __new__(cls, route, key, mask, sources={None}):
         return super(RoutingTableEntry, cls).__new__(
-            cls, frozenset(route), key, mask, set(sources)
+            cls, RouteSet(route), key, mask, RouteSet(sources)
         )
 
     def __str__(self):

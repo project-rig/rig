@@ -1,6 +1,7 @@
 from collections import defaultdict, namedtuple, OrderedDict
 
-from rig.routing_table import RoutingTableEntry, MultisourceRouteError
+from rig.routing_table import (
+    RoutingTableEntry, MultisourceRouteError, RouteSet)
 from six import iteritems
 import warnings
 
@@ -69,7 +70,8 @@ def routing_tree_to_tables(routes, net_keys):
             else:
                 # Otherwise create a new route set
                 route_sets[(x, y)][(key, mask)] = \
-                    InOutPair({in_direction}, set(out_directions))
+                    InOutPair(RouteSet({in_direction}),
+                              RouteSet(out_directions))
 
     # Construct the routing tables from the route sets
     routing_tables = defaultdict(list)

@@ -1,5 +1,5 @@
 # Basic routing table datastructures
-from rig.routing_table.entries import RoutingTableEntry, Routes
+from rig.routing_table.entries import RoutingTableEntry, Routes, RouteSet
 
 # Common exceptions produced by algorithms in this module
 from rig.routing_table.exceptions import (MinimisationFailedError,
