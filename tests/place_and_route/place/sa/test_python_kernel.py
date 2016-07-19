@@ -2,6 +2,8 @@ import pytest
 
 from itertools import cycle
 
+from math import sqrt
+
 from mock import Mock, call
 
 from six import iteritems, next
@@ -39,23 +41,23 @@ def test__net_cost_no_wrap():
     # Should report cost 1 for a net to a chip one cell away
     assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(1, 0)][0]),
-                        placements, False, machine) == 1.0
+                        placements, False, machine) == 1.0 * sqrt(2)
     assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(2, 1)][0]),
-                        placements, False, machine) == 1.0
+                        placements, False, machine) == 1.0 * sqrt(2)
 
     # Should report cost for a square net
     assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(2, 2)][0]),
-                        placements, False, machine) == 2.0
+                        placements, False, machine) == 2.0 * sqrt(2)
     assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(2, 2)][0]),
-                        placements, False, machine) == 4.0
+                        placements, False, machine) == 4.0 * sqrt(2)
 
     # Should account for the weight
     assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(2, 2)][0], 0.5),
-                        placements, False, machine) == 4.0 / 2.0
+                        placements, False, machine) == 4.0 * 0.5 * sqrt(2)
 
 
 def test__net_cost_with_wrap():
@@ -80,34 +82,34 @@ def test__net_cost_with_wrap():
     # Should report cost 1 for a net to a chip one cell away
     assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(1, 0)][0]),
-                        placements, True, machine) == 1.0
+                        placements, True, machine) == 1.0 * sqrt(2)
     assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(2, 1)][0]),
-                        placements, True, machine) == 1.0
+                        placements, True, machine) == 1.0 * sqrt(2)
     # ...with wrapping
     assert pk._net_cost(Net(l2v[(2, 2)][0],
                             l2v[(2, 0)][0]),
-                        placements, True, machine) == 1.0
+                        placements, True, machine) == 1.0 * sqrt(2)
     assert pk._net_cost(Net(l2v[(2, 2)][0],
                             l2v[(0, 2)][0]),
-                        placements, True, machine) == 1.0
+                        placements, True, machine) == 1.0 * sqrt(2)
 
     # Should report cost for a square net
     assert pk._net_cost(Net(l2v[(1, 1)][0],
                             l2v[(2, 2)][0]),
-                        placements, True, machine) == 2.0
+                        placements, True, machine) == 2.0 * sqrt(2)
     assert pk._net_cost(Net(l2v[(0, 0)][0],
                             [l2v[(1, 1)][0], l2v[(2, 2)][0]]),
-                        placements, True, machine) == 4.0
+                        placements, True, machine) == 4.0 * sqrt(3)
     # With wrapping
     assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(2, 2)][0]),
-                        placements, True, machine) == 2.0
+                        placements, True, machine) == 2.0 * sqrt(2)
 
     # Should account for the weight
     assert pk._net_cost(Net(l2v[(0, 0)][0],
                             l2v[(2, 2)][0], 0.5),
-                        placements, True, machine) == 2.0 / 2.0
+                        placements, True, machine) == 2.0 * 0.5 * sqrt(2)
 
 
 @pytest.mark.parametrize("resources,expectation",
