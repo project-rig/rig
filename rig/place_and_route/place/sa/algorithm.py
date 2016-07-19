@@ -74,7 +74,8 @@ def _initial_placement(movable_vertices, vertices_resources, machine, random):
     location_iter = iter(locations)
 
     # Greedily place the vertices in a random order
-    movable_vertices = list(movable_vertices)
+    movable_vertices = list(v for v in vertices_resources
+                            if v in movable_vertices)
     random.shuffle(movable_vertices)
     vertex_iter = iter(movable_vertices)
 

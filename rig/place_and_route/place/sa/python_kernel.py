@@ -36,7 +36,8 @@ class PythonKernel(object):
     def __init__(self, vertices_resources, movable_vertices, fixed_vertices,
                  initial_placements, nets, machine, random, no_warn=False):
         self.vertices_resources = vertices_resources
-        self.movable_vertices = list(movable_vertices)
+        self.movable_vertices = list(v for v in vertices_resources
+                                     if v in movable_vertices)
         self.fixed_vertices = fixed_vertices
         self.placements = initial_placements.copy()
         self.nets = nets
