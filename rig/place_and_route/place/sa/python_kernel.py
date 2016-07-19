@@ -191,7 +191,8 @@ def _net_cost(net, placements, has_wrap_around_links, machine):
 
         return (((machine.width - x_max_delta) +
                  (machine.height - y_max_delta)) *
-                net.weight)
+                net.weight *
+                math.sqrt(len(net.sinks) + 1))
     else:
         # When no wrap-around links, find the bounding box around the vertices
         # in the net and return the HPWL weighted by the net weight.
@@ -203,7 +204,9 @@ def _net_cost(net, placements, has_wrap_around_links, machine):
             x2 = x if x > x2 else x2
             y2 = y if y > y2 else y2
 
-        return ((x2 - x1) + (y2 - y1)) * float(net.weight)
+        return (((x2 - x1) + (y2 - y1)) *
+                float(net.weight) *
+                math.sqrt(len(net.sinks) + 1))
 
 
 def _vertex_net_cost(vertex, v2n, placements, has_wrap_around_links, machine):
