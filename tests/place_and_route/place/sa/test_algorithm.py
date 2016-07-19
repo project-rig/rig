@@ -71,7 +71,7 @@ def test_callback(return_value, should_terminate):
 @pytest.mark.parametrize("kernel", [CKernel, PythonKernel])
 def test_deterministic(kernel):
     """Ensure that placement is deterministic when a single seed is used."""
-    # Generate a random placement in which the graph is always the saame but
+    # Generate a random placement in which the graph is always the same but
     # the specific object() instaces acting as vertices change.
     last_placements = None
     last_vertices = None
