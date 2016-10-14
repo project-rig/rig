@@ -43,10 +43,10 @@ def test_get_regions_and_cores_for_floodfill():
 
     # Test
     seen_fills = collections.defaultdict(set)
-    last = 0
+    last = (0, 0)
     for (region, cores) in compress_flood_fill_regions(targets):
-        assert (region << 32) | cores >= last
-        last = (region << 32) | cores
+        assert (region, cores) >= last
+        last = (region, cores)
 
         # Extract the data from the region
         level = (region >> 16) & 0x3
@@ -66,6 +66,26 @@ def test_get_regions_and_cores_for_floodfill():
                         {i for i in range(18) if cores & (1 << i)})
 
     assert seen_fills == targets
+
+
+def test_get_regions_and_cores_for_floodfill_ordering():
+    """This test explicitly checks that ordering across subregions works
+    correctly. Two level-3 regions are created in the level-2 region
+    originating at (0, 0). Importantly these two lower-level regions are
+    arranged in increasing order on the x-axis. A further level-3 region is
+    then created *in a different level-2 subregion* at x=0 and y=64.
+    """
+    targets = {
+        (0, 0): {1},
+        (4, 0): {1},
+        (0, 64): {1},
+    }
+
+    # Test the ordering across the subregions
+    last = (0, 0)
+    for (region, cores) in compress_flood_fill_regions(targets):
+        assert (region, cores) >= last
+        last = (region, cores)
 
 
 class TestRegionCoreTree(object):
