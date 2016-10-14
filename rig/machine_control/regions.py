@@ -80,7 +80,7 @@ def compress_flood_fill_regions(targets):
         for p in cores:
             t.add_core(x, y, p)
 
-    return t.get_regions_and_coremasks()
+    return sorted(t.get_regions_and_coremasks())
 
 
 class RegionCoreTree(object):
