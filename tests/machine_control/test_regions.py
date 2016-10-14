@@ -82,7 +82,6 @@ def test_get_regions_and_cores_for_floodfill_ordering():
     }
 
     # Test the ordering across the subregions
-    seen_fills = collections.defaultdict(set)
     last = (0, 0)
     for (region, cores) in compress_flood_fill_regions(targets):
         assert (region, cores) >= last
