@@ -62,7 +62,7 @@ spin5_boot_options = {
 def boot(hostname, boot_port=consts.BOOT_PORT,
          scamp_binary=None, sark_struct=None,
          boot_delay=0.05, post_boot_delay=2.0,
-         **sv_overrides):
+         sv_overrides=dict(), **kwargs):
     """Boot a SpiNNaker machine of the given size.
 
     Parameters
@@ -83,9 +83,9 @@ def boot(hostname, boot_port=consts.BOOT_PORT,
         Number of seconds to wait after sending last piece of boot data to give
         SC&MP time to re-initialise the Ethernet interface. Note that this does
         *not* wait for the system to fully boot.
-    **sv_overrides : {name: value, ...}
-        Any additional keyword arguments may be used to override the default
-        values in the 'sv' struct defined in the struct file.
+    sv_overrides : {name: value, ...}
+        Values used to override the defaults in the 'sv' struct defined in the
+        struct file.
 
     Notes
     -----
@@ -115,6 +115,7 @@ def boot(hostname, boot_port=consts.BOOT_PORT,
         struct_data = f.read()
     structs = struct_file.read_struct_file(struct_data)
     sv = structs[b"sv"]
+    sv_overrides.update(kwargs)  # Allow non-explicit keyword arguments for SV
     sv.update_default_values(**sv_overrides)
     sv.update_default_values(unix_time=int(time.time()),
                              boot_sig=int(time.time()),
