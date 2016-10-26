@@ -302,9 +302,9 @@ class MachineController(ContextMixin):
             fully booted before returning. If False, this check is skipped and
             the function returns as soon as the machine's Ethernet interface is
             likely to be up (but not necessarily before booting has completed).
-        **sv_overrides : {name: value, ...}
-            Any additional keyword arguments may be used to override the
-            default values in the 'sv' struct defined in the struct file.
+        sv_overrides : {name: value, ...}
+            Additional arguments used to override the default values in the
+            'sv' struct defined in the struct file.
 
         Returns
         -------
