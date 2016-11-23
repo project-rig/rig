@@ -550,9 +550,11 @@ class TestMachineControllerLive(object):
             # Allocate 90MiB
             ptr = controller.sdram_alloc(90*(1 << 20))
 
-            # A second allocation should fail
-            with pytest.raises(SpiNNakerMemoryError):
+            # A second allocation should fail because there is insufficient
+            # memory.
+            with pytest.raises(SpiNNakerMemoryError) as excinfo:
                 controller.sdram_alloc(90*(1 << 20))
+            assert not excinfo.value.tag_in_use
 
             # Free the block
             controller.sdram_free(ptr)
@@ -563,6 +565,34 @@ class TestMachineControllerLive(object):
             # A second allocation should fail
             with pytest.raises(SpiNNakerMemoryError):
                 controller.sdram_alloc(90*(1 << 20))
+
+            # Free the block again
+            controller.sdram_free(ptr)
+
+    @pytest.mark.order_after("live_test_load_application")
+    def test_sdram_alloc_and_free_repeated_tags(self, controller):
+        """Test subsequent allocation, freeing and reallocation of memory using
+        tags.
+        """
+        with controller(x=0, y=0):
+            # Allocate a small amount of memory with a tag
+            ptr = controller.sdram_alloc(4, tag=1)
+
+            # A second allocation should fail because the tag has already been
+            # used.
+            with pytest.raises(SpiNNakerMemoryError) as excinfo:
+                controller.sdram_alloc(4, tag=1)
+            assert excinfo.value.tag_in_use
+
+            # Free the block
+            controller.sdram_free(ptr)
+
+            # Re-allocate, this will fail if the free didn't work
+            ptr = controller.sdram_alloc(4, tag=1)
+
+            # A second allocation should fail
+            with pytest.raises(SpiNNakerMemoryError):
+                controller.sdram_alloc(4, tag=1)
 
             # Free the block again
             controller.sdram_free(ptr)
@@ -1253,27 +1283,50 @@ class TestMachineController(object):
             cn.fill.assert_called_once_with(addr, 0x0, size, x, y, 0)
 
     @pytest.mark.parametrize("x, y", [(1, 3), (5, 6)])
-    @pytest.mark.parametrize("size, tag", [(8, 0), (200, 2)])
-    def test_sdram_alloc_fail(self, x, y, size, tag):
+    @pytest.mark.parametrize("size, tag, tag_in_use", [(8, 0, False),
+                                                       (200, 2, False),
+                                                       (200, 2, True)])
+    @pytest.mark.parametrize("app_id", (30, 60))
+    def test_sdram_alloc_fail(self, x, y, size, tag, tag_in_use, app_id):
         """Test that sdram_alloc raises an exception when ALLOC fails."""
         # Create the mock controller
         cn = MachineController("localhost")
         cn._send_scp = mock.Mock()
         cn._send_scp.return_value = SCPPacket(False, 1, 0, 0, 0, 0, 0, 0, 0, 0,
                                               0x80, 0, 0, None, None, b"")
+
+        cn.read_struct_field = mock.Mock()
+        cn.read_struct_field.return_value = 0x67884038
+
+        cn.read = mock.Mock()
+        cn.read.return_value = 1 if tag_in_use else 0
+
         cn.write = mock.Mock()
 
         with pytest.raises(SpiNNakerMemoryError) as excinfo:
-            cn.sdram_alloc(size, tag=tag, x=x, y=y, app_id=30, clear=True)
+            cn.sdram_alloc(size, tag=tag, x=x, y=y, app_id=app_id, clear=True)
 
         assert str((x, y)) in str(excinfo.value)
         assert str(size) in str(excinfo.value)
+        assert excinfo.value.tag_in_use is tag_in_use
 
         if tag == 0:
             assert "tag" not in str(excinfo.value)
         else:
-            assert "tag" in str(excinfo.value)
-            assert str(tag) in str(excinfo.value)
+            # Check that we read the allocation table
+            cn.read_struct_field.assert_called_once_with(
+                "sv", "alloc_tag", x, y
+            )
+            cn.read.assert_called_once_with(
+                cn.read_struct_field.return_value + (app_id << 8) + tag,
+                4, x, y
+            )
+
+            if tag_in_use:
+                assert "Tag" in str(excinfo.value)
+                assert str(tag) in str(excinfo.value)
+            else:
+                assert "Tag" not in str(excinfo.value)
 
         # NO write OR fill should have occurred
         assert cn._send_scp.call_count == 1  # No fill
