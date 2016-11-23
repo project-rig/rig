@@ -85,8 +85,8 @@ def test_dfs():
     v4 = "v4"
     v5 = "v5"
     vertices_neighbours = {
-        v0: {v1: 1.0}, v1: {v0: 1.0},
-        v1: {v2: 1.0, v3: 1.0}, v2: {v1: 1.0}, v3: {v1: 1.0},
+        v0: {v1: 1.0},
+        v1: {v0: 1.0, v2: 1.0, v3: 1.0}, v2: {v1: 1.0}, v3: {v1: 1.0},
         v4: {v5: 1.0}, v5: {v4: 1.0},
     }
     assert set(_dfs(v0, vertices_neighbours)) == set([v0, v1, v2, v3])
