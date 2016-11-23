@@ -162,6 +162,7 @@ def test_shortest_mesh_path():
             assert shortest_mesh_path(end, start) == neg_minimised, \
                 (end, start, neg_minimised)
 
+
 # A series of hexagonal vectors along with their possibly multiple (torus)
 # minimal counterparts in the specified torus size for testing hexagonal
 # coordinate minimisation-related functions.
