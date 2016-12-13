@@ -131,8 +131,8 @@ def _get_minimal_core_reservations(core_resource, cores, chip=None):
         Which chip the constraints should be applied to or None for a global
         constraint.
 
-    Yield
-    -----
+    Yields
+    ------
     :py:class:`~rig.place_and_route.constraints.ReserveResourceConstraint`
     """
     reservation = None

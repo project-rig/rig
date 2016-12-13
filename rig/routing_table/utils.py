@@ -251,8 +251,8 @@ def expand_entry(entry, ignore_xs=0x0):
     ignore_xs : int
         Bit-mask of Xs which should not be expanded.
 
-    Yield
-    -----
+    Yields
+    ------
     :py:class:`~rig.routing_table.RoutingTableEntry`
         Routing table entries which represent the original entry but with all
         Xs not masked off by `ignore_xs` replaced with 1s and 0s.
@@ -339,8 +339,8 @@ def expand_entries(entries, ignore_xs=None):
         Mask of bits in which Xs should not be expanded. If None (the default)
         then Xs which are common to all entries will not be expanded.
 
-    Yield
-    -----
+    Yields
+    ------
     :py:class:`~rig.routing_table.RoutingTableEntry`
         Routing table entries which represent the original entries but with all
         Xs not masked off by `ignore_xs` replaced with 1s and 0s.

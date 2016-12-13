@@ -97,8 +97,8 @@ class RoutingTree(object):
         """Traverse the tree yielding the direction taken to a node, the
         co-ordinates of that node and the directions leading from the Node.
 
-        Yield
-        -----
+        Yields
+        ------
         (direction, (x, y), {:py:class:`~rig.routing_table.Routes`, ...})
             Direction taken to reach a Node in the tree, the (x, y) co-ordinate
             of that Node and routes leading to children of the Node.
