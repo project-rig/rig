@@ -339,8 +339,8 @@ def _get_best_merge(routing_table, aliases):
 def _get_all_merges(routing_table):
     """Get possible sets of entries to merge.
 
-    Yield
-    -----
+    Yields
+    ------
     :py:class:`~.Merge`
     """
     # Memorise entries that have been considered as part of a merge
@@ -811,8 +811,8 @@ def _get_covered_keys_and_masks(merge, aliases):
         Map of key-mask pairs to the sets of key-mask pairs that they actually
         represent.
 
-    Yield
-    -----
+    Yields
+    ------
     (key, mask)
         Pairs of keys and masks which would be covered if the given `merge`
         were to be applied to the routing table.
