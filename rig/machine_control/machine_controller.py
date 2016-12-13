@@ -1101,9 +1101,18 @@ class MachineController(ContextMixin):
 
         # Send the packet and retrieve the address
         rv = self._send_scp(x, y, 0, SCPCommands.alloc_free, arg1, size, tag)
-        if rv.arg1 == 0:
-            # Allocation failed
-            raise SpiNNakerMemoryError(size, x, y, tag)
+        if rv.arg1 == 0:  # Allocation failed
+            tag_in_use = False
+            if tag != 0:
+                # If a tag was specified then read the allocation table to see
+                # if the tag was already in use or whether we ran out of
+                # memory.
+                alloc_tags = self.read_struct_field("sv", "alloc_tag", x, y)
+                index = (app_id << 8) + tag
+                entry = self.read(alloc_tags + index, 4, x, y)
+                tag_in_use = (entry != 0)
+
+            raise SpiNNakerMemoryError(size, x, y, tag, tag_in_use)
 
         # Get the address
         address = rv.arg1
@@ -2409,21 +2418,24 @@ class SpiNNakerMemoryError(Exception):
         The chip coordinates on which the allocation failed.
     tag : int
         The tag number of the failed allocation.
+    tag_in_use : bool
+        Whether the allocation failed because the tag was already in use.
     """
-    def __init__(self, size, x, y, tag=0):
+    def __init__(self, size, x, y, tag=0, tag_in_use=False):
         self.size = size
         self.chip = (x, y)
         self.tag = tag
+        self.tag_in_use = tag_in_use
 
     def __str__(self):
-        if self.tag == 0:
+        if self.tag == 0 or not self.tag_in_use:
             return ("Failed to allocate {} bytes of SDRAM on chip ({}, {}). "
                     "Insufficient memory available.".
                     format(self.size, self.chip[0], self.chip[1]))
         else:
             return ("Failed to allocate {} bytes of SDRAM on chip ({}, {}). "
-                    "Insufficient memory available or tag {} already in use.".
-                    format(self.size, self.chip[0], self.chip[1], self.tag))
+                    "Tag {} already in use.".format(
+                        self.size, self.chip[0], self.chip[1], self.tag))
 
 
 class SpiNNakerRouterError(Exception):
