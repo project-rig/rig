@@ -109,6 +109,7 @@ class SCPReturnCodes(enum.IntEnum):
     p2p_timeout = 0x8e  # Eth chip <--> destination comms timeout (Fatal)
     pkt_tx = 0x8f  # Pkt Tx failed (Fatal)
 
+
 RETRYABLE_SCP_RETURN_CODES = set([
     SCPReturnCodes.sum,
     SCPReturnCodes.p2p_busy,
