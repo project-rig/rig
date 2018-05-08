@@ -60,9 +60,14 @@ class CKernel(object):
                 vertices_nets[vertex].add(net)
 
         # Create all vertices and set assign initial positions. Populates a map
-        # from Python vertex object to C sa_vertex_t pointer.
+        # from Python vertex object to C sa_vertex_t pointer. As required by
+        # the C interface, sorts vertices such that moveable vertices are
+        # listed before fixed ones.
+        movable_vertices_set = set(movable_vertices)  # For faster lookup
         self.vertices_c = {}
-        for i, vertex in enumerate(vertices_resources):
+        for i, vertex in enumerate(
+                sorted(vertices_resources,
+                       key=(lambda v: v not in movable_vertices_set))):
             # Create the vertex
             v = rig_c_sa.sa_new_vertex(self.s, len(vertices_nets[vertex]))
             assert v != ffi.NULL
