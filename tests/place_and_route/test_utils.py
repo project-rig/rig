@@ -47,7 +47,7 @@ def test_build_machine():
                          if (x, y, c) != (2, 3, 17) else
                          AppState.dead
                          for c in range(17 if (x, y) == (2, 3) else 18)],
-            working_links=(set(l for l in Links if l != Links.north)
+            working_links=(set(link for link in Links if link != Links.north)
                            if (x, y) == (4, 5) else
                            set(Links)),
             largest_free_sdram_block=(0 if (x, y) == (6, 7)

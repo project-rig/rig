@@ -2381,12 +2381,14 @@ class TestMachineController(object):
                              "largest_free_rtr_mc_block,ethernet_up",
                              [((18 | (0b111110 << 8) | (1024 << 14)),
                                18,
-                               set(l for l in Links if l != Links.east),
+                               set(link for link in Links
+                                   if link != Links.east),
                                1024,
                                False),
                               ((18 | (0b011111 << 8) | (0 << 14)),
                                18,
-                               set(l for l in Links if l != Links.south),
+                               set(link for link in Links
+                                   if link != Links.south),
                                0,
                                False),
                               ((17 | (0b111111 << 8) | (123 << 14)),

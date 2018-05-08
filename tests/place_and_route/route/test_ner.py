@@ -425,10 +425,10 @@ def test_a_star_impossible():
 
     # A machine where the only working link is that going west from (1, 0) to
     # (0, 0).
-    machine = Machine(2, 1, dead_links=set((x, 0, l)
-                                           for l in Links for x in range(2)
+    machine = Machine(2, 1, dead_links=set((x, 0, link)
+                                           for link in Links for x in range(2)
                                            if not (x == 1 and
-                                                   l == Links.west)))
+                                                   link == Links.west)))
 
     # Ensure we can't get a route out of (0, 0) to (1, 0) since all links
     # leaving it are dead
