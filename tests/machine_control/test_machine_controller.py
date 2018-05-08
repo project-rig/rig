@@ -15,7 +15,8 @@ from rig.machine_control.consts import (
 from rig.machine_control.machine_controller import (
     MachineController, SpiNNakerBootError, SpiNNakerMemoryError, MemoryIO,
     SpiNNakerRouterError, SpiNNakerLoadingError, SystemInfo, CoreInfo,
-    ChipInfo, ProcessorStatus, unpack_routing_table_entry, TruncationWarning
+    ChipInfo, ProcessorStatus, unpack_routing_table_entry, TruncationWarning,
+    TruncationWarning
 )
 from rig.machine_control.packets import SCPPacket
 from rig.machine_control.scp_connection import \
@@ -2794,7 +2795,8 @@ class TestMemoryIO(object):
         mock_controller.read.assert_called_with(1, 9, 0, 0, 0)
         mock_controller.read.reset_mock()
 
-        assert sdram_file.read(1) == b''
+        with pytest.warns(TruncationWarning):
+            assert sdram_file.read(1) == b''
         assert mock_controller.read.call_count == 0
 
     def test_empty_read(self, mock_controller):
@@ -2844,7 +2846,8 @@ class TestMemoryIO(object):
             assert len(w) == 1
             assert issubclass(w[0].category, TruncationWarning)
 
-        assert sdram_file.write(b"\x00") == 0
+        with pytest.warns(TruncationWarning):
+            assert sdram_file.write(b"\x00") == 0
         sdram_file.flush()
 
         assert mock_controller.write.call_count == 1
@@ -3024,7 +3027,8 @@ class TestMemoryIO(object):
         assert not mock_controller.read.called
 
         # No writes should occur
-        assert sdram_file.write(b"Hello, world!") == 0
+        with pytest.warns(TruncationWarning):
+            assert sdram_file.write(b"Hello, world!") == 0
         assert not mock_controller.write.called
 
         # Slicing should achieve the same thing
