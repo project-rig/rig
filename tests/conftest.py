@@ -46,10 +46,8 @@ def pytest_runtest_makereport(item, call):  # pragma: no cover
         if call.excinfo is not None:
             # Don't skip following tests if something was simply
             # skipped/xfailed.
-            # XXX: The pytest API for testing for skip/xfail is "lightly"
-            # defined. This will hopefully be cleaner in future versions.
-            if call.excinfo.type is not _pytest.runner.Skipped and \
-               call.excinfo.type is not _pytest.skipping.XFailed:
+            if call.excinfo.type is not pytest.skip and \
+               call.excinfo.type is not pytest.xfail:
                 parent = item.parent
                 parent._previousfailed = item
 
