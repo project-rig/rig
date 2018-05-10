@@ -15,8 +15,7 @@ from rig.machine_control.consts import (
 from rig.machine_control.machine_controller import (
     MachineController, SpiNNakerBootError, SpiNNakerMemoryError, MemoryIO,
     SpiNNakerRouterError, SpiNNakerLoadingError, SystemInfo, CoreInfo,
-    ChipInfo, ProcessorStatus, unpack_routing_table_entry, TruncationWarning,
-    TruncationWarning
+    ChipInfo, ProcessorStatus, unpack_routing_table_entry, TruncationWarning
 )
 from rig.machine_control.packets import SCPPacket
 from rig.machine_control.scp_connection import \

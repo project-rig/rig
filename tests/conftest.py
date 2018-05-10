@@ -1,5 +1,4 @@
 import pytest
-import _pytest
 
 from collections import defaultdict
 from toposort import toposort
