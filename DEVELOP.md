@@ -145,12 +145,10 @@ The test suite supports the following commandline arguments:
 
 Booting a SpiNNaker board requires the (reliable) sending of packets to UDP
 port 54321 which is frequently blocked by ISPs and is not reliable (since UDP
-gives no guarantees, especially on the open internet). As a result, a proxy
-server must be used to communicate with the board. A utility such as
-[`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy) can be used
-alongside the test suite for this purpose.
-
-See the [Travis setup](.travis.yml) for an example of this in use.
+gives no guarantees, especially on the open internet). As a result on some
+networks, a proxy server must be used to communicate with the board. A utility
+such as [`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy) can
+be used alongside the test suite for this purpose if required.
 
 ### Test coverage checking
 
