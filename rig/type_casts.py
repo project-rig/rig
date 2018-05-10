@@ -386,7 +386,7 @@ class NumpyFixToFloatConverter(object):
 
         >>> unsigned = np.array([0xf0], dtype=np.uint8)
         >>> kbits(unsigned)
-        array([ 15.])
+        array([15.])
     """
     def __init__(self, n_frac):
         """Create a new converter from fix-point to floating point
