@@ -368,7 +368,8 @@ class TestMinimise(object):
             RTE({Routes.south, Routes.south_west}, 0b0000, 0b1011),
             RTE({Routes.south_west}, 0b0100, 0b0100),
         ]
-        assert table_is_subset_of(table, expected_table), "Test is broken"
+        with pytest.warns(UserWarning):  # Table is non-orthogonal
+            assert table_is_subset_of(table, expected_table), "Test is broken"
 
         # Get the minimised table
         assert minimise(table, target_length=None) == expected_table
