@@ -91,12 +91,12 @@ will also detect packaging faults (e.g. omitted binaries & support files).
 
 Rigs tests are broken up into three groups which can be run as follows:
 
-    $ py.test tests                                # The Rig test-suite
-    $ py.test rig --doctest-modules                # Doctests in rig source code
-    $ py.test docs --doctest-glob='*_doctest.rst'  # Doctests in Sphinx
-                                                   # documentation whose
-                                                   # filename ends with
-                                                   # '_doctest.rst'.
+    $ py.test tests                                 # The Rig test-suite
+    $ py.test rig --doctest-modules -p no:warnings  # Doctests in rig source code
+    $ py.test docs --doctest-glob='*_doctest.rst'   # Doctests in Sphinx
+                                                    # documentation whose
+                                                    # filename ends with
+                                                    # '_doctest.rst'.
 
 Note: The first command only runs a subset of the full test suite which does not
 require an attached SpiNNaker board.
