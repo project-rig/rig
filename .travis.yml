@@ -21,7 +21,7 @@ script:
                     --cov tests \
                     --durations=10
         # Run doctests in code
-        - py.test rig/ --doctest-modules
+        - py.test rig/ --doctest-modules -p no:warnings
         # Run doctests in documentation
         - py.test docs/ --doctest-glob='*_doctest.rst'
         # Code quality check
