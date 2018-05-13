@@ -162,7 +162,7 @@ def test_links_between():
     # If some links are down, these should be omitted
     machine = Machine(1, 1, dead_links=set([(0, 0, Links.north)]))
     assert (links_between((0, 0), (0, 0), machine) ==  # pragma: no branch
-            set(l for l in Links if l != Links.north))
+            set(link for link in Links if link != Links.north))
 
     # Should work the same in large system
     machine = Machine(10, 10, dead_links=set([(4, 4, Links.north)]))

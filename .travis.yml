@@ -8,10 +8,6 @@ install:
         - python setup.py install
         - pip install -r requirements-test.txt
         - pip install codecov
-        - pip install spinnaker_proxy
-before_script:
-        - spinnaker_proxy.py -qct cspc276.cs.man.ac.uk &
-        - export SPINNAKER_PROXY_PID=$!
 script:
         # Run the main test suite against real hardware and against the
         # installed codebase. Note: since we're testing an installed version,
@@ -19,23 +15,19 @@ script:
         # './rig/'.
         - >
             py.test tests/ \
-                    --spinnaker localhost --spinn5 \
+                    --spinnaker spinn-4.cs.man.ac.uk --spinn5 \
                     --bmp spinn-4c.cs.man.ac.uk \
                     --cov "$(./utils/rig_path.py)" \
                     --cov tests \
                     --durations=10
         # Run doctests in code
-        - py.test rig/ --doctest-modules
+        - py.test rig/ --doctest-modules -p no:warnings
         # Run doctests in documentation
         - py.test docs/ --doctest-glob='*_doctest.rst'
         # Code quality check
         - flake8 rig tests
 after_success:
         - codecov
-after_script:
-        - kill $SPINNAKER_PROXY_PID
-        - sleep 0.5
-        - kill -9 $SPINNAKER_PROXY_PID
 notifications:
         email: false
 

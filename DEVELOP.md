@@ -91,12 +91,12 @@ will also detect packaging faults (e.g. omitted binaries & support files).
 
 Rigs tests are broken up into three groups which can be run as follows:
 
-    $ py.test tests                                # The Rig test-suite
-    $ py.test rig --doctest-modules                # Doctests in rig source code
-    $ py.test docs --doctest-glob='*_doctest.rst'  # Doctests in Sphinx
-                                                   # documentation whose
-                                                   # filename ends with
-                                                   # '_doctest.rst'.
+    $ py.test tests                                 # The Rig test-suite
+    $ py.test rig --doctest-modules -p no:warnings  # Doctests in rig source code
+    $ py.test docs --doctest-glob='*_doctest.rst'   # Doctests in Sphinx
+                                                    # documentation whose
+                                                    # filename ends with
+                                                    # '_doctest.rst'.
 
 Note: The first command only runs a subset of the full test suite which does not
 require an attached SpiNNaker board.
@@ -145,12 +145,10 @@ The test suite supports the following commandline arguments:
 
 Booting a SpiNNaker board requires the (reliable) sending of packets to UDP
 port 54321 which is frequently blocked by ISPs and is not reliable (since UDP
-gives no guarantees, especially on the open internet). As a result, a proxy
-server must be used to communicate with the board. A utility such as
-[`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy) can be used
-alongside the test suite for this purpose.
-
-See the [Travis setup](.travis.yml) for an example of this in use.
+gives no guarantees, especially on the open internet). As a result on some
+networks, a proxy server must be used to communicate with the board. A utility
+such as [`spinnaker_proxy`](https://github.com/project-rig/spinnaker_proxy) can
+be used alongside the test suite for this purpose if required.
 
 ### Test coverage checking
 

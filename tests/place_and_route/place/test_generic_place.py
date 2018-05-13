@@ -10,6 +10,8 @@ import pytest
 
 import random
 
+from collections import OrderedDict
+
 from six import iteritems
 
 from rig.netlist import Net
@@ -259,14 +261,31 @@ def test_location_constraint(algorithm, kwargs):
     assert algorithm({v: {Cores: 1} for v in manual_placement},
                      [], machine, constraints, **kwargs) == manual_placement
 
-    # Should be able to mix constrained and unconstrained vertices
-    machine = Machine(2, 1, chip_resources={Cores: 1})
-    constrained_vertex = object()
-    free_vertex = object()
-    constraints = [LocationConstraint(constrained_vertex, (0, 0))]
-    assert algorithm({constrained_vertex: {Cores: 1}, free_vertex: {Cores: 1}},
-                     [], machine, constraints, **kwargs) \
-        == {constrained_vertex: (0, 0), free_vertex: (1, 0)}
+    # Should be able to mix constrained and unconstrained vertices. As an added
+    # detail, in this test the supplied vertices are provided in an interleaved
+    # order to ensure that no special ordering is required by the algorithm.
+    machine = Machine(4, 1, chip_resources={Cores: 1})
+    constrained_vertex_1 = "fixed1"
+    constrained_vertex_2 = "fixed2"
+    free_vertex_1 = "free1"
+    free_vertex_2 = "free2"
+    constraints = [LocationConstraint(constrained_vertex_1, (0, 0)),
+                   LocationConstraint(constrained_vertex_2, (2, 0))]
+    nets = [Net(constrained_vertex_1, free_vertex_1),
+            Net(constrained_vertex_2, free_vertex_2)]
+    assert algorithm(OrderedDict([(constrained_vertex_1, {Cores: 1}),
+                                  (free_vertex_1, {Cores: 1}),
+                                  (constrained_vertex_2, {Cores: 1}),
+                                  (free_vertex_2, {Cores: 1})]),
+                     nets, machine, constraints, **kwargs) \
+        in ({constrained_vertex_1: (0, 0),
+             constrained_vertex_2: (2, 0),
+             free_vertex_1: (1, 0),
+             free_vertex_2: (3, 0)},
+            {constrained_vertex_1: (0, 0),
+             constrained_vertex_2: (2, 0),
+             free_vertex_1: (3, 0),
+             free_vertex_2: (1, 0)})
 
     # Should fail placing a vertex onto a dead chip
     machine = Machine(2, 2, dead_chips=set([(0, 0)]))

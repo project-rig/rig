@@ -128,8 +128,8 @@ class TestBMPControllerLive(object):
         assert 5.0 < adc.temp_btm < 100.0
         assert adc.temp_ext_0 is None or 5.0 < adc.temp_ext_0 < 100.0
         assert adc.temp_ext_1 is None or 5.0 < adc.temp_ext_1 < 100.0
-        assert adc.fan_0 is None or 0.0 < adc.fan_0 < 10000.0
-        assert adc.fan_1 is None or 0.0 < adc.fan_1 < 10000.0
+        assert adc.fan_0 is None or 0.0 <= adc.fan_0 < 10000.0
+        assert adc.fan_1 is None or 0.0 <= adc.fan_1 < 10000.0
 
 
 @pytest.mark.order_after("spinnaker_hw_test", "bmp_hw_test")
