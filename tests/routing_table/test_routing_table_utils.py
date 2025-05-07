@@ -262,9 +262,9 @@ def test_routing_tree_to_tables_repeated_key_mask_fork_not_allowed():
     with pytest.raises(MultisourceRouteError) as err:
         routing_tree_to_tables(routes, net_keys)
 
-    assert "(1, 1)" in str(err)  # Co-ordinate of the fork
-    assert "0x00000000" in str(err)  # Key that causes the problem
-    assert "0x0000000f" in str(err)  # Mask that causes the problem
+    assert "(1, 1)" in str(err.value)  # Co-ordinate of the fork
+    assert "0x00000000" in str(err.value)  # Key that causes the problem
+    assert "0x0000000f" in str(err.value)  # Mask that causes the problem
 
 
 def test_build_routing_table_target_lengths():
