@@ -127,7 +127,22 @@ class ContextMixin(object):
         def decorator(f):
             # Extract any positional and positional-and-key-word arguments
             # which may be set.
-            arg_names, varargs, keywords, defaults = inspect.getargspec(f)
+            if hasattr(inspect, "getfullargspec"):  # pragma: no cover
+                # Python 3
+                (
+                    arg_names,
+                    varargs,
+                    keywords,  # Actually varkw
+                    defaults,
+                    # Unused for consistency with Python 2 behaviour, whilst
+                    # Python 2 support remains.
+                    _kwonlyargs,
+                    _kwonlydefaults,
+                    _anotations,
+                ) = inspect.getfullargspec(f)
+            else:  # pragma: no cover
+                # Python 2
+                arg_names, varargs, keywords, defaults = inspect.getargspec(f)
 
             # Sanity check: non-keyword-only arguments should't be present in
             # the keyword-only-arguments list.

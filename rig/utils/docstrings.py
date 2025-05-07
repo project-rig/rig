@@ -109,7 +109,22 @@ def add_signature_to_docstring(f, include_self=False, kw_only_args={}):
     """
 
     def decorate(f_wrapper):
-        args, varargs, keywords, defaults = inspect.getargspec(f)
+        if hasattr(inspect, "getfullargspec"):  # pragma: no cover
+            # Python 3
+            (
+                args,
+                varargs,
+                keywords,  # Actually varkw
+                defaults,
+                # Unused for consistency with Python 2 behaviour, whilst
+                # Python 2 support remains.
+                _kwonlyargs,
+                _kwonlydefaults,
+                _anotations,
+            ) = inspect.getfullargspec(f)
+        else:  # pragma: no cover
+            # Python 2
+            args, varargs, keywords, defaults = inspect.getargspec(f)
 
         # Simplifies later logic
         if defaults is None:
