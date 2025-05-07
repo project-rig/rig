@@ -1999,11 +1999,10 @@ class TestMachineController(object):
 
         assert "(0, 1, 4)" in str(excinfo.value)
 
-    @pytest.mark.parametrize("signal", ["non-existant",
-                                        consts.AppDiagnosticSignal.AND])
+    @pytest.mark.parametrize("signal", ["non-existant", -1])
     def test_send_signal_fails(self, signal):
         # Make sure that the send_signal function rejects bad signal
-        # identifiers (or ones that require special treatment)
+        # identifiers
         cn = MachineController("localhost")
         with pytest.raises(ValueError):
             cn.send_signal(signal)
@@ -2094,11 +2093,10 @@ class TestMachineController(object):
         # Check the correct number of packets were sent
         assert cn._send_scp.call_count == len(states)
 
-    @pytest.mark.parametrize("state", ["non-existant",
-                                       consts.AppDiagnosticSignal.AND])
+    @pytest.mark.parametrize("state", ["non-existant", -1])
     def test_count_cores_in_state_fails(self, state):
         # Make sure that the count_cores_in_state function rejects bad state
-        # identifiers (or ones that require special treatment)
+        # identifiers
         cn = MachineController("localhost")
         with pytest.raises(ValueError):
             cn.count_cores_in_state(state)
