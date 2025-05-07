@@ -9,6 +9,7 @@ import socket
 import struct
 import time
 import warnings
+from six.moves.collections_abc import Iterable
 
 import rig
 
@@ -1557,7 +1558,7 @@ class MachineController(ContextMixin):
             an iterable of these, in which case the total count will be
             returned.
         """
-        if (isinstance(state, collections.Iterable) and
+        if (isinstance(state, Iterable) and
                 not isinstance(state, str)):
             # If the state is iterable then call for each state and return the
             # sum.

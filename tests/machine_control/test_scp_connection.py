@@ -3,6 +3,7 @@ import mock
 import pytest
 import struct
 import time
+from six.moves.collections_abc import Callable
 
 from rig.machine_control.consts import \
     SCPCommands, DataType, SDP_HEADER_LENGTH, RETRYABLE_SCP_RETURN_CODES, \
@@ -58,7 +59,7 @@ def test_scpcall():
     assert call.arg1 == call.arg2 == call.arg3 == 0
     assert call.data == b''
     assert call.timeout == 0.0
-    assert isinstance(call.callback, collections.Callable)
+    assert isinstance(call.callback, Callable)
 
 
 def test_single_scp_packet(mock_conn):
