@@ -380,13 +380,13 @@ class NumpyFixToFloatConverter(object):
     This will produced signed and unsigned values depending on the `dtype` of
     the original array.
 
-        >>> signed = np.array([0xf0], dtype=np.int8)
+        >>> signed = np.array(np.array([0xf0]), dtype=np.int8)
         >>> kbits(signed)
         array([-1.])
 
         >>> unsigned = np.array([0xf0], dtype=np.uint8)
         >>> kbits(unsigned)[0]
-        15.0
+        np.float64(15.0)
     """
     def __init__(self, n_frac):
         """Create a new converter from fix-point to floating point
