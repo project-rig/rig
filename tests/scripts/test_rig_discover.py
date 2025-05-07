@@ -24,4 +24,4 @@ def test_rig_discover(args, should_work, timeout, monkeypatch, capsys):
     else:
         assert out == ""
 
-    assert mock_listen.called_once_with(timeout)
+    mock_listen.assert_called_once_with(timeout=timeout)
