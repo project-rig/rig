@@ -6,11 +6,12 @@
 """
 from . import struct_file, consts
 import enum
-import pkg_resources
 import socket
 import struct
 import time
+import os
 
+import rig
 from rig.utils.docstrings import add_int_enums_to_docstring
 
 # Specifies the size of packets that should be sent to SpiNNaker to boot the
@@ -102,10 +103,18 @@ def boot(hostname, boot_port=consts.BOOT_PORT,
         Layout of structs in memory.
     """
     # Get the boot data if not specified.
-    scamp_binary = (scamp_binary if scamp_binary is not None else
-                    pkg_resources.resource_filename("rig", "boot/scamp.boot"))
-    sark_struct = (sark_struct if sark_struct is not None else
-                   pkg_resources.resource_filename("rig", "boot/sark.struct"))
+    if scamp_binary is None:  # pragma: no branch
+        scamp_binary = os.path.join(
+            os.path.dirname(rig.__file__),
+            "boot",
+            "scamp.boot",
+        )
+    if sark_struct is None:  # pragma: no branch
+        sark_struct = os.path.join(
+            os.path.dirname(rig.__file__),
+            "boot",
+            "sark.struct",
+        )
     with open(scamp_binary, "rb") as f:
         boot_data = f.read()
 

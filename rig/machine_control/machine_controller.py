@@ -8,8 +8,9 @@ from six import iteritems
 import socket
 import struct
 import time
-import pkg_resources
 import warnings
+
+import rig
 
 from rig.machine_control.consts import \
     SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
@@ -118,8 +119,14 @@ class MachineController(ContextMixin):
         # Load default structs if none provided
         self.structs = structs
         if self.structs is None:
-            struct_data = pkg_resources.resource_string("rig",
-                                                        "boot/sark.struct")
+            struct_data = open(
+                os.path.join(
+                    os.path.dirname(rig.__file__),
+                    "boot",
+                    "sark.struct",
+                ),
+                "rb",
+            ).read()
             self.structs = struct_file.read_struct_file(struct_data)
 
         # This dictionary contains a lookup from chip (x, y) to the
