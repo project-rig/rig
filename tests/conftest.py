@@ -38,6 +38,13 @@ def pytest_addoption(parser):
                           "Specify the IP address or hostname of "
                           "the BMP to use.")
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "order_before")
+    config.addinivalue_line("markers", "order_after")
+    config.addinivalue_line("markers", "order_id")
+    config.addinivalue_line("markers", "incremental")
+    config.addinivalue_line("markers", "no_boot")
+
 
 # From pytest.org
 def pytest_runtest_makereport(item, call):  # pragma: no cover

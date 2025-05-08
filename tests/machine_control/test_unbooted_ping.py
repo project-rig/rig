@@ -24,5 +24,5 @@ def test_listen(should_fail, monkeypatch):
         assert retval == "127.0.0.1"
 
     # Make sure parameters were obayed
-    assert mock_socket.settimeout.called_once_with(12.0)
-    assert mock_socket.bind.called_once_with('0.0.0.0', 12345)
+    mock_socket.settimeout.assert_called_once_with(12.0)
+    mock_socket.bind.assert_called_once_with(('0.0.0.0', 12345))

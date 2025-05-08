@@ -1,5 +1,4 @@
 import mock
-import pkg_resources
 import pytest
 import six
 from six import iteritems, itervalues
@@ -10,6 +9,7 @@ import time
 import itertools
 import warnings
 
+import rig
 from rig.machine_control.consts import (
     SCPCommands, LEDAction, NNCommands, NNConstants)
 from rig.machine_control.machine_controller import (
@@ -25,6 +25,22 @@ from rig.machine_control import boot, regions, consts, struct_file
 from rig.links import Links
 
 from rig.routing_table import RoutingTableEntry, Routes
+
+
+sark_struct_data = open(
+    os.path.join(
+        os.path.dirname(rig.__file__),
+        "boot",
+        "sark.struct",
+    ),
+    "rb",
+).read()
+
+test_aplx_file = os.path.join(
+    os.path.dirname(rig.__file__),
+    "binaries",
+    "test.aplx",
+)
 
 
 @pytest.fixture(scope="module")
@@ -258,7 +274,7 @@ class TestMachineControllerLive(object):
         assert len(controller.structs) > 0, \
             "Controller has no structs, check test fixture."
         controller.load_application(
-            pkg_resources.resource_filename("rig", "binaries/test.aplx"),
+            test_aplx_file,
             targets, use_count=False
         )
 
@@ -314,8 +330,7 @@ class TestMachineControllerLive(object):
                     controller.get_chip_info(0, 1).core_states[10] ==
                     consts.AppState.idle)
                 controller.load_application(
-                    pkg_resources.resource_filename("rig",
-                                                    "binaries/test.aplx"),
+                    test_aplx_file,
                     {(0, 1): set([10])},
                     wait=True
                 )
@@ -1389,8 +1404,7 @@ class TestMachineController(object):
         field = six.b(field_ascii)
 
         # Open the struct file
-        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
-        structs = struct_file.read_struct_file(struct_data)
+        structs = struct_file.read_struct_file(sark_struct_data)
         assert (which_struct in structs and
                 field in structs[which_struct]), "Test is broken"
 
@@ -1423,8 +1437,7 @@ class TestMachineController(object):
          ])
     def test_write_struct_field(self, x, y, p, which_struct, field, value):
         # Open the struct file
-        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
-        structs = struct_file.read_struct_file(struct_data)
+        structs = struct_file.read_struct_file(sark_struct_data)
         assert (six.b(which_struct) in structs and
                 six.b(field) in structs[six.b(which_struct)]), "Test is broken"
 
@@ -1466,8 +1479,7 @@ class TestMachineController(object):
     )
     def test_read_vcpu_struct(self, x, y, p, vcpu_base, field, data,
                               converted):
-        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
-        structs = struct_file.read_struct_file(struct_data)
+        structs = struct_file.read_struct_file(sark_struct_data)
         vcpu_struct = structs[b"vcpu"]
         assert six.b(field) in vcpu_struct, "Test is broken"
         field_ = vcpu_struct[six.b(field)]
@@ -1503,8 +1515,7 @@ class TestMachineController(object):
          ("rt_code", 8, b"\x08")]
     )
     def test_write_vcpu_struct(self, x, y, p, vcpu_base, field, value, data):
-        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
-        structs = struct_file.read_struct_file(struct_data)
+        structs = struct_file.read_struct_file(sark_struct_data)
         vcpu_struct = structs[b"vcpu"]
         assert six.b(field) in vcpu_struct, "Test is broken"
         field_ = vcpu_struct[six.b(field)]
@@ -1532,8 +1543,7 @@ class TestMachineController(object):
     @pytest.mark.parametrize("x, y, p, vcpu_base", [(0, 1, 11, 0x67801234),
                                                     (1, 4, 17, 0x33331110)])
     def test_get_processor_status(self, x, y, p, vcpu_base):
-        struct_data = pkg_resources.resource_string("rig", "boot/sark.struct")
-        structs = struct_file.read_struct_file(struct_data)
+        structs = struct_file.read_struct_file(sark_struct_data)
         vcpu_struct = structs[b"vcpu"]
 
         # Create a mock SV struct reader
@@ -1989,11 +1999,10 @@ class TestMachineController(object):
 
         assert "(0, 1, 4)" in str(excinfo.value)
 
-    @pytest.mark.parametrize("signal", ["non-existant",
-                                        consts.AppDiagnosticSignal.AND])
+    @pytest.mark.parametrize("signal", ["non-existant", -1])
     def test_send_signal_fails(self, signal):
         # Make sure that the send_signal function rejects bad signal
-        # identifiers (or ones that require special treatment)
+        # identifiers
         cn = MachineController("localhost")
         with pytest.raises(ValueError):
             cn.send_signal(signal)
@@ -2084,11 +2093,10 @@ class TestMachineController(object):
         # Check the correct number of packets were sent
         assert cn._send_scp.call_count == len(states)
 
-    @pytest.mark.parametrize("state", ["non-existant",
-                                       consts.AppDiagnosticSignal.AND])
+    @pytest.mark.parametrize("state", ["non-existant", -1])
     def test_count_cores_in_state_fails(self, state):
         # Make sure that the count_cores_in_state function rejects bad state
-        # identifiers (or ones that require special treatment)
+        # identifiers
         cn = MachineController("localhost")
         with pytest.raises(ValueError):
             cn.count_cores_in_state(state)

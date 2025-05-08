@@ -56,8 +56,9 @@ ALGORITHMS_UNDER_TEST = [(default_place, {}),
                          (sa_place, {}),
                          # Test using other kernels (when available)
                          (sa_place, {"kernel": PythonKernel}),
-                         pytest.mark.skipif("CKernel is None")(
-                             (sa_place, {"kernel": CKernel})),
+                         pytest.param(sa_place,
+                                      {"kernel": CKernel},
+                                      marks=pytest.mark.skipif("CKernel is None")),
                          # Testing with effort = 0 tests the initial (random)
                          # placement solutions of the SA placer.
                          (sa_place, {"effort": 0.0}),

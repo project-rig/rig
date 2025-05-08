@@ -8,8 +8,10 @@ from six import iteritems
 import socket
 import struct
 import time
-import pkg_resources
 import warnings
+from six.moves.collections_abc import Iterable
+
+import rig
 
 from rig.machine_control.consts import \
     SCPCommands, NNCommands, NNConstants, AppFlags, LEDAction
@@ -118,8 +120,14 @@ class MachineController(ContextMixin):
         # Load default structs if none provided
         self.structs = structs
         if self.structs is None:
-            struct_data = pkg_resources.resource_string("rig",
-                                                        "boot/sark.struct")
+            struct_data = open(
+                os.path.join(
+                    os.path.dirname(rig.__file__),
+                    "boot",
+                    "sark.struct",
+                ),
+                "rb",
+            ).read()
             self.structs = struct_file.read_struct_file(struct_data)
 
         # This dictionary contains a lookup from chip (x, y) to the
@@ -1550,7 +1558,7 @@ class MachineController(ContextMixin):
             an iterable of these, in which case the total count will be
             returned.
         """
-        if (isinstance(state, collections.Iterable) and
+        if (isinstance(state, Iterable) and
                 not isinstance(state, str)):
             # If the state is iterable then call for each state and return the
             # sum.

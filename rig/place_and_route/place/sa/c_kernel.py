@@ -4,15 +4,13 @@ from collections import defaultdict
 
 from six import iteritems
 
-import pkg_resources
-
 # An optional Rig dependency.
 from rig_c_sa import ffi
 import rig_c_sa
 
-
 # Make sure installed rig_c_sa version is compatible.
-pkg_resources.require("rig_c_sa>=0.3.1,<1.0.0")
+rig_c_sa_version = tuple(map(int, rig_c_sa.__version__.split(".")))
+assert (0, 3, 1) <= rig_c_sa_version < (1, 0, 0)
 
 
 class CKernel(object):

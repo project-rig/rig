@@ -76,7 +76,7 @@ def place(vertices_resources, nets, machine, constraints,
     movable_vertices = [v for v in vertices_resources
                         if v not in placements]
 
-    locations = set(machine)
+    locations = list(machine)
 
     for vertex in movable_vertices:
         # Keep choosing random chips until we find one where the vertex fits.

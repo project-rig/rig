@@ -245,7 +245,7 @@ class TestNumpyFixToFloat(object):
          ]
         )
     def test_standard(self, values, dtype, n_frac, expected_values):
-        input_array = np.array(values, dtype=dtype)
+        input_array = np.array(np.array(values), dtype=dtype)
 
         fpf = NumpyFixToFloatConverter(n_frac)
         output_array = fpf(input_array)
